@@ -16,8 +16,8 @@
 // @connect      animoflix.to
 // @connect      anime-sama.to
 // @connect      api.na-backend.odysee.com
-// @updateURL    https://raw.githubusercontent.com/Tryne-graphik/esprit-donghua-tracker/master/esprit-donghua-suivi-progression-v6.user.js
-// @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/esprit-donghua-tracker/master/esprit-donghua-suivi-progression-v6.user.js
+// @updateURL    https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
+// @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // ==/UserScript==
 
 // CONTEXTE (2026-09-21) : v4 (esprit-donghua-suivi-progression-v4.user.js,
