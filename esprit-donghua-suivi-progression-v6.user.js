@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.4
+// @version      6.5
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -16,6 +16,7 @@
 // @connect      animoflix.to
 // @connect      anime-sama.to
 // @connect      api.na-backend.odysee.com
+// @connect      www.googleapis.com
 // @updateURL    https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // ==/UserScript==
@@ -1061,6 +1062,152 @@
             saveYoutubeOverrides(all);
         }
 
+        // ---- Playlist YouTube automatique (par chaine associee) ----
+        //
+        // Complement au lien manuel ci-dessus : au lieu de chercher/coller
+        // un lien par episode, on associe UNE FOIS une chaine YouTube +
+        // un mot-cle (les titres de chaines comme celle de Tencent Video
+        // melangent plein de series differentes, pas de structure fiable a
+        // scraper - le mot-cle est fourni par l'utilisateur, plus simple et
+        // plus fiable qu'une heuristique de prefixe comme pour Odysee vu la
+        // variete des formats de titre). Necessite une cle API YouTube Data
+        // v3 (gratuite, configurable via le menu Tampermonkey) - l'API
+        // publique Odysee n'a pas d'equivalent chez YouTube.
+        function getYoutubeApiKey() { return GM_getValue('youtubeApiKey', ''); }
+        function setYoutubeApiKey(key) { GM_setValue('youtubeApiKey', key); }
+
+        function youtubeApiRequest(path, params) {
+            const apiKey = getYoutubeApiKey();
+            if (!apiKey) return Promise.reject(new Error('Cle API YouTube non configuree (menu Tampermonkey > Configurer la cle API YouTube).'));
+            const query = Object.assign({}, params, { key: apiKey });
+            const qs = Object.keys(query).map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(query[k])).join('&');
+            return gmRequest({ method: 'GET', url: 'https://www.googleapis.com/youtube/v3/' + path + '?' + qs }).then((res) => {
+                let parsed;
+                try { parsed = JSON.parse(res.responseText); } catch (e) { throw new Error('Reponse API YouTube illisible (statut ' + res.status + ')'); }
+                if (parsed.error) throw new Error('API YouTube : ' + parsed.error.message);
+                return parsed;
+            });
+        }
+
+        function normalizeYoutubeChannelHandle(input) {
+            const trimmed = input.trim();
+            const urlMatch = trimmed.match(/youtube\.com\/(@[\w.-]+)/i);
+            if (urlMatch) return urlMatch[1];
+            return trimmed.indexOf('@') === 0 ? trimmed : '@' + trimmed;
+        }
+
+        function resolveYoutubeUploadsPlaylistId(channelHandle) {
+            return youtubeApiRequest('channels', { forHandle: channelHandle, part: 'contentDetails' }).then((data) => {
+                const item = data.items && data.items[0];
+                const uploadsId = item && item.contentDetails && item.contentDetails.relatedPlaylists && item.contentDetails.relatedPlaylists.uploads;
+                if (!uploadsId) throw new Error('Chaine YouTube introuvable : ' + channelHandle);
+                return uploadsId;
+            });
+        }
+
+        // Pagine tant que la chaine a d'autres resultats - plafonne a 2000
+        // videos par securite (playlistItems.list coute 1 unite de quota
+        // par page de 50, largement sous la limite gratuite quotidienne).
+        function fetchAllYoutubeUploads(uploadsPlaylistId) {
+            function fetchPage(pageToken, acc) {
+                const params = { playlistId: uploadsPlaylistId, part: 'snippet', maxResults: 50 };
+                if (pageToken) params.pageToken = pageToken;
+                return youtubeApiRequest('playlistItems', params).then((data) => {
+                    const items = data.items || [];
+                    const merged = acc.concat(items);
+                    if (data.nextPageToken && merged.length < 2000) return fetchPage(data.nextPageToken, merged);
+                    return merged;
+                });
+            }
+            return fetchPage(null, []);
+        }
+
+        // Numero d'episode = dernier nombre trouve dans le titre - meme
+        // heuristique que pour Odysee, marche sur "EP326" comme sur
+        // "Episode 326".
+        function guessYoutubeEpisodeNumber(title) {
+            const matches = title.match(/\d+/g);
+            return matches ? parseInt(matches[matches.length - 1], 10) : null;
+        }
+
+        function buildYoutubePlaylist(channelHandle, titleKeywordLower) {
+            return resolveYoutubeUploadsPlaylistId(channelHandle).then((uploadsId) => fetchAllYoutubeUploads(uploadsId)).then((items) => {
+                const entries = [];
+                items.forEach((item) => {
+                    const snippet = item.snippet || {};
+                    const title = snippet.title || '';
+                    if (title.toLowerCase().indexOf(titleKeywordLower) === -1) return;
+                    const videoId = snippet.resourceId && snippet.resourceId.videoId;
+                    if (!videoId) return;
+                    const episodeNumber = guessYoutubeEpisodeNumber(title);
+                    if (episodeNumber === null) return;
+                    entries.push({ episodeNumber: episodeNumber, title: title, videoId: videoId });
+                });
+                entries.sort((a, b) => a.episodeNumber - b.episodeNumber);
+                return entries;
+            });
+        }
+
+        function youtubePlaylistCacheKey(channelHandle, titleKeywordLower) { return channelHandle + '::' + titleKeywordLower; }
+
+        function getYoutubePlaylist(channelHandle, titleKeywordLower) {
+            const cacheKey = youtubePlaylistCacheKey(channelHandle, titleKeywordLower);
+            const all = GM_getValue('youtubePlaylists', {});
+            const cached = all[cacheKey];
+            if (cached && (Date.now() - cached.builtAt) < 60 * 60 * 1000) return Promise.resolve(cached.entries);
+            return buildYoutubePlaylist(channelHandle, titleKeywordLower).then((entries) => {
+                if (entries.length === 0 && cached) return cached.entries;
+                const fresh = GM_getValue('youtubePlaylists', {});
+                fresh[cacheKey] = { builtAt: Date.now(), entries: entries };
+                GM_setValue('youtubePlaylists', fresh);
+                return entries;
+            }).catch((e) => {
+                console.log('[AnimeTracker v6] (youtube) echec construction playlist', e);
+                if (cached) return cached.entries;
+                throw e;
+            });
+        }
+
+        function getYoutubeChannelAssociation(info) {
+            const all = GM_getValue('youtubeChannelAssociations', {});
+            return info ? (all[storageKey(info)] || null) : null;
+        }
+        function setYoutubeChannelAssociation(info, channelHandle, titleKeyword) {
+            const all = GM_getValue('youtubeChannelAssociations', {});
+            all[storageKey(info)] = { channelHandle: channelHandle, titleKeyword: titleKeyword };
+            GM_setValue('youtubeChannelAssociations', all);
+        }
+
+        // Action bouton "Trouver sur YouTube (chaine associee)" - demande
+        // la chaine/le mot-cle une seule fois par serie (prompt()), puis
+        // recherche l'episode courant dans la playlist (mise en cache) et
+        // applique directement le lien trouve, sans copier-coller manuel.
+        function useYoutubeAutoForCurrentEpisode() {
+            if (!currentEpisode) { alert('Ouvre d\'abord un episode.'); return; }
+            if (!getYoutubeApiKey()) {
+                alert('Configure d\'abord une cle API YouTube (menu Tampermonkey > Configurer la cle API YouTube).');
+                return;
+            }
+            let assoc = getYoutubeChannelAssociation(currentEpisode);
+            if (!assoc) {
+                const channelInput = prompt('Chaine YouTube (lien ou @handle) pour cette serie :');
+                if (!channelInput) return;
+                const keywordInput = prompt('Mot-cle a chercher dans les titres pour reconnaitre cette serie sur la chaine (ex: "Ten Thousand Worlds") :');
+                if (!keywordInput) return;
+                assoc = { channelHandle: normalizeYoutubeChannelHandle(channelInput), titleKeyword: keywordInput.trim() };
+                setYoutubeChannelAssociation(currentEpisode, assoc.channelHandle, assoc.titleKeyword);
+            }
+            setStatus('Recherche sur YouTube...');
+            getYoutubePlaylist(assoc.channelHandle, assoc.titleKeyword.toLowerCase()).then((entries) => {
+                const match = entries.find((e) => e.episodeNumber === currentEpisode.episodeNumber);
+                if (!match) { alert('Episode ' + currentEpisode.episodeNumber + ' introuvable sur ' + assoc.channelHandle + ' avec le mot-cle "' + assoc.titleKeyword + '".'); return; }
+                const all = loadYoutubeOverrides();
+                all[youtubeOverrideKey(currentEpisode)] = 'https://www.youtube.com/embed/' + match.videoId + '?autoplay=1';
+                saveYoutubeOverrides(all);
+                applyLoadedEpisode(currentEpisode, false);
+            }).catch((e) => { alert('Erreur recherche YouTube : ' + e.message); setStatus('Erreur recherche YouTube'); });
+        }
+
         function isAutoNextEnabled() { return GM_getValue('autoNextEnabled', true); }
         function setAutoNextEnabled(v) { GM_setValue('autoNextEnabled', v); }
         function isAutoOpenEnabled() { return GM_getValue('popupAutoOpen', true); }
@@ -1406,6 +1553,7 @@
                 '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
                 '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Utiliser ce lien YouTube</button>' +
                 '<button id="ed-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Retirer le lien YouTube</button>' +
+                '<button id="ed-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Trouver sur YouTube (chaine associee)</button>' +
                 '<button id="ed-set-intro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fin intro</button>' +
                 '<button id="ed-set-outro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Debut outro</button>' +
                 '<button id="ed-settings-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Configuration</button>' +
@@ -1552,6 +1700,7 @@
                 clearYoutubeOverride(currentEpisode);
                 applyLoadedEpisode(currentEpisode, false);
             });
+            topbar.querySelector('#ed-youtube-auto-btn').addEventListener('click', useYoutubeAutoForCurrentEpisode);
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
 
             overlayEls = {
@@ -2208,6 +2357,7 @@
                 html += '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">';
                 html += '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Utiliser ce lien YouTube</button>';
                 html += '<button id="ep-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Retirer le lien YouTube</button>';
+                html += '<button id="ep-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Trouver sur YouTube (chaine associee)</button>';
                 const trackedChecked = isSeriesExcluded(storageKey(currentEpisode)) ? '' : 'checked';
                 html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-track-series" ' + trackedChecked + '> Suivre cet anime</label>';
             }
@@ -2313,6 +2463,8 @@
                 clearYoutubeOverride(currentEpisode);
                 applyLoadedEpisode(currentEpisode, false);
             });
+            const youtubeAutoBtn = panel.querySelector('#ep-youtube-auto-btn');
+            if (youtubeAutoBtn) youtubeAutoBtn.addEventListener('click', useYoutubeAutoForCurrentEpisode);
 
             const autoNextCheckbox = panel.querySelector('#ep-autonext');
             if (autoNextCheckbox) autoNextCheckbox.addEventListener('change', () => {
@@ -2363,6 +2515,11 @@
         GM_registerMenuCommand('Exporter en fichier', exportProgress);
         GM_registerMenuCommand('Choisir le fichier de sauvegarde', chooseBackupFile);
         GM_registerMenuCommand('Ouvrir le lecteur', () => startEpisode(getEpisodeInfoForCurrentPage(), 'commande menu'));
+        GM_registerMenuCommand('Configurer la cle API YouTube', () => {
+            const current = getYoutubeApiKey();
+            const key = prompt('Cle API YouTube Data v3 (console.cloud.google.com > API et services > Identifiants) :', current);
+            if (key !== null) setYoutubeApiKey(key.trim());
+        });
 
         const liveInfoPromise = getLiveEpisodeInfo();
         liveInfoPromise.then((liveInfo) => {
