@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Esprit Donghua - Contournement Referer Odysee",
+  "version": "1.0",
+  "description": "Reecrit le header Referer des requetes vers le CDN video d'Odysee (player.odycdn.com) pour qu'il accepte les requetes venant d'esprit-donghua.xyz. Permet au lecteur video natif de streamer directement les episodes (sans telechargement complet prealable). Usage strictement personnel, en complement du script Tampermonkey Esprit Donghua v4.",
+  "permissions": ["declarativeNetRequest"],
+  "host_permissions": ["https://player.odycdn.com/*"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "odysee_referer_rules",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}
