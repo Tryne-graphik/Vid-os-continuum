@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.3
+// @version      6.4
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1031,6 +1031,36 @@
             saveIntroOutro(all);
         }
 
+        // ---- Lecteur alternatif YouTube (episode par episode) ----
+        //
+        // Depannage manuel : quand un episode est casse/bloque sur son
+        // hebergeur habituel, l'utilisateur peut coller un lien YouTube
+        // pour CET episode precis. Pas de saut intro/outro ni d'enchainement
+        // automatique sur cette source (YouTube n'est pas un domaine
+        // pilote par notre script injecte dans l'iframe, contrairement a
+        // Odysee/Sibnet) - juste un repli pour pouvoir regarder quand meme.
+        function youtubeVideoIdFromUrl(url) {
+            const m = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([A-Za-z0-9_-]{11})/);
+            return m ? m[1] : null;
+        }
+        function youtubeOverrideKey(info) { return storageKey(info) + '::' + info.episodeNumber; }
+        function loadYoutubeOverrides() { return GM_getValue('youtubeOverrides', {}); }
+        function saveYoutubeOverrides(data) { GM_setValue('youtubeOverrides', data); }
+        function getYoutubeOverrideUrl(info) { return info ? (loadYoutubeOverrides()[youtubeOverrideKey(info)] || null) : null; }
+        function setYoutubeOverride(info, youtubeUrl) {
+            const videoId = youtubeVideoIdFromUrl(youtubeUrl);
+            if (!videoId) { alert('Lien YouTube non reconnu (attendu : youtube.com/watch?v=..., youtu.be/... ou .../embed/...).'); return false; }
+            const all = loadYoutubeOverrides();
+            all[youtubeOverrideKey(info)] = 'https://www.youtube.com/embed/' + videoId + '?autoplay=1';
+            saveYoutubeOverrides(all);
+            return true;
+        }
+        function clearYoutubeOverride(info) {
+            const all = loadYoutubeOverrides();
+            delete all[youtubeOverrideKey(info)];
+            saveYoutubeOverrides(all);
+        }
+
         function isAutoNextEnabled() { return GM_getValue('autoNextEnabled', true); }
         function setAutoNextEnabled(v) { GM_setValue('autoNextEnabled', v); }
         function isAutoOpenEnabled() { return GM_getValue('popupAutoOpen', true); }
@@ -1373,6 +1403,9 @@
                 '</div>' +
                 '<button id="ed-reload-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#8635; Recharger la page</button>' +
                 (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Ouvrir sur Odysee</button>' : '') +
+                '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
+                '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Utiliser ce lien YouTube</button>' +
+                '<button id="ed-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Retirer le lien YouTube</button>' +
                 '<button id="ed-set-intro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fin intro</button>' +
                 '<button id="ed-set-outro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Debut outro</button>' +
                 '<button id="ed-settings-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Configuration</button>' +
@@ -1505,6 +1538,20 @@
             });
             const edOpenOdyseeBtn = topbar.querySelector('#ed-open-odysee-btn');
             if (edOpenOdyseeBtn) edOpenOdyseeBtn.addEventListener('click', openCurrentEpisodeOnOdysee);
+            topbar.querySelector('#ed-youtube-apply-btn').addEventListener('click', () => {
+                if (!currentEpisode) { alert('Ouvre d\'abord un episode.'); return; }
+                const input = topbar.querySelector('#ed-youtube-input');
+                if (!input.value.trim()) return;
+                if (setYoutubeOverride(currentEpisode, input.value.trim())) {
+                    input.value = '';
+                    applyLoadedEpisode(currentEpisode, false);
+                }
+            });
+            topbar.querySelector('#ed-youtube-clear-btn').addEventListener('click', () => {
+                if (!currentEpisode) return;
+                clearYoutubeOverride(currentEpisode);
+                applyLoadedEpisode(currentEpisode, false);
+            });
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
 
             overlayEls = {
@@ -1646,11 +1693,15 @@
 
         function applyLoadedEpisode(info, pushHistory) {
             if (!info) throw new Error('episode introuvable ou lecteur sibnet indisponible pour cet episode');
-            if (!info.embedSrc) {
+            const youtubeOverride = getYoutubeOverrideUrl(info);
+            if (!info.embedSrc && !youtubeOverride) {
                 // Ex. anime-sama : cet episode precis n'existe que sur un
                 // hebergeur qu'on ne gere pas encore (v1 = sibnet
                 // uniquement) - on renonce plutot que de bloquer sur un
                 // calque vide, le lecteur natif du site reste utilisable.
+                // Sauf si un lien YouTube de secours a ete configure pour
+                // cet episode precis (voir ci-dessus) - dans ce cas on
+                // continue avec lui.
                 setStatus('Non disponible sur sibnet pour cet episode - utilise le lecteur du site.');
                 return;
             }
@@ -1658,9 +1709,13 @@
             recordEpisodeProgress(info);
             applyRuntimeConfig(storageKey(info));
             outroSignalSent = false;
-            overlayEls.playerFrame.src = info.embedSrc;
-            startBufferStallTracking();
-            setStatus('Chargement...');
+            overlayEls.playerFrame.src = youtubeOverride || info.embedSrc;
+            if (youtubeOverride) {
+                setStatus('Lecture via lien YouTube de secours - pas de saut intro/outro ni enchainement auto sur cette source.');
+            } else {
+                startBufferStallTracking();
+                setStatus('Chargement...');
+            }
             if (pushHistory) { try { history.pushState(null, '', info.resumeUrl); } catch (e) {} }
             buildPersistentPanel();
         }
@@ -2150,6 +2205,9 @@
                 if (currentEpisode.site === 'esprit-donghua') {
                     html += '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Ouvrir sur Odysee</button>';
                 }
+                html += '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">';
+                html += '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Utiliser ce lien YouTube</button>';
+                html += '<button id="ep-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Retirer le lien YouTube</button>';
                 const trackedChecked = isSeriesExcluded(storageKey(currentEpisode)) ? '' : 'checked';
                 html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-track-series" ' + trackedChecked + '> Suivre cet anime</label>';
             }
@@ -2238,6 +2296,23 @@
 
             const openOdyseeBtn = panel.querySelector('#ep-open-odysee');
             if (openOdyseeBtn) openOdyseeBtn.addEventListener('click', openCurrentEpisodeOnOdysee);
+
+            const youtubeApplyBtn = panel.querySelector('#ep-youtube-apply-btn');
+            if (youtubeApplyBtn) youtubeApplyBtn.addEventListener('click', () => {
+                if (!currentEpisode) { alert('Ouvre d\'abord un episode.'); return; }
+                const input = panel.querySelector('#ep-youtube-input');
+                if (!input.value.trim()) return;
+                if (setYoutubeOverride(currentEpisode, input.value.trim())) {
+                    input.value = '';
+                    applyLoadedEpisode(currentEpisode, false);
+                }
+            });
+            const youtubeClearBtn = panel.querySelector('#ep-youtube-clear-btn');
+            if (youtubeClearBtn) youtubeClearBtn.addEventListener('click', () => {
+                if (!currentEpisode) return;
+                clearYoutubeOverride(currentEpisode);
+                applyLoadedEpisode(currentEpisode, false);
+            });
 
             const autoNextCheckbox = panel.querySelector('#ep-autonext');
             if (autoNextCheckbox) autoNextCheckbox.addEventListener('change', () => {
