@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.1
+// @version      6.2
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1369,6 +1369,7 @@
                 '<button id="ed-goto-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Aller</button>' +
                 '</div>' +
                 '<button id="ed-reload-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#8635; Recharger la page</button>' +
+                (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Ouvrir sur Odysee</button>' : '') +
                 '<button id="ed-set-intro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fin intro</button>' +
                 '<button id="ed-set-outro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Debut outro</button>' +
                 '<button id="ed-settings-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Configuration</button>' +
@@ -1499,6 +1500,8 @@
                 postToPlayerFrame({ type: MSG_PREFIX + 'pause' });
                 if (document.fullscreenElement === overlay) document.exitFullscreen().catch(() => {});
             });
+            const edOpenOdyseeBtn = topbar.querySelector('#ed-open-odysee-btn');
+            if (edOpenOdyseeBtn) edOpenOdyseeBtn.addEventListener('click', openCurrentEpisodeOnOdysee);
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
 
             overlayEls = {
