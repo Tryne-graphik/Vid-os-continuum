@@ -16,6 +16,12 @@ namespace EspritDonghuaInstaller
         const string TampermonkeyUrlChrome = "https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo";
         const string TampermonkeyUrlFirefox = "https://addons.mozilla.org/firefox/addon/tampermonkey/";
         const string TampermonkeyUrlEdge = "https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd";
+        // Opera a sa propre fiche sur son propre store (pas le Chrome Web
+        // Store) meme si Opera est base sur Chromium - installer depuis le
+        // Chrome Web Store y est plus fragile/demande une extension tierce
+        // (meme constat que dans le projet Diablo IV Assistant, verifie le
+        // 2026-09-26 : Tampermonkey a un ID d'extension different sur Opera).
+        const string TampermonkeyUrlOpera = "https://addons.opera.com/en/extensions/details/tampermonkey-beta/";
 
         static int Main(string[] args)
         {
@@ -73,7 +79,8 @@ namespace EspritDonghuaInstaller
             Console.WriteLine("  1) Chrome");
             Console.WriteLine("  2) Firefox");
             Console.WriteLine("  3) Edge");
-            Console.WriteLine("  4) Autre (navigateur par defaut du systeme)");
+            Console.WriteLine("  4) Opera");
+            Console.WriteLine("  5) Autre (navigateur par defaut du systeme)");
             Console.Write("> ");
             string choice = Console.ReadLine();
 
@@ -92,9 +99,13 @@ namespace EspritDonghuaInstaller
                     tampermonkeyUrl = TampermonkeyUrlEdge;
                     return true;
                 case "4":
+                    browserExe = "opera.exe";
+                    tampermonkeyUrl = TampermonkeyUrlOpera;
+                    return true;
+                case "5":
                     // Pas de navigateur precis : on laisse Windows ouvrir le
                     // navigateur par defaut, on suppose une base Chromium
-                    // (page Chrome Web Store, compatible Brave/Opera/Vivaldi).
+                    // (page Chrome Web Store, compatible Brave/Vivaldi).
                     browserExe = null;
                     tampermonkeyUrl = TampermonkeyUrlChrome;
                     return true;

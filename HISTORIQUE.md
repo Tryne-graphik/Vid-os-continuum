@@ -1927,3 +1927,26 @@ ni la resolution de playlist, ni la configuration de la cle API par le menu
 Tampermonkey. Le bouton Odysee (v6.2) et le titre "Video Continuum" (v6.3) sont de
 simples changements d'UI, risque de regression faible mais non plus verifie en
 navigateur reel depuis.
+
+## 2026-09-27 - installateur decouvert (jamais journalise) + ajout d'Opera
+
+En reprenant le projet, decouverte d'un `installateur/EspritDonghuaInstaller.exe`
+(+ source `Program.cs`) - cree le 26/09 a 00:53, juste avant l'init de git (inclus
+dans le premier commit), jamais mentionne ici. Console C# simple : demande le
+navigateur, ouvre la page Tampermonkey correspondante, attend une touche, puis
+ouvre le `.user.js` local (cherche a cote de l'exe ou dans son dossier parent) pour
+declencher la fenetre de confirmation d'installation de Tampermonkey. Cible en dur
+`esprit-donghua-suivi-progression-v6.user.js` (le bon script, celui reellement
+utilise) - un commentaire dans le code dit de le changer pour
+`anime-tracker-generique.user.js` une fois cette version validee.
+
+**Ajout demande** : Opera a la liste des navigateurs (menu 1-4 -> 1-5, "Autre"
+passe en position 5). Meme raison que dans le projet Diablo IV Assistant : Opera a
+sa propre fiche Tampermonkey sur son propre store (`addons.opera.com`), pas le
+Chrome Web Store. `browserExe = "opera.exe"` (repose sur le registre Windows
+"App Paths", meme mecanisme que chrome.exe/firefox.exe/msedge.exe deja en place).
+Recompile avec le compilateur .NET Framework `csc.exe` (meme taille d'exe exacte
+qu'avant, 8704 octets - coherent avec l'outil d'origine). **Teste** : execution
+reelle avec le choix Opera - le menu affiche bien l'option, et Opera etait
+installe sur la machine de test donc les 2 etapes (page Tampermonkey puis script
+local) se sont vraiment ouvertes dans Opera.
