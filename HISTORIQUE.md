@@ -1864,3 +1864,66 @@ faire en priorite a la reprise, dans cet ordre :
    `unsafeWindow`, pas `window`, sous peine d'`Illegal invocation` - deja
    applique ici mais jamais teste dans ce nouveau fichier).
 7. Verifier "Vérifier nouveaux épisodes" et l'affichage du point "●".
+
+## 2026-09-26 - Git initialise + retour sur v6 (rattrapage du journal, ecrit le 2026-09-27)
+
+**Note sur ce rattrapage** : les 6 commits ci-dessous ont ete faits le 26/09 mais
+n'avaient jamais ete consignes ici - reconstitue le 27/09 a partir des messages de
+commit et des diffs (tous suffisamment detailles pour ca). Le chantier "tracker
+generique" (`anime-tracker-generique.user.js`, section precedente) reste EXACTEMENT
+ou il etait - toujours v1.0, toujours jamais teste dans un vrai navigateur. Toute
+cette journee a plutot continue `esprit-donghua-suivi-progression-v6.user.js`
+(v6.1 -> v6.5), qui reste le script "reel" utilise au quotidien.
+
+**Git initialise pour la premiere fois sur ce projet** (`043df06`, 06:00) - jusque
+la, seul ce fichier HISTORIQUE.md servait de suivi, aucun depot. Remote GitHub cree :
+`https://github.com/Tryne-graphik/Vid-os-continuum`. Le premier commit visait encore
+`esprit-donghua-tracker` comme nom de repo dans `@updateURL`/`@downloadURL` -
+corrige 16 minutes plus tard (`2c7ec5a`, v6 inchangee cote fonctionnel) une fois le
+repo reellement cree sous le nom `Vid-os-continuum`.
+
+**v6.2** (`06ce6f4`) : vrai bug corrige - le bouton "Ouvrir sur Odysee" n'existait
+que dans `#ep-panel` (visible seulement sur une page SANS lecteur actif, ex. accueil),
+jamais dans le calque plein ecran (topbar, IDs `ed-*`) qui passe par-dessus et cache
+`#ep-panel` des qu'un episode est lance - donc invisible en usage reel. Ajoute aussi
+au topbar.
+
+**v6.3** (`1432f56`) : renommage visuel du panneau. Le calque plein ecran affiche
+maintenant "Video Continuum" + le numero de version (lu dynamiquement via
+`GM_info.script.version`) au-dessus du nom de la serie, meme traitement que
+`#ep-panel` deja fait avant. Premier signe visible dans le code du renommage du
+projet (`@name` du script est deja "Anime Tracker Continuum (v6)" depuis le tout
+premier commit git - le renommage a donc eu lieu avant l'init de git, pas trace).
+
+**v6.4** (`e72555d`) : **lecteur YouTube de secours, par episode**. Depannage
+manuel quand l'hebergeur habituel (Odysee/Sibnet) d'un episode precis est
+casse/bloque (exemple cite : chaine officielle Tencent Video pour Wan Jie Du Zun) -
+l'utilisateur colle un lien YouTube (`youtube.com/watch?v=...`, `youtu.be/...` ou
+`.../embed/...`, extrait via regex sur les 11 caracteres de l'ID video), stocke par
+`site+serie+numero d'episode` (`youtubeOverrides` via `GM_setValue`), applique dans
+`applyLoadedEpisode()` a la place de l'embed habituel. **Volontairement degrade** :
+pas de saut intro/outro ni d'enchainement automatique sur cette source, puisque
+YouTube n'est pas pilote par le second script injecte dans l'iframe (contrairement
+a Odysee/Sibnet) - juste un repli pour pouvoir regarder quand meme. UI ajoutee aux
+DEUX panneaux (topbar ET `#ep-panel`) directement cette fois, lecon retenue du
+bouton Odysee (v6.2) qui n'avait ete ajoute qu'a un seul au depart.
+
+**v6.5** (`c8cb739`) : **playlist YouTube automatique par chaine associee**,
+complement du lien manuel v6.4. Association unique (prompt) d'une chaine YouTube +
+un mot-cle a la serie, puis construction/mise en cache d'une playlist triee par
+numero d'episode (dernier nombre trouve dans le titre - marche aussi bien sur
+"EP326" que "Episode 326") via l'API YouTube Data v3 (`playlistItems.list`,
+1 unite/page de 50, largement sous le quota gratuit journalier). Bouton "Trouver
+sur YouTube (chaine associee)" cherche l'episode courant dans la playlist en cache
+et applique le lien automatiquement - plus besoin de copier-coller un lien a
+chaque episode comme avec v6.4. Necessite une cle API YouTube gratuite,
+configurable via un nouveau menu Tampermonkey "Configurer la cle API YouTube".
+Ajoute aux deux panneaux comme v6.4.
+
+**Etat a la reprise (2026-09-27)** : `node --check` relance sur le fichier actuel,
+vert. **Aucune des fonctionnalites YouTube (v6.4/v6.5) n'a ete
+testee dans un vrai navigateur** - ni le lien manuel, ni l'association de chaine,
+ni la resolution de playlist, ni la configuration de la cle API par le menu
+Tampermonkey. Le bouton Odysee (v6.2) et le titre "Video Continuum" (v6.3) sont de
+simples changements d'UI, risque de regression faible mais non plus verifie en
+navigateur reel depuis.
