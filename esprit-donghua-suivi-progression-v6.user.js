@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.13
+// @version      6.14
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -190,7 +190,20 @@
             location.reload();
         }, reloadWatchdogMs);
 
+        // Reprise en cours d'episode (v6.13) : une seule fois par chargement
+        // du lecteur - la config est renvoyee a chaque reaffichage du calque
+        // et ne doit pas faire reculer la lecture.
+        let resumeApplied = false;
+        function applyResumeIfNeeded(video) {
+            if (resumeApplied || !config || !config.resumeAt) return;
+            resumeApplied = true;
+            if (video.currentTime >= config.resumeAt) return;
+            video.currentTime = config.resumeAt;
+            console.log('[AnimeTracker v6] (' + cfg.label + ') reprise a ' + Math.round(config.resumeAt) + 's');
+        }
+
         function applyIntroSkipIfNeeded(video) {
+            applyResumeIfNeeded(video);
             if (!config || !config.introEnd) return;
             if (video.currentTime < config.introEnd) {
                 video.currentTime = config.introEnd;
@@ -298,6 +311,14 @@
                 window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'pret' }, '*');
             }, { once: true });
 
+            let lastPositionPost = 0;
+            video.addEventListener('timeupdate', () => {
+                const now = Date.now();
+                if (now - lastPositionPost > 5000) {
+                    lastPositionPost = now;
+                    window.parent.postMessage({ type: MSG_PREFIX + 'position', t: video.currentTime, d: video.duration }, '*');
+                }
+            });
             video.addEventListener('timeupdate', () => {
                 if (!config || !config.outroStart || outroSignalSent) return;
                 if (video.currentTime >= config.outroStart) {
@@ -1898,8 +1919,26 @@
             try { origin = new URL(overlayEls.playerFrame.src).origin; } catch (e) {}
             overlayEls.playerFrame.contentWindow.postMessage(data, origin);
         }
+        // Position dans l'episode en cours, une seule par serie (v6.13) :
+        // { [storageKey]: { ep, t } } - ecrasee a chaque episode, donc ne
+        // grossit pas. Effacee en fin d'episode.
+        function loadResumePositions() { return GM_getValue('resumePositions', {}); }
+        function setResumePosition(info, t) {
+            const all = loadResumePositions();
+            if (t === null) { if (!all[storageKey(info)]) return; delete all[storageKey(info)]; }
+            else all[storageKey(info)] = { ep: info.episodeNumber, t: Math.floor(t) };
+            GM_setValue('resumePositions', all);
+        }
+        // Faux entre le changement de src et le 'ready' du nouveau lecteur :
+        // l'ancien peut encore envoyer sa position, attribuee a tort au
+        // nouvel episode (meme contentWindow d'une navigation a l'autre).
+        let positionArmed = false;
+        function getResumeAt(info) {
+            const r = loadResumePositions()[storageKey(info)];
+            return r && r.ep === info.episodeNumber ? r.t : null;
+        }
         function sendConfigToPlayerFrame() {
-            postToPlayerFrame({ type: MSG_PREFIX + 'config', introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, preferredQuality: currentConfig.preferredQuality });
+            postToPlayerFrame({ type: MSG_PREFIX + 'config', introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
         }
 
         // Origines autorisees pour les messages ENTRANTS du lecteur - le
@@ -1912,7 +1951,14 @@
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
-            if (type === 'ready') sendConfigToPlayerFrame();
+            if (type === 'ready') { positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'position' && currentEpisode && positionArmed) {
+                const t = Number(event.data.t), d = Number(event.data.d);
+                // < 30s : rien a reprendre ; dernieres 2 min : considere fini.
+                if (t >= 30 && (!isFinite(d) || d - t > 120)) setResumePosition(currentEpisode, t);
+                else if (isFinite(d) && d - t <= 120) setResumePosition(currentEpisode, null);
+            }
+            if (type === 'outro-reached' || type === 'ended') { if (currentEpisode) setResumePosition(currentEpisode, null); }
             if (type === 'outro-reached') {
                 if (outroSkipSuspended || outroSignalSent) return;
                 outroSignalSent = true;
@@ -2024,6 +2070,7 @@
             recordEpisodeProgress(info);
             applyRuntimeConfig(storageKey(info));
             outroSignalSent = false;
+            positionArmed = false;
             overlayEls.playerFrame.src = youtubeOverride || info.embedSrc;
             if (youtubeOverride) {
                 setStatus('Lecture via lien YouTube de secours - pas de saut intro/outro ni enchainement auto sur cette source.');
