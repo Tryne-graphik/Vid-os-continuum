@@ -340,3 +340,15 @@ avant chaque push destiné à l'usage réel, sinon Tampermonkey ne voit rien.
   l'URL brute GitHub (l'ami n'a besoin que de l'exe, mises à jour auto) au lieu
   d'un fichier local ; rappel "Autoriser les scripts utilisateur" pour Chrome.
   Recompilé (csc .NET Framework), démarrage vérifié.
+
+### 2026-10-01 (suite 3) — v6.9 : signalement d'incidents branché
+
+URL `/exec` fournie par l'utilisateur, collée dans `INCIDENTS_ENDPOINT_URL`.
+Vérifié : GET → "endpoint incidents OK", mauvais secret → `unauthorized`, bon
+secret → `{"status":"ok"}` ; puis envoi réel depuis le panneau (Chrome, banc
+Playwright) → "Merci, envoyé !". **2 lignes `[TEST]` écrites dans la feuille
+Incidents** (à supprimer à la main). Bug corrigé au passage : le message de
+résultat était effacé par la reconstruction du panneau (1re vérification des
+nouveaux épisodes 8 s après le chargement) — désormais gardé hors du DOM
+(`setIncidentNote`). Leçon banc de test : le shim `GM_xmlhttpRequest` doit
+transmettre `data`/`headers`, sinon faux "réponse serveur inattendue".

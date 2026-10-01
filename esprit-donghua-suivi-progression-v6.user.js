@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.8
+// @version      6.9
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1550,9 +1550,20 @@
         // pre-remplie (depot public). Le "secret" n'en est pas un (il est
         // dans ce script public) : il ecarte seulement les bots generiques,
         // le vrai garde-fou est le quota journalier cote serveur.
-        const INCIDENTS_ENDPOINT_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+        const INCIDENTS_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbyoNpSWs28TV9KktdTYw0EaYNI8jtNitXmaa_Ck9lBtn6du6O-8Gq88HGN1IhR-V1pD/exec';
         const INCIDENTS_SHARED_SECRET = 'c9322995-95ba-4fca-a51f-1d67abd6ea96';
         let incidentDraft = '';
+        // Message de resultat garde hors du DOM : le panneau est regenere
+        // (ex. 1re verification des nouveaux episodes, 8s apres le
+        // chargement) et effacait le "Merci, envoye !" en plein envoi.
+        let incidentNote = { text: '', color: '#888' };
+        function setIncidentNote(text, color) {
+            incidentNote = { text: text, color: color };
+            ['ep', 'ed'].forEach((prefix) => {
+                const el = document.getElementById(prefix + '-fb-note');
+                if (el) { el.textContent = text; el.style.color = color; }
+            });
+        }
 
         function incidentSectionHtml(prefix, open) {
             const draft = incidentDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -1562,13 +1573,12 @@
                 '<textarea id="' + prefix + '-fb-body" rows="4" placeholder="Ce que tu faisais, ce qui s\'est passe..." style="width:100%;box-sizing:border-box;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;resize:vertical;">' + draft + '</textarea>' +
                 '<div style="font-size:10px;color:#888;">Envoye avec : site, anime, episode, version, navigateur.</div>' +
                 '<button id="' + prefix + '-fb-send" style="' + BTN_STYLE + '">&#128228; Envoyer</button>' +
-                '<span id="' + prefix + '-fb-note" style="font-size:11px;color:#888;"></span>', open);
+                '<span id="' + prefix + '-fb-note" style="font-size:11px;color:' + incidentNote.color + ';">' + incidentNote.text + '</span>', open);
         }
 
         function bindIncidentSection(container, prefix) {
             const body = container.querySelector('#' + prefix + '-fb-body');
             const sendBtn = container.querySelector('#' + prefix + '-fb-send');
-            const note = container.querySelector('#' + prefix + '-fb-note');
             if (!body || !sendBtn) return;
             body.addEventListener('input', () => { incidentDraft = body.value; });
             sendBtn.addEventListener('click', () => {
@@ -1598,10 +1608,11 @@
                         let ok = false;
                         try { ok = JSON.parse(res.responseText).status === 'ok'; } catch (e) {}
                         if (!ok) throw new Error('reponse serveur inattendue');
-                        note.textContent = 'Merci, envoye !'; note.style.color = '#4caf50';
-                        body.value = ''; incidentDraft = '';
+                        setIncidentNote('Merci, envoye !', '#4caf50');
+                        incidentDraft = '';
+                        ['ep', 'ed'].forEach((p2) => { const b = document.getElementById(p2 + '-fb-body'); if (b) b.value = ''; });
                     })
-                    .catch((e) => { note.textContent = 'Echec de l\'envoi (' + ((e && e.message) || 'reseau') + ') - reessaie plus tard.'; note.style.color = '#f66'; })
+                    .catch((e) => { setIncidentNote('Echec de l\'envoi (' + ((e && e.message) || 'reseau') + ') - reessaie plus tard.', '#f66'); })
                     .then(() => { sendBtn.disabled = false; sendBtn.innerHTML = '&#128228; Envoyer'; });
             });
         }
