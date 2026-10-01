@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.11
+// @version      6.12
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1586,7 +1586,7 @@
         // pre-remplie (depot public). Le "secret" n'en est pas un (il est
         // dans ce script public) : il ecarte seulement les bots generiques,
         // le vrai garde-fou est le quota journalier cote serveur.
-        const INCIDENTS_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbyoNpSWs28TV9KktdTYw0EaYNI8jtNitXmaa_Ck9lBtn6du6O-8Gq88HGN1IhR-V1pD/exec';
+        const INCIDENTS_ENDPOINT_URL = 'https://script.google.com/macros/s/AKfycbyhbP6zqVXnReLV0mcwEWBF68w7zZBfe6DSD7u522SeXECVNzGiHux6FVD8yKEm2H3s/exec';
         const INCIDENTS_SHARED_SECRET = 'c9322995-95ba-4fca-a51f-1d67abd6ea96';
         let incidentDraft = '';
         // Message de resultat garde hors du DOM : le panneau est regenere

@@ -403,3 +403,14 @@ Audit (demande : "sécuriser nos projets pour les partager avec des inconnus") :
   -r:System.Drawing.dll -resource:guide/store.png,store.png
   -resource:guide/userscripts.png,userscripts.png
   -resource:guide/install.png,install.png -out:"Vidéo_Continuum-Installateur.exe" Program.cs`
+
+### 2026-10-01 (suite 6) — v6.12 : nouvelle adresse du collecteur d'incidents
+
+L'utilisateur a redéployé les 2 Apps Script (anti-injection de formule). Pour
+Vidéo_Continuum, 1er essai = code modifié sans "Nouvelle version" (l'URL servait
+encore l'ancien texte "Video Continuum") ; 2e essai = **nouveau déploiement →
+nouvelle URL** `.../AKfycbyhbP6z.../exec`. Vérifié : GET renvoie le nouveau texte
+"Vidéo_Continuum - endpoint incidents OK", mauvais secret → `unauthorized`.
+`INCIDENTS_ENDPOINT_URL` mis à jour. L'ancien déploiement (AKfycbyoNp...) sert
+toujours l'ancien code sans la protection : à archiver une fois les installations
+passées en 6.12.
