@@ -414,3 +414,22 @@ nouvelle URL** `.../AKfycbyhbP6z.../exec`. Vérifié : GET renvoie le nouveau te
 `INCIDENTS_ENDPOINT_URL` mis à jour. L'ancien déploiement (AKfycbyoNp...) sert
 toujours l'ancien code sans la protection : à archiver une fois les installations
 passées en 6.12.
+
+### 2026-10-01 — fin de séance : à reprendre
+
+État : v6.12 en ligne et installée chez l'utilisateur ; phase de test avec un ami
+(installateur envoyé depuis le Bureau). Les 2 Apps Script sont redéployés.
+
+À faire / vérifier à la reprise :
+- **Retours de l'ami** : regarder la feuille "Incidents" (statut "Nouveau").
+- Supprimer l'ancien `installateur/Vidéo_Continuum-Installateur.exe` (version
+  0.0.0.0, verrouillé par Bitdefender) puis committer la version propre (6.11.0.0,
+  sha c6eeb62a…, copie sur le Bureau).
+- Archiver l'ancien déploiement Apps Script (`AKfycbyoNp…`) si pas encore fait ;
+  supprimer les 2 lignes `[TEST]` de la feuille.
+- Non testé en conditions réelles : saut d'intro/outro + enchaînement sur ansembed,
+  pop-up de suivi sur esprit-donghua/animoflix/odysee, parcours complet de
+  l'installateur chez quelqu'un d'autre.
+- Plus tard : version générique (`anime-tracker-generique.user.js`, v1.0 non
+  testée) avant toute présentation publique ; vitrine GitHub Pages ; double
+  authentification GitHub avant partage public.
