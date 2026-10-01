@@ -1,4 +1,4 @@
-# Video Continuum
+# Vidéo_Continuum
 
 Script Tampermonkey qui retient où tu en es dans tes animes, saute les
 génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
@@ -6,7 +6,7 @@ génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
 
 ## Installation
 
-**Le plus simple** : lance `installateur/VideoContinuum-Installateur.exe` et
+**Le plus simple** : lance `installateur/Vidéo_Continuum-Installateur.exe` et
 suis les étapes (choix du navigateur → installation de Tampermonkey →
 installation du script).
 
@@ -26,14 +26,17 @@ Les mises à jour arrivent ensuite automatiquement (ou via le bouton
 L'exécutable n'est pas signé : Windows SmartScreen peut afficher un
 avertissement (« Informations complémentaires » → « Exécuter quand même »).
 Pour vérifier qu'il n'a pas été modifié, compare son empreinte SHA-256
-(PowerShell : `Get-FileHash VideoContinuum-Installateur.exe`) :
+(PowerShell : `Get-FileHash Vidéo_Continuum-Installateur.exe`) :
 
 ```
-09be7a05b630567d4bf412d9dca2309be51b46f40d824fee71db54ab342e4051
+c6eeb62a1810f63b8c6dd05907e52a4f1c773e63ffda30c1411aac77696495e0
 ```
 
 Son code source est dans `installateur/Program.cs` : il ne fait qu'ouvrir
-deux pages dans ton navigateur (Tampermonkey, puis le script ci-dessus).
+des pages dans ton navigateur (Tampermonkey, la page des extensions, puis
+le script ci-dessus), avec une image pour chaque clic à faire. Il n'installe
+rien lui-même, ne touche pas au registre et ne demande pas de droits
+administrateur.
 
 ## Données et vie privée
 

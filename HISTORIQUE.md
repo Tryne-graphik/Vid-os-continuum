@@ -375,3 +375,31 @@ Audit (demande : "sécuriser nos projets pour les partager avec des inconnus") :
 - Vérifié : aucun chemin local / e-mail / clé / ID de feuille dans les fichiers
   suivis ; `save/` (historique perso) bien ignoré. Reste visible : l'e-mail
   d'auteur des commits (métadonnées git publiques).
+
+### 2026-10-01 (suite 5) — v6.11 : renommage Vidéo_Continuum + installateur illustré
+
+- **Renommage** demandé : "Vidéo_Continuum" partout où le nom est AFFICHÉ (panneau,
+  calque, fichier de sauvegarde exporté, README, Apps Script, installateur).
+  **Volontairement inchangés** : `@name` (Tampermonkey identifie un script par
+  nom+namespace → changer `@name` créerait un 2e script, double calque +
+  progression vide), nom du fichier `.user.js` et dépôt GitHub (= `@updateURL`
+  des installations existantes).
+- **Installateur en fenêtre** (WinForms, `-target:winexe`) au lieu de la console :
+  accueil + choix du navigateur, puis un écran illustré par manipulation
+  (Ajouter Tampermonkey / Autoriser les scripts utilisateur / Installer), bouton
+  "Rouvrir la page". Illustrations = schémas `installateur/guide/mockups.html`
+  rendus en PNG (Playwright) et embarqués (`/resource`). Accents via
+  `-codepage:65001`. Fiche d'identité de l'exe (AssemblyInfo). Option `--preview
+  <dossier>` = rendu PNG de tous les écrans sans rien ouvrir ; `--detect` = dit si
+  Tampermonkey est installé (Chrome/Edge, par dossier de profil).
+- **Installation automatique de Tampermonkey tentée puis RETIRÉE** : clé HKLM
+  "extensions externes" (méthode officielle Chrome/Edge, HKLM seulement d'après
+  leurs docs) + relance de l'exe en administrateur. **Bitdefender bloquait l'exe
+  dès sa compilation** (verrou, impossible à lancer/supprimer). Prouvé par
+  élimination : même exe sans `runas` ni écriture registre → lancé sans souci.
+  Schéma typique d'adware → aurait été bloqué chez les testeurs aussi. Remplacé
+  par la page du store + écran illustré.
+- Build compilé : `csc -codepage:65001 -target:winexe -r:System.Windows.Forms.dll
+  -r:System.Drawing.dll -resource:guide/store.png,store.png
+  -resource:guide/userscripts.png,userscripts.png
+  -resource:guide/install.png,install.png -out:"Vidéo_Continuum-Installateur.exe" Program.cs`

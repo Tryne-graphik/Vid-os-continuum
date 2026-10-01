@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.10
+// @version      6.11
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1349,9 +1349,9 @@
                 JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>';
             return '<!doctype html><html><head><meta charset="utf-8">' +
                 '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-                '<title>Ma progression - Anime Tracker</title>' +
+                '<title>Ma progression - Vidéo_Continuum</title>' +
                 '<style>body{font-family:Arial,sans-serif;background:#0d0d12;color:#eee;padding:20px;} a{color:#03d0fc;} li{margin-bottom:12px;font-size:15px;} h2{color:#03d0fc;font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;}</style>' +
-                '</head><body><h1>Ma progression - Anime Tracker</h1>' + items + dataBlock + '</body></html>';
+                '</head><body><h1>Ma progression - Vidéo_Continuum</h1>' + items + dataBlock + '</body></html>';
         }
 
         function downloadHtml(filename) {
@@ -1680,7 +1680,7 @@
             const SELECT = 'width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;';
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
-                '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Video Continuum</div>' +
+                '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Vidéo_Continuum</div>' +
                 '<div style="font-size:10px;color:#888;margin-top:-6px;">v' + scriptVersion + '</div>' +
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
@@ -2590,7 +2590,7 @@
             panel.querySelectorAll('details[data-sec]').forEach((d) => { prevOpen[d.getAttribute('data-sec')] = d.open; });
             const CHECK = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
 
-            let html = '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Video Continuum</div>';
+            let html = '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Vidéo_Continuum</div>';
             html += '<div style="font-size:10px;color:#888;margin-top:-6px;">v' + scriptVersion + '</div>';
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';

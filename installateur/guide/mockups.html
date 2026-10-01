@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<!-- Source des illustrations de l'installateur : chaque .shot est capture
+     en PNG (520x280) puis embarque dans l'exe. Schemas simplifies, pas des
+     captures reelles : seul le bouton a cliquer doit etre fidele. -->
+<style>
+  body { margin: 0; background: #888; font-family: "Segoe UI", Arial, sans-serif; }
+  .shot { width: 520px; height: 280px; background: #f1f3f4; position: relative; overflow: hidden; margin: 10px; box-sizing: border-box; border: 1px solid #ccc; }
+  .bar { height: 34px; background: #dee1e6; display: flex; align-items: center; padding: 0 10px; gap: 8px; }
+  .tab { background: #fff; border-radius: 8px 8px 0 0; padding: 6px 14px; font-size: 12px; align-self: flex-end; }
+  .url { flex: 1; background: #fff; border-radius: 14px; padding: 5px 12px; font-size: 12px; color: #555; }
+  .menu { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; position: relative; }
+  .badge { position: absolute; top: 1px; right: 1px; width: 9px; height: 9px; border-radius: 50%; background: #f29900; }
+  .dialog { position: absolute; background: #fff; border-radius: 8px; box-shadow: 0 4px 18px rgba(0,0,0,.25); padding: 16px 18px; font-size: 13px; color: #202124; }
+  .dialog h3 { margin: 0 0 8px; font-size: 15px; font-weight: 600; }
+  .dialog p { margin: 0 0 14px; color: #5f6368; line-height: 1.35; }
+  .btns { display: flex; justify-content: flex-end; gap: 8px; }
+  .btn { border-radius: 16px; padding: 7px 16px; font-size: 13px; border: 1px solid #dadce0; background: #fff; color: #1a73e8; }
+  .btn.primary { background: #1a73e8; color: #fff; border-color: #1a73e8; }
+  .ring { outline: 4px solid #ff3b30; outline-offset: 4px; border-radius: 18px; }
+  .arrow { position: absolute; color: #ff3b30; font-size: 34px; font-weight: bold; }
+  .tm { display: inline-flex; width: 22px; height: 22px; border-radius: 5px; background: #000; color: #fff; font-size: 13px; align-items: center; justify-content: center; vertical-align: middle; margin-right: 6px; }
+  .row { display: flex; justify-content: space-between; align-items: center; padding: 11px 16px; border-top: 1px solid #e8eaed; font-size: 13px; background: #fff; }
+  .toggle { width: 36px; height: 14px; border-radius: 7px; background: #bdc1c6; position: relative; }
+  .toggle::after { content: ""; position: absolute; top: -3px; left: -2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); }
+  .toggle.on { background: #8ab4f8; }
+  .toggle.on::after { left: 18px; background: #1a73e8; }
+</style></head><body>
+
+<!-- 1b. Repli : page du store -->
+<div class="shot" id="shot-store">
+  <div class="bar"><span class="tab">Tampermonkey - store</span><span class="url">chromewebstore.google.com/detail/tampermonkey</span></div>
+  <div style="background:#fff;margin:18px;border-radius:8px;padding:22px;display:flex;align-items:center;gap:16px;">
+    <span class="tm" style="width:56px;height:56px;font-size:24px;border-radius:12px;">TM</span>
+    <div style="flex:1;"><div style="font-size:18px;font-weight:600;">Tampermonkey</div><div style="font-size:12px;color:#5f6368;">★★★★★ · Extension</div></div>
+    <span class="btn primary ring" style="padding:9px 20px;">Ajouter à Chrome</span>
+  </div>
+  <div style="margin:0 18px;font-size:12px;color:#5f6368;">Puis confirme « Ajouter l'extension » dans la petite fenêtre qui s'ouvre.<br>(Edge : « Obtenir » · Firefox : « Ajouter à Firefox » · Opera : « Ajouter à Opera »)</div>
+</div>
+
+<!-- 2. Autoriser les scripts utilisateur -->
+<div class="shot" id="shot-userscripts">
+  <div class="bar"><span class="tab">Extensions</span><span class="url">chrome://extensions/?id=dhdgffkkebhmkfjojejmpbldmpobfkfo</span></div>
+  <div style="margin:12px 18px 0;background:#fff;border-radius:8px;overflow:hidden;">
+    <div style="padding:12px 16px;font-size:15px;font-weight:600;"><span class="tm">TM</span>Tampermonkey</div>
+    <div class="row"><span>Activé</span><span class="toggle on"></span></div>
+    <div class="row" style="background:#fff7e6;"><span><b>Autoriser les scripts utilisateur</b></span><span class="toggle on ring" style="border-radius:7px;"></span></div>
+    <div class="row"><span>Autoriser en navigation privée</span><span class="toggle"></span></div>
+  </div>
+  <div style="position:absolute;bottom:10px;left:18px;font-size:11px;color:#5f6368;">Option absente ? Active « Mode développeur » en haut à droite de la page Extensions.</div>
+</div>
+
+<!-- 3. Installer le script dans Tampermonkey -->
+<div class="shot" id="shot-install">
+  <div class="bar"><span class="tab">Tampermonkey</span><span class="url">Installation d'un script</span></div>
+  <div style="margin:16px 18px;background:#fff;border-radius:8px;padding:18px;">
+    <div style="font-size:12px;color:#5f6368;"><span class="tm">TM</span>Tampermonkey · Installation</div>
+    <div style="font-size:18px;font-weight:600;margin:12px 0 2px;">Anime Tracker Continuum (v6)</div>
+    <div style="font-size:12px;color:#5f6368;margin-bottom:18px;">par Tryne · source : raw.githubusercontent.com</div>
+    <div style="display:flex;gap:10px;"><span class="btn primary ring" style="border-radius:4px;">Installer</span><span class="btn" style="border-radius:4px;">Annuler</span></div>
+  </div>
+  <div style="position:absolute;bottom:10px;left:18px;font-size:11px;color:#5f6368;">Déjà installé ? Le bouton s'appelle « Mettre à jour » ou « Réinstaller ».</div>
+</div>
+
+</body></html>
