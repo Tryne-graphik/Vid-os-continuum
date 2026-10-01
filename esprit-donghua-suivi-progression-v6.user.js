@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.12
+// @version      6.13
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -110,9 +110,14 @@
     const PLAYER_ORIGIN_SIBNET = 'https://video.sibnet.ru';
     const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';
     const MSG_PREFIX = 'anime-tracker-v6-';
+    const PLAYER_FRAME_NAME = 'continuum-player';
 
     // ================= Contexte : DANS l'iframe du lecteur =================
     if (!isTopFrame) {
+        // Seulement dans NOTRE iframe (nommee dans buildOverlay) : anime-sama
+        // charge desormais lui-meme ansembed dans #playerDF, et le clic
+        // automatique y lancait une 2e lecture en arriere-plan (v6.13).
+        if (window.name !== PLAYER_FRAME_NAME) return;
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
         if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
@@ -1639,11 +1644,17 @@
                     return;
                 }
                 sendBtn.disabled = true; sendBtn.textContent = 'Envoi...';
-                gmRequest({ method: 'POST', url: INCIDENTS_ENDPOINT_URL, data: JSON.stringify(report), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, timeout: 20000 })
+                // anonymous : sans les cookies Google du navigateur - avec plusieurs
+                // comptes Google connectes, Apps Script renvoie une page HTML au
+                // lieu du JSON ("reponse serveur inattendue", v6.13).
+                gmRequest({ method: 'POST', url: INCIDENTS_ENDPOINT_URL, data: JSON.stringify(report), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, timeout: 20000, anonymous: true })
                     .then((res) => {
-                        let ok = false;
-                        try { ok = JSON.parse(res.responseText).status === 'ok'; } catch (e) {}
-                        if (!ok) throw new Error('reponse serveur inattendue');
+                        let json = null;
+                        try { json = JSON.parse(res.responseText); } catch (e) {}
+                        if (!json || json.status !== 'ok') {
+                            console.log('[AnimeTracker v6] reponse incident inattendue', res.status, res.finalUrl, (res.responseText || '').slice(0, 500));
+                            throw new Error(json && json.message ? json.message : 'reponse serveur inattendue, statut ' + res.status);
+                        }
                         setIncidentNote('Merci, envoye !', '#4caf50');
                         incidentDraft = '';
                         ['ep', 'ed'].forEach((p2) => { const b = document.getElementById(p2 + '-fb-body'); if (b) b.value = ''; });
@@ -1661,6 +1672,7 @@
 
             const playerFrame = document.createElement('iframe');
             playerFrame.id = 'ed-player-frame';
+            playerFrame.name = PLAYER_FRAME_NAME;
             playerFrame.setAttribute('allow', 'autoplay; fullscreen');
             playerFrame.style.cssText = 'width:100%;height:100%;border:0;background:#000;display:block;';
             overlay.appendChild(playerFrame);
@@ -2085,9 +2097,8 @@
         function disableLiveVideoOnPage() {
             // esprit-donghua/animoflix : neutralise l'iframe native du
             // lecteur pour eviter un flux video en double sous notre calque.
-            // anime-sama : le lecteur (#playerDF) est deja vide par defaut
-            // (src="") tant que rien n'a ete choisi - rien a neutraliser.
-            const iframe = document.getElementById('odysee-iframe') || document.querySelector('iframe[src*="odysee.com"]') || document.querySelector('#epVideoFrame');
+            // anime-sama : #playerDF charge desormais ansembed par defaut.
+            const iframe = document.getElementById('odysee-iframe') || document.querySelector('iframe[src*="odysee.com"]') || document.querySelector('#epVideoFrame') || document.getElementById('playerDF');
             if (iframe && iframe.src && iframe.src !== 'about:blank') {
                 iframe.src = 'about:blank';
                 console.log('[AnimeTracker v6] lecteur natif de la page desactive (evite un flux video en double)');
