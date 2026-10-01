@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.5
+// @version      6.6
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
 // @match        https://animoflix.to/*
 // @match        https://anime-sama.to/*
 // @match        https://video.sibnet.ru/*
+// @match        https://ansembed.net/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -105,12 +106,14 @@
     const isTopFrame = (window.top === window.self);
     const PLAYER_ORIGIN_ODYSEE = 'https://odysee.com';
     const PLAYER_ORIGIN_SIBNET = 'https://video.sibnet.ru';
+    const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';
     const MSG_PREFIX = 'anime-tracker-v6-';
 
     // ================= Contexte : DANS l'iframe du lecteur =================
     if (!isTopFrame) {
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
+        if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
         return;
     }
 
@@ -348,6 +351,18 @@
             autoClickIntervalMs: 2000,
             autoClickMaxAttempts: 15, // ~30s
             reloadWatchdogMs: 30000
+        });
+    }
+
+    // anime-sama (2026-10-01) : sibnet renvoie 403 meme dans le lecteur du
+    // site lui-meme ; le lecteur par defaut du site est desormais ansembed.net
+    // (JW Player, vraie balise <video> dans le meme document - clic sur
+    // .jw-icon-display + seek verifies en vrai navigateur).
+    function runInsidePlayerFrame_ansembed() {
+        runInsidePlayerFrameGeneric({
+            label: 'Ansembed',
+            playSelectors: ['.jw-icon-display', '.jw-display-icon-display'],
+            supportsQualityLock: false
         });
     }
 
@@ -703,7 +718,7 @@
 
             return fetchPageHtml(episodesJsUrl).then((jsText) => {
                 const epsArrays = parseEpsArrays(jsText);
-                const embedByIndex = buildSibnetByIndex(epsArrays);
+                const embedByIndex = buildEmbedByIndex(epsArrays);
                 const totalEpisodes = embedByIndex.length;
                 if (totalEpisodes === 0) return null;
                 // Pas de trous possibles ici (tableau JS du site, un index =
@@ -759,21 +774,21 @@
         return arrays; // { "1": [...], "2": [...], ... }
     }
 
-    // Pour chaque index d'episode, prend la premiere URL sibnet trouvee
-    // parmi les lecteurs disponibles a CET index (la disponibilite par
-    // hebergeur peut varier episode par episode, pas seulement lecteur par
-    // lecteur - constate en inspectant un vrai fichier episodes.js). null si
-    // aucun lecteur n'a de source sibnet pour cet episode precis.
-    function buildSibnetByIndex(epsArrays) {
+    // Pour chaque index d'episode, prend la premiere URL d'un hebergeur
+    // gere parmi les lecteurs disponibles a CET index (la disponibilite par
+    // hebergeur peut varier episode par episode - constate en inspectant un
+    // vrai fichier episodes.js). Ansembed d'abord (lecteur par defaut du
+    // site, sibnet en 403 depuis 2026-10-01), sibnet en secours. null si
+    // aucun hebergeur gere pour cet episode precis.
+    const ANIME_SAMA_HOSTS = [/ansembed\.net/i, /sibnet\.ru/i];
+    function buildEmbedByIndex(epsArrays) {
         const lecteurKeys = Object.keys(epsArrays).sort((a, b) => Number(a) - Number(b));
         const maxLen = lecteurKeys.reduce((max, k) => Math.max(max, epsArrays[k].length), 0);
         const result = [];
         for (let i = 0; i < maxLen; i++) {
+            const urls = lecteurKeys.map((k) => epsArrays[k][i]).filter(Boolean);
             let found = null;
-            for (let k = 0; k < lecteurKeys.length; k++) {
-                const url = epsArrays[lecteurKeys[k]][i];
-                if (url && /sibnet\.ru/i.test(url)) { found = url; break; }
-            }
+            for (let h = 0; h < ANIME_SAMA_HOSTS.length && !found; h++) found = urls.find((u) => ANIME_SAMA_HOSTS[h].test(u)) || null;
             result.push(found);
         }
         return result;
@@ -1475,6 +1490,7 @@
         let outroSkipSuspended = false;
         let newEpisodes = {};
         let latestKnownEpisode = {};
+        let lastNewEpisodesCheckAt = null;
 
         // ---- Detection "chargement tres lent" (surcharge serveur probable) ----
         // Base sur la meme progression de % de buffer que l'affichage normal
@@ -1562,6 +1578,7 @@
                 '</select>' +
                 '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' +
                 '<button id="ed-check-new-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#8635; Verifier les nouveaux episodes</button>' +
+                '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 '<label style="display:flex;align-items:center;gap:6px;color:#ccc;"><input type="checkbox" id="ed-autonext-cb"> Lecture continue</label>' +
                 '<label style="display:flex;align-items:center;gap:6px;color:#ccc;"><input type="checkbox" id="ed-autoopen-cb"> Lecteur auto</label>' +
                 '<label style="display:flex;align-items:center;gap:6px;color:#ccc;" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet.">' +
@@ -1730,7 +1747,11 @@
 
         function postToPlayerFrame(data) {
             if (!overlayEls || !overlayEls.playerFrame.contentWindow || !currentEpisode) return;
-            overlayEls.playerFrame.contentWindow.postMessage(data, currentEpisode.playerOrigin);
+            // Origine tiree de la vraie src de l'iframe (anime-sama melange
+            // ansembed/sibnet selon l'episode), pas de info.playerOrigin.
+            let origin = currentEpisode.playerOrigin;
+            try { origin = new URL(overlayEls.playerFrame.src).origin; } catch (e) {}
+            overlayEls.playerFrame.contentWindow.postMessage(data, origin);
         }
         function sendConfigToPlayerFrame() {
             postToPlayerFrame({ type: MSG_PREFIX + 'config', introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, preferredQuality: currentConfig.preferredQuality });
@@ -1739,7 +1760,7 @@
         // Origines autorisees pour les messages ENTRANTS du lecteur - le
         // vrai controle de securite reste event.source (voir plus bas), cet
         // ensemble n'est qu'un premier filtre rapide.
-        const PLAYER_ORIGINS = new Set([PLAYER_ORIGIN_ODYSEE, PLAYER_ORIGIN_SIBNET]);
+        const PLAYER_ORIGINS = new Set([PLAYER_ORIGIN_ODYSEE, PLAYER_ORIGIN_SIBNET, PLAYER_ORIGIN_ANSEMBED]);
         window.addEventListener('message', (event) => {
             if (!PLAYER_ORIGINS.has(event.origin)) return;
             if (!event.data || typeof event.data.type !== 'string' || event.data.type.indexOf(MSG_PREFIX) !== 0) return;
@@ -1841,7 +1862,7 @@
         }
 
         function applyLoadedEpisode(info, pushHistory) {
-            if (!info) throw new Error('episode introuvable ou lecteur sibnet indisponible pour cet episode');
+            if (!info) throw new Error('episode introuvable ou aucun lecteur compatible pour cet episode');
             const youtubeOverride = getYoutubeOverrideUrl(info);
             if (!info.embedSrc && !youtubeOverride) {
                 // Ex. anime-sama : cet episode precis n'existe que sur un
@@ -1851,7 +1872,7 @@
                 // Sauf si un lien YouTube de secours a ete configure pour
                 // cet episode precis (voir ci-dessus) - dans ce cas on
                 // continue avec lui.
-                setStatus('Non disponible sur sibnet pour cet episode - utilise le lecteur du site.');
+                setStatus('Aucun lecteur compatible (ansembed/sibnet) pour cet episode - utilise le lecteur du site.');
                 return;
             }
             currentEpisode = info;
@@ -2132,7 +2153,12 @@
                     return site.extract(doc, e.episodeUrl);
                 }).then((info) => { if (info) applyResultFor(e, info, (c) => { if (c) changed = true; }); }).catch(() => {});
             });
-            return Promise.all(checks).then(() => { if (changed) buildPersistentPanel(); });
+            return Promise.all(checks).then(() => {
+                const firstCheck = !lastNewEpisodesCheckAt;
+                lastNewEpisodesCheckAt = new Date();
+                if (changed || firstCheck) buildPersistentPanel();
+                refreshTrackingPopup();
+            });
 
             function applyResultFor(entry, info, cb) {
                 let didChange = false;
@@ -2225,6 +2251,108 @@
             return html;
         }
 
+        // ---- Resume par site + fenetre de suivi (demande 2026-10-01) ----
+        // Une ligne cliquable par site : nom, nb d'animes suivis, nb de
+        // nouveaux episodes (somme dernier connu - vu quand les deux sont
+        // connus, sinon 1 par serie signalee). Ouvre openTrackingPopup().
+
+        function countNewEpisodesFor(key, watched) {
+            if (!newEpisodes[key]) return 0;
+            const latest = Number(latestKnownEpisode[key]);
+            const w = Number(watched);
+            return latest && w && latest > w ? latest - w : 1;
+        }
+
+        function getTrackedEntriesBySite() {
+            const progress = loadProgress();
+            const excluded = loadExcludedSeries();
+            const bySite = {};
+            Object.keys(progress).forEach((k) => {
+                if (excluded[k]) return;
+                const e = Object.assign({ key: k }, progress[k]);
+                (bySite[e.site] = bySite[e.site] || []).push(e);
+            });
+            return bySite;
+        }
+
+        function renderTrackingSummary() {
+            const bySite = getTrackedEntriesBySite();
+            return SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id)).map((s) => {
+                const entries = bySite[s.id];
+                const nbNew = entries.reduce((sum, e) => sum + countNewEpisodesFor(e.key, e.episodeNumber), 0);
+                const newText = lastNewEpisodesCheckAt ? nbNew + ' nouveau' + (nbNew > 1 ? 'x' : '') : '? nouveaux';
+                const color = nbNew > 0 ? '#ffb300' : '#ccc';
+                return '<div class="ep-summary-line" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.1);border:1px solid #234;border-radius:4px;padding:5px 7px;font-size:11px;color:' + color + ';">' +
+                    '<b>' + s.label + '</b> &middot; ' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div>';
+            }).join('');
+        }
+
+        function bindTrackingSummary(container) {
+            container.querySelectorAll('.ep-summary-line').forEach((el) => {
+                el.addEventListener('click', () => openTrackingPopup(el.getAttribute('data-site')));
+            });
+        }
+
+        let trackingPopupSite = null;
+        function refreshTrackingPopup() {
+            if (document.getElementById('ep-tracking-overlay')) openTrackingPopup(trackingPopupSite);
+        }
+
+        function openTrackingPopup(siteId) {
+            trackingPopupSite = siteId;
+            const old = document.getElementById('ep-tracking-overlay');
+            if (old) old.remove();
+            const siteObj = SITES.find((s) => s.id === siteId) || { id: siteId, label: siteId };
+            const entries = (getTrackedEntriesBySite()[siteId] || []).sort((a, b) => {
+                const d = countNewEpisodesFor(b.key, b.episodeNumber) - countNewEpisodesFor(a.key, a.episodeNumber);
+                return d || displayName(a.seriesName).localeCompare(displayName(b.seriesName));
+            });
+
+            const pop = document.createElement('div');
+            pop.id = 'ep-tracking-overlay';
+            pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+            const checkedText = lastNewEpisodesCheckAt ? 'Derniere verification : ' + lastNewEpisodesCheckAt.toLocaleTimeString().slice(0, 5) : 'Pas encore verifie';
+            let html = '<div style="background:#15151f;color:#eee;max-width:720px;width:92%;max-height:80vh;overflow:auto;border-radius:8px;padding:20px;">' +
+                '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">Suivi - ' + siteObj.label + '</h2>' +
+                '<div style="font-size:11px;color:#888;margin-bottom:12px;">' + entries.length + ' anime(s) suivi(s) &middot; ' + checkedText + '</div>' +
+                '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th></tr>';
+            entries.forEach((e) => {
+                const nb = countNewEpisodesFor(e.key, e.episodeNumber);
+                const latest = latestKnownEpisode[e.key];
+                const link = nb ? newEpisodes[e.key].url : e.episodeUrl;
+                const action = nb ? 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')' : 'Reprendre';
+                html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : '') + '">' +
+                    '<td style="padding:6px 4px;" title="' + e.seriesName + '">' + displayName(e.seriesName) + '</td>' +
+                    '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
+                    '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
+                    '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
+                    '<td style="padding:6px 4px;text-align:right;"><a href="' + link + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td></tr>';
+            });
+            html += '</table><div style="margin-top:16px;text-align:right;">' +
+                '<button id="ep-tracking-check" style="background:#333;color:#fff;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;margin-right:8px;">&#8635; Verifier maintenant</button>' +
+                '<button id="ep-tracking-close" style="background:#03d0fc;color:#000;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:bold;">Fermer</button></div></div>';
+            pop.innerHTML = html;
+            // Dans le calque du lecteur s'il est affiche (sinon invisible en
+            // plein ecran, qui ne montre que les descendants du calque).
+            const host = overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body;
+            host.appendChild(pop);
+            pop.addEventListener('click', (ev) => { if (ev.target === pop) pop.remove(); });
+            pop.querySelector('#ep-tracking-close').addEventListener('click', () => pop.remove());
+            // anime-sama : meme page, seule l'ancre #ep=N change - sans
+            // rechargement le navigateur ne fait rien, on force donc.
+            pop.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', (ev) => {
+                if (a.href.replace(/#.*$/, '') !== location.href.replace(/#.*$/, '')) return;
+                ev.preventDefault();
+                location.href = a.href;
+                location.reload();
+            }));
+            pop.querySelector('#ep-tracking-check').addEventListener('click', (ev) => {
+                ev.currentTarget.disabled = true; ev.currentTarget.textContent = 'Recherche...';
+                checkForNewEpisodes();
+            });
+        }
+
         function syncOverlayControls() {
             if (!overlayEls) return;
             const disp = getCurrentEpisodeDisplay();
@@ -2256,6 +2384,8 @@
                 select.appendChild(opt);
             });
             if (overlayEls.newEpisodesEl) overlayEls.newEpisodesEl.innerHTML = renderNewEpisodesList();
+            const summaryEl = overlayEls.overlay.querySelector('#ed-tracking-summary');
+            if (summaryEl) { summaryEl.innerHTML = renderTrackingSummary(); bindTrackingSummary(summaryEl); }
         }
 
         function ensurePanelToggleButton() {
@@ -2380,6 +2510,7 @@
             }
 
             html += '<button id="ep-check-new" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#8635; Verifier les nouveaux episodes</button>';
+            html += renderTrackingSummary();
 
             const autoNextChecked = isAutoNextEnabled() ? 'checked' : '';
             html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-autonext" ' + autoNextChecked + '> Lecture continue</label>';
@@ -2416,6 +2547,7 @@
                 buildPersistentPanel();
             });
 
+            bindTrackingSummary(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
                 checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';

@@ -276,3 +276,28 @@ résumé par version avec bugs réels + causes racines + version finale atteinte
 sections plus récentes (v6.0, tracker générique, v6.2-v6.5, installateur) gardées
 en détail car non testées/en cours. Historique complet original récupérable via
 `git log -p -- HISTORIQUE.md`.
+
+### 2026-10-01 — v6.6 : anime-sama via ansembed + résumé/pop-up de suivi
+
+Retour utilisateur après test approfondi de la v6.5 sur plusieurs sites/animes :
+- **Bug anime-sama "la vidéo ne se lance pas"** : cause réelle trouvée en vrai
+  navigateur (Playwright/Chrome) — `video.sibnet.ru/shell.php` répond **403**, y
+  compris dans le lecteur du site lui-même ("Lecteur 2"). Le lecteur par défaut
+  d'anime-sama est désormais **ansembed.net** (JW Player, vraie `<video>` dans le
+  même document). Corrigé : `@match https://ansembed.net/*`, pilote in-iframe
+  `runInsidePlayerFrame_ansembed()` (clic `.jw-icon-display`), `buildEmbedByIndex()`
+  préfère ansembed puis sibnet en secours, origine `postMessage` tirée de la vraie
+  src de l'iframe. **Testé** (script injecté avec shims GM dans Chrome) : épisode
+  demandé chargé, lecture qui avance (muet tant qu'on n'a pas cliqué, comme sibnet).
+- **Suivi des nouveaux épisodes peu clair** : ajout d'une ligne résumé par site
+  sous "Vérifier les nouveaux épisodes" (panneau + calque) — "Site · N suivis · N
+  nouveaux" ("?" avant la 1re vérification). Clic → pop-up de suivi du site
+  (anime, vu, dispo, dernier visionnage, bouton Regarder/Reprendre, "Vérifier
+  maintenant"). Pop-up insérée dans le calque quand il est affiché (sinon
+  invisible en plein écran). **Testé** dans Chrome sur anime-sama.
+- Lien YouTube jugé "situationnel" par l'utilisateur (un seul anime à problème) —
+  laissé tel quel.
+
+Non testé : saut d'intro/outro + enchaînement auto réels sur ansembed (seek
+vérifié à la main uniquement), pop-up sur esprit-donghua/animoflix/odysee, et le
+tout sous Tampermonkey réel (le banc Playwright simule GM_*).
