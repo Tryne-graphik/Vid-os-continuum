@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.6
+// @version      6.7
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1573,6 +1573,7 @@
                 '<button id="ed-set-intro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fin intro</button>' +
                 '<button id="ed-set-outro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Debut outro</button>' +
                 '<button id="ed-settings-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Configuration</button>' +
+                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#128260; Verifier MAJ</button>' +
                 '<select id="ed-series-select" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">' +
                 '<option value="">-- Changer de serie --</option>' +
                 '</select>' +
@@ -1626,6 +1627,7 @@
             topbar.querySelector('#ed-set-intro-btn').addEventListener('click', promptIntroEnd);
             topbar.querySelector('#ed-set-outro-btn').addEventListener('click', promptOutroStart);
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
+            topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
 
             const gotoInput = topbar.querySelector('#ed-goto-input');
             const gotoBtn = topbar.querySelector('#ed-goto-btn');
@@ -2040,6 +2042,16 @@
             const m = Math.floor(seconds / 60);
             const s = seconds % 60;
             return m + ':' + String(s).padStart(2, '0');
+        }
+
+        // Meme principe que l'assistant Diablo IV : ouvre l'URL brute GitHub
+        // du script (@downloadURL), Tampermonkey intercepte et propose
+        // "Mettre a jour" / "Reinstaller" selon la version. Repli en dur si
+        // GM_info ne la porte pas (copie importee a la main).
+        function openScriptUpdatePage() {
+            const url = (typeof GM_info !== 'undefined' && GM_info.script && (GM_info.script.downloadURL || GM_info.script.updateURL)) ||
+                'https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js';
+            window.open(url, '_blank', 'noopener,noreferrer');
         }
 
         function openSettingsModal() {
@@ -2522,6 +2534,7 @@
             html += '<button id="ep-set-intro" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Fin intro</button>';
             html += '<button id="ep-set-outro" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Debut outro</button>';
             html += '<button id="ep-settings-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Configuration</button>';
+            html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#128260; Verifier MAJ</button>';
             html += '<button id="ep-export-panel" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Exporter</button>';
             html += '<button id="ep-import-panel" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Importer</button>';
             html += '<button id="ep-choose-backup" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Choisir fichier sauvegarde</button>';
@@ -2617,6 +2630,8 @@
             if (setOutroBtn) setOutroBtn.addEventListener('click', promptOutroStart);
             const settingsBtn = panel.querySelector('#ep-settings-btn');
             if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
+            const checkUpdateBtn = panel.querySelector('#ep-check-update-btn');
+            if (checkUpdateBtn) checkUpdateBtn.addEventListener('click', openScriptUpdatePage);
 
             const trackCheckbox = panel.querySelector('#ep-track-series');
             if (trackCheckbox && currentEpisode) {

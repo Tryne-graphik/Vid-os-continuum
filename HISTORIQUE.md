@@ -301,3 +301,14 @@ Retour utilisateur après test approfondi de la v6.5 sur plusieurs sites/animes 
 Non testé : saut d'intro/outro + enchaînement auto réels sur ansembed (seek
 vérifié à la main uniquement), pop-up sur esprit-donghua/animoflix/odysee, et le
 tout sous Tampermonkey réel (le banc Playwright simule GM_*).
+
+### 2026-10-01 (suite) — v6.7 : bouton "Vérifier MAJ"
+
+Demande : bouton de mise à jour comme sur l'assistant Diablo IV. Ajouté au
+panneau et au calque ("🔄 Vérifier MAJ", après Configuration) : ouvre
+`GM_info.script.downloadURL` (repli en dur sur l'URL raw GitHub `master`),
+Tampermonkey intercepte et propose Mettre à jour/Réinstaller. Testé (Chrome,
+banc Playwright) : les deux boutons ouvrent la bonne URL. **Le dépôt GitHub
+était déjà poussé jusqu'à v6.5** (`c8cb739`) — contrairement à ce que disait la
+note de session précédente. v6.6 + v6.7 poussées. Rappel : monter `@version`
+avant chaque push destiné à l'usage réel, sinon Tampermonkey ne voit rien.
