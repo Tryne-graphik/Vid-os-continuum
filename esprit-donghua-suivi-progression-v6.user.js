@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.7
+// @version      6.8
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -18,6 +18,8 @@
 // @connect      anime-sama.to
 // @connect      api.na-backend.odysee.com
 // @connect      www.googleapis.com
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // @updateURL    https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // ==/UserScript==
@@ -1026,7 +1028,17 @@
         runPollutionAnalysis();
 
         const STORE_KEY = 'progress';
-        function loadProgress() { return GM_getValue(STORE_KEY, {}); }
+        function loadProgress() {
+            const data = GM_getValue(STORE_KEY, {});
+            // Etiquette/libelle toujours tires de SITES : une vieille sauvegarde
+            // peut porter une etiquette perimee ("[ES]" vu en usage reel le
+            // 2026-10-01 sur une entree esprit-donghua).
+            Object.keys(data).forEach((k) => {
+                const known = SITES.find((x) => x.id === data[k].site);
+                if (known) { data[k].siteTag = known.tag; data[k].siteLabel = known.label; }
+            });
+            return data;
+        }
         function saveProgress(data) { GM_setValue(STORE_KEY, data); }
 
         function loadExcludedSeries() { return GM_getValue('excludedSeries', {}); }
@@ -1524,6 +1536,76 @@
             bufferStallTimer = setInterval(renderLoadStatus, 2000);
         }
 
+        // ---- Sections repliables + signalement d'incident (v6.8) ----
+        const BTN_STYLE = 'background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;';
+
+        function collapsibleSection(key, title, innerHtml, open) {
+            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="border-top:1px solid #2a2a35;padding-top:6px;">' +
+                '<summary style="cursor:pointer;font-size:12px;font-weight:bold;color:#ccc;">' + title + '</summary>' +
+                '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' + innerHtml + '</div></details>';
+        }
+
+        // Endpoint Apps Script (google-apps-script/incidents-collector.gs).
+        // Tant que l'URL n'est pas collee, repli sur une issue GitHub
+        // pre-remplie (depot public). Le "secret" n'en est pas un (il est
+        // dans ce script public) : il ecarte seulement les bots generiques,
+        // le vrai garde-fou est le quota journalier cote serveur.
+        const INCIDENTS_ENDPOINT_URL = 'PASTE_YOUR_APPS_SCRIPT_URL_HERE';
+        const INCIDENTS_SHARED_SECRET = 'c9322995-95ba-4fca-a51f-1d67abd6ea96';
+        let incidentDraft = '';
+
+        function incidentSectionHtml(prefix, open) {
+            const draft = incidentDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            return collapsibleSection('incident', '&#9888; Signaler un probleme',
+                '<select id="' + prefix + '-fb-type" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                '<option>Bug</option><option>Video ne se lance pas</option><option>Suggestion</option><option>Autre</option></select>' +
+                '<textarea id="' + prefix + '-fb-body" rows="4" placeholder="Ce que tu faisais, ce qui s\'est passe..." style="width:100%;box-sizing:border-box;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;resize:vertical;">' + draft + '</textarea>' +
+                '<div style="font-size:10px;color:#888;">Envoye avec : site, anime, episode, version, navigateur.</div>' +
+                '<button id="' + prefix + '-fb-send" style="' + BTN_STYLE + '">&#128228; Envoyer</button>' +
+                '<span id="' + prefix + '-fb-note" style="font-size:11px;color:#888;"></span>', open);
+        }
+
+        function bindIncidentSection(container, prefix) {
+            const body = container.querySelector('#' + prefix + '-fb-body');
+            const sendBtn = container.querySelector('#' + prefix + '-fb-send');
+            const note = container.querySelector('#' + prefix + '-fb-note');
+            if (!body || !sendBtn) return;
+            body.addEventListener('input', () => { incidentDraft = body.value; });
+            sendBtn.addEventListener('click', () => {
+                const description = body.value.trim();
+                if (!description) { alert('Ecris un message avant d\'envoyer.'); return; }
+                const statusEl = document.getElementById('ed-status');
+                const report = {
+                    action: 'incident', secret: INCIDENTS_SHARED_SECRET,
+                    type: container.querySelector('#' + prefix + '-fb-type').value,
+                    site: currentEpisode ? currentEpisode.siteLabel : site.label,
+                    anime: currentEpisode ? currentEpisode.seriesName : '',
+                    episode: currentEpisode ? String(currentEpisode.episodeNumber || '') : '',
+                    description: description,
+                    version: (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?',
+                    browser: navigator.userAgent,
+                    page: location.href,
+                    playerStatus: statusEl ? statusEl.textContent : ''
+                };
+                if (INCIDENTS_ENDPOINT_URL.indexOf('PASTE_') === 0) {
+                    const ctx = '\n\n---\nType : ' + report.type + '\nSite : ' + report.site + '\nAnime : ' + report.anime + ' (ep ' + report.episode + ')\nVersion : ' + report.version + '\nNavigateur : ' + report.browser + '\nPage : ' + report.page;
+                    window.open('https://github.com/Tryne-graphik/Vid-os-continuum/issues/new?title=' + encodeURIComponent('[' + report.type + '] ' + report.anime) + '&body=' + encodeURIComponent(description + ctx), '_blank');
+                    return;
+                }
+                sendBtn.disabled = true; sendBtn.textContent = 'Envoi...';
+                gmRequest({ method: 'POST', url: INCIDENTS_ENDPOINT_URL, data: JSON.stringify(report), headers: { 'Content-Type': 'text/plain;charset=utf-8' }, timeout: 20000 })
+                    .then((res) => {
+                        let ok = false;
+                        try { ok = JSON.parse(res.responseText).status === 'ok'; } catch (e) {}
+                        if (!ok) throw new Error('reponse serveur inattendue');
+                        note.textContent = 'Merci, envoye !'; note.style.color = '#4caf50';
+                        body.value = ''; incidentDraft = '';
+                    })
+                    .catch((e) => { note.textContent = 'Echec de l\'envoi (' + ((e && e.message) || 'reseau') + ') - reessaie plus tard.'; note.style.color = '#f66'; })
+                    .then(() => { sendBtn.disabled = false; sendBtn.innerHTML = '&#128228; Envoyer'; });
+            });
+        }
+
         function buildOverlay() {
             if (overlayEls) return overlayEls;
             const overlay = document.createElement('div');
@@ -1547,53 +1629,55 @@
             const topbar = document.createElement('div');
             topbar.style.cssText = 'position:absolute;top:52px;left:10px;z-index:10;display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.6);padding:10px;border-radius:8px;font-family:Arial,sans-serif;color:#eee;font-size:12px;max-width:220px;max-height:calc(100vh - 70px);overflow-y:auto;';
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
+            const B = 'background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;';
+            const SELECT = 'width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;';
+            const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Video Continuum</div>' +
                 '<div style="font-size:10px;color:#888;margin-top:-6px;">v' + scriptVersion + '</div>' +
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
-                '<select id="ed-site-filter" title="Filtrer la liste des animes suivis et les nouveaux episodes par site" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
-                buildSiteFilterOptionsHtml() +
-                '</select>' +
-                '<div id="ed-new-episodes"></div>' +
+                '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
+                '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
+                '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
+                '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 '<button id="ed-fullscreen-btn" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;">Plein ecran</button>' +
-                '<button id="ed-close-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fermer</button>' +
-                '<button id="ed-prev-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#9664; Precedent</button>' +
-                '<button id="ed-next-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Suivant &#9654;</button>' +
+                '<button id="ed-close-btn" style="' + B + '">Fermer</button>' +
+                '<div style="display:flex;gap:4px;">' +
+                '<button id="ed-prev-btn" style="' + B + 'flex:1;">&#9664; Prec.</button>' +
+                '<button id="ed-next-btn" style="' + B + 'flex:1;">Suiv. &#9654;</button>' +
+                '</div>' +
                 '<div style="display:flex;gap:4px;">' +
                 '<input type="number" id="ed-goto-input" min="1" placeholder="N&#176; episode" style="width:0;flex:1;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:12px;">' +
-                '<button id="ed-goto-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Aller</button>' +
+                '<button id="ed-goto-btn" style="' + B + '">Aller</button>' +
                 '</div>' +
-                '<button id="ed-reload-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#8635; Recharger la page</button>' +
-                (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Ouvrir sur Odysee</button>' : '') +
-                '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
-                '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Utiliser ce lien YouTube</button>' +
-                '<button id="ed-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Retirer le lien YouTube</button>' +
-                '<button id="ed-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Trouver sur YouTube (chaine associee)</button>' +
-                '<button id="ed-set-intro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Fin intro</button>' +
-                '<button id="ed-set-outro-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Debut outro</button>' +
-                '<button id="ed-settings-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Configuration</button>' +
-                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">&#128260; Verifier MAJ</button>' +
-                '<select id="ed-series-select" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">' +
-                '<option value="">-- Changer de serie --</option>' +
-                '</select>' +
-                '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' +
-                '<button id="ed-check-new-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#8635; Verifier les nouveaux episodes</button>' +
-                '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
-                '<label style="display:flex;align-items:center;gap:6px;color:#ccc;"><input type="checkbox" id="ed-autonext-cb"> Lecture continue</label>' +
-                '<label style="display:flex;align-items:center;gap:6px;color:#ccc;"><input type="checkbox" id="ed-autoopen-cb"> Lecteur auto</label>' +
-                '<label style="display:flex;align-items:center;gap:6px;color:#ccc;" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet.">' +
-                '<input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)' +
-                '</label>' +
-                '<label style="display:flex;align-items:center;gap:6px;color:#ccc;"><input type="checkbox" id="ed-track-cb"> Suivre cet anime</label>' +
-                '<button id="ed-export-btn" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;">Exporter</button>' +
-                '<button id="ed-import-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Importer</button>' +
-                '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
-                '<button id="ed-choose-backup-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Choisir fichier sauvegarde</button>' +
-                '<button id="ed-reauth-backup-btn" style="background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;">Reautoriser l\'acces au fichier</button>' +
-                '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>' +
-                '<span id="ed-status" style="color:#ccc;">En attente...</span>' +
-                '<span id="ed-mute-indicator" style="color:#f66;display:none;">Son coupe - clique dans le lecteur</span>';
+                (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
+                '<select id="ed-series-select" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
+                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
+                '<label style="' + CHECK + '"><input type="checkbox" id="ed-autonext-cb"> Lecture continue</label>' +
+                '<label style="' + CHECK + '"><input type="checkbox" id="ed-autoopen-cb"> Lecteur auto</label>' +
+                '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
+                '<label style="' + CHECK + '"><input type="checkbox" id="ed-track-cb"> Suivre cet anime</label>' +
+                collapsibleSection('reglages', 'Reglages',
+                    '<button id="ed-set-intro-btn" style="' + B + '">Fin intro</button>' +
+                    '<button id="ed-set-outro-btn" style="' + B + '">Debut outro</button>' +
+                    '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
+                    '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
+                    '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>') +
+                collapsibleSection('youtube', 'Lien YouTube de secours',
+                    '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
+                    '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + B + '">Utiliser ce lien YouTube</button>' +
+                    '<button id="ed-youtube-clear-btn" style="' + B + '">Retirer le lien YouTube</button>' +
+                    '<button id="ed-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="' + B + '">Trouver sur YouTube (chaine associee)</button>') +
+                collapsibleSection('sauvegarde', 'Sauvegarde',
+                    '<button id="ed-export-btn" style="' + B + '">Exporter</button>' +
+                    '<button id="ed-import-btn" style="' + B + '">Importer</button>' +
+                    '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
+                    '<button id="ed-choose-backup-btn" style="' + B + '">Choisir fichier sauvegarde</button>' +
+                    '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser l\'acces au fichier</button>' +
+                    '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
+                incidentSectionHtml('ed', false) +
+                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>';
             overlay.appendChild(topbar);
 
             toggleBtn.addEventListener('click', () => {
@@ -1621,13 +1705,13 @@
             const lowQualityCb = topbar.querySelector('#ed-lowquality-cb');
             const trackCb = topbar.querySelector('#ed-track-cb');
             const backupStatusEl = topbar.querySelector('#ed-backup-status');
-            const newEpisodesEl = topbar.querySelector('#ed-new-episodes');
 
             topbar.querySelector('#ed-reload-btn').addEventListener('click', () => location.reload());
             topbar.querySelector('#ed-set-intro-btn').addEventListener('click', promptIntroEnd);
             topbar.querySelector('#ed-set-outro-btn').addEventListener('click', promptOutroStart);
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
+            bindIncidentSection(topbar, 'ed');
 
             const gotoInput = topbar.querySelector('#ed-goto-input');
             const gotoBtn = topbar.querySelector('#ed-goto-btn');
@@ -1725,7 +1809,7 @@
             overlayEls = {
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
                 seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, lowQualityCb: lowQualityCb, trackCb: trackCb,
-                backupStatusEl: backupStatusEl, newEpisodesEl: newEpisodesEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl
+                backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl
             };
             return overlayEls;
         }
@@ -2232,37 +2316,6 @@
             };
         }
 
-        function renderNewEpisodesList() {
-            const excluded = loadExcludedSeries();
-            const progress = loadProgress();
-            const keys = Object.keys(newEpisodes)
-                .filter((key) => !excluded[key] && matchesSiteFilter(newEpisodes[key].site))
-                .sort((a, b) => {
-                    const wa = progress[a] ? progress[a].watchedAt : null;
-                    const wb = progress[b] ? progress[b].watchedAt : null;
-                    if (!wa && !wb) return 0;
-                    if (!wa) return -1;
-                    if (!wb) return 1;
-                    return new Date(wa) - new Date(wb);
-                });
-            if (keys.length === 0) return '';
-            let html = '<div style="font-size:11px;font-weight:bold;color:#ffb300;text-align:center;">Nouveaux episodes</div>' +
-                '<div style="display:flex;flex-direction:column;gap:4px;text-align:center;">';
-            keys.forEach((key) => {
-                const info = newEpisodes[key];
-                const latest = latestKnownEpisode[key];
-                const watched = progress[key] ? progress[key].episodeNumber : null;
-                const since = progress[key] ? formatRelativeDays(progress[key].watchedAt) : null;
-                const siteTag = progress[key] ? progress[key].siteTag : (SITES.find((s) => s.id === info.site) || {}).tag;
-                const epInfo = [watched && latest ? ('vu ' + watched + ' &rarr; ' + latest) : (latest ? ('Ep ' + latest) : ''), since].filter(Boolean).join(' &middot; ');
-                html += `<a href="${info.url}" style="display:block;color:#ffb300;text-decoration:none;background:rgba(255,179,0,.12);padding:5px 7px;border-radius:4px;">` +
-                    `<div style="font-weight:bold;font-size:11px;">[${siteTag}] ${displayName(info.seriesName)}</div>` +
-                    (epInfo ? `<div style="font-size:10px;font-weight:normal;opacity:.85;">${epInfo}</div>` : '') + `</a>`;
-            });
-            html += '</div>';
-            return html;
-        }
-
         // ---- Resume par site + fenetre de suivi (demande 2026-10-01) ----
         // Une ligne cliquable par site : nom, nb d'animes suivis, nb de
         // nouveaux episodes (somme dernier connu - vu quand les deux sont
@@ -2291,11 +2344,15 @@
             const bySite = getTrackedEntriesBySite();
             return SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id)).map((s) => {
                 const entries = bySite[s.id];
-                const nbNew = entries.reduce((sum, e) => sum + countNewEpisodesFor(e.key, e.episodeNumber), 0);
-                const newText = lastNewEpisodesCheckAt ? nbNew + ' nouveau' + (nbNew > 1 ? 'x' : '') : '? nouveaux';
-                const color = nbNew > 0 ? '#ffb300' : '#ccc';
-                return '<div class="ep-summary-line" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.1);border:1px solid #234;border-radius:4px;padding:5px 7px;font-size:11px;color:' + color + ';">' +
-                    '<b>' + s.label + '</b> &middot; ' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div>';
+                // Nombre d'ANIMES a rattraper, pas d'episodes : une seule serie
+                // tres en retard (ex. 139 ep.) noyait le total. Detail par
+                // anime dans la fenetre de suivi.
+                const nbBehind = entries.filter((e) => newEpisodes[e.key]).length;
+                const newText = !lastNewEpisodesCheckAt ? 'verification...' : (nbBehind ? nbBehind + ' a rattraper' : 'a jour');
+                const color = nbBehind > 0 ? '#ffb300' : '#4caf50';
+                return '<div class="ep-summary-line" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.12);border:1px solid #03d0fc;border-radius:6px;padding:7px 9px;font-size:12px;">' +
+                    '<div style="font-weight:bold;color:#03d0fc;">' + s.label + ' &#9656;</div>' +
+                    '<div style="color:' + color + ';">' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div></div>';
             }).join('');
         }
 
@@ -2395,7 +2452,6 @@
                 if (since) opt.title = since;
                 select.appendChild(opt);
             });
-            if (overlayEls.newEpisodesEl) overlayEls.newEpisodesEl.innerHTML = renderNewEpisodesList();
             const summaryEl = overlayEls.overlay.querySelector('#ed-tracking-summary');
             if (summaryEl) { summaryEl.innerHTML = renderTrackingSummary(); bindTrackingSummary(summaryEl); }
         }
@@ -2481,27 +2537,29 @@
             const entries = Object.keys(progress).map((k) => Object.assign({ key: k }, progress[k])).filter((e) => !excluded[e.key] && matchesSiteFilter(e.site)).sort(seriesSortCompare);
 
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
+            // Etat ouvert/ferme des sections conserve d'une reconstruction a
+            // l'autre (le panneau est regenere a chaque changement).
+            const prevOpen = {};
+            panel.querySelectorAll('details[data-sec]').forEach((d) => { prevOpen[d.getAttribute('data-sec')] = d.open; });
+            const CHECK = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
+
             let html = '<div style="font-weight:bold;color:#03d0fc;font-size:13px;">Video Continuum</div>';
             html += '<div style="font-size:10px;color:#888;margin-top:-6px;">v' + scriptVersion + '</div>';
-            html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis et les nouveaux episodes par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+            html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';
-            html += renderNewEpisodesList();
+            html += renderTrackingSummary();
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
                 html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + disp.fullName + '">' + disp.name + '</div>';
                 html += '<div style="font-size:13px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
-                html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Ouvrir le lecteur</button>';
+                html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<span id="ep-player-status" style="font-size:11px;color:#ccc;"></span>';
                 if (currentEpisode.site === 'esprit-donghua') {
-                    html += '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Ouvrir sur Odysee</button>';
+                    html += '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>';
                 }
-                html += '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">';
-                html += '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Utiliser ce lien YouTube</button>';
-                html += '<button id="ep-youtube-clear-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Retirer le lien YouTube</button>';
-                html += '<button id="ep-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Trouver sur YouTube (chaine associee)</button>';
                 const trackedChecked = isSeriesExcluded(storageKey(currentEpisode)) ? '' : 'checked';
-                html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-track-series" ' + trackedChecked + '> Suivre cet anime</label>';
+                html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-track-series" ' + trackedChecked + '> Suivre cet anime</label>';
             }
 
             if (entries.length === 0) {
@@ -2518,29 +2576,37 @@
                     html += `<option value="${e.episodeUrl}"${selected}${style}${titleAttr}>${label}</option>`;
                 });
                 html += '</select>';
-                html += '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>';
             }
 
-            html += '<button id="ep-check-new" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#8635; Verifier les nouveaux episodes</button>';
-            html += renderTrackingSummary();
+            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
+            html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autonext" ' + (isAutoNextEnabled() ? 'checked' : '') + '> Lecture continue</label>';
+            html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autoopen" ' + (isAutoOpenEnabled() ? 'checked' : '') + '> Lecteur auto</label>';
+            html += '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>';
 
-            const autoNextChecked = isAutoNextEnabled() ? 'checked' : '';
-            html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-autonext" ' + autoNextChecked + '> Lecture continue</label>';
-            const autoOpenChecked = isAutoOpenEnabled() ? 'checked' : '';
-            html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;"><input type="checkbox" id="ep-autoopen" ' + autoOpenChecked + '> Lecteur auto</label>';
-            const lowQualityChecked = isLowQualityEnabled() ? 'checked' : '';
-            html += '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + lowQualityChecked + '> 720p (Esprit Donghua uniquement)</label>';
-
-            html += '<button id="ep-set-intro" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Fin intro</button>';
-            html += '<button id="ep-set-outro" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Debut outro</button>';
-            html += '<button id="ep-settings-btn" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Configuration</button>';
-            html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">&#128260; Verifier MAJ</button>';
-            html += '<button id="ep-export-panel" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Exporter</button>';
-            html += '<button id="ep-import-panel" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Importer</button>';
-            html += '<button id="ep-choose-backup" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Choisir fichier sauvegarde</button>';
-            html += '<button id="ep-reauth-backup" style="background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Reautoriser l\'acces au fichier</button>';
-            html += '<span id="ep-backup-status" style="font-size:11px;color:#888;"></span>';
-            html += '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">';
+            html += collapsibleSection('reglages', 'Reglages',
+                '<button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button>' +
+                '<button id="ep-set-outro" style="' + BTN_STYLE + '">Debut outro</button>' +
+                '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
+                (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
+                prevOpen.reglages);
+            if (currentEpisode && currentEpisode.seriesName) {
+                html += collapsibleSection('youtube', 'Lien YouTube de secours',
+                    '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
+                    '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + BTN_STYLE + '">Utiliser ce lien YouTube</button>' +
+                    '<button id="ep-youtube-clear-btn" style="' + BTN_STYLE + '">Retirer le lien YouTube</button>' +
+                    '<button id="ep-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="' + BTN_STYLE + '">Trouver sur YouTube (chaine associee)</button>',
+                    prevOpen.youtube);
+            }
+            html += collapsibleSection('sauvegarde', 'Sauvegarde',
+                '<button id="ep-export-panel" style="' + BTN_STYLE + '">Exporter</button>' +
+                '<button id="ep-import-panel" style="' + BTN_STYLE + '">Importer</button>' +
+                '<button id="ep-choose-backup" style="' + BTN_STYLE + '">Choisir fichier sauvegarde</button>' +
+                '<button id="ep-reauth-backup" style="' + BTN_STYLE + '">Reautoriser l\'acces au fichier</button>' +
+                '<span id="ep-backup-status" style="font-size:11px;color:#888;"></span>' +
+                '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
+                prevOpen.sauvegarde);
+            html += incidentSectionHtml('ep', prevOpen.incident);
+            html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
 
             panel.innerHTML = html;
 
@@ -2561,6 +2627,7 @@
             });
 
             bindTrackingSummary(panel);
+            bindIncidentSection(panel, 'ep');
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
                 checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';

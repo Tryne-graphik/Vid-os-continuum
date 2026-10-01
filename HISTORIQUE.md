@@ -312,3 +312,31 @@ banc Playwright) : les deux boutons ouvrent la bonne URL. **Le dépôt GitHub
 était déjà poussé jusqu'à v6.5** (`c8cb739`) — contrairement à ce que disait la
 note de session précédente. v6.6 + v6.7 poussées. Rappel : monter `@version`
 avant chaque push destiné à l'usage réel, sinon Tampermonkey ne voit rien.
+
+### 2026-10-01 (suite 2) — v6.8 : panneau allégé, signalement d'incidents, installateur GitHub
+
+- **Lisibilité** (proposée puis validée par l'utilisateur) : liste "Nouveaux
+  épisodes" supprimée (doublon de la pop-up de suivi) ; ligne résumé par site
+  remontée en haut, plus visible, comptant les **animes à rattraper** (et non la
+  somme d'épisodes, noyée par une série à 139 ép. de retard) ; actions rares
+  repliées dans des sections `<details>` (Réglages / Lien YouTube de secours /
+  Sauvegarde / Signaler un problème), état ouvert conservé entre reconstructions ;
+  Exporter n'est plus en bleu vif. Même chose dans le calque (statut remonté sous
+  l'épisode, Préc./Suiv. sur une ligne).
+- **Bug "[ES] Big Brother"** sous le filtre Esprit Donghua : étiquette périmée
+  stockée dans une vieille sauvegarde (aucun tag "ES" dans v6). `loadProgress()`
+  réécrit désormais tag/libellé depuis `SITES`. Testé (entrée "ES" injectée →
+  affichée "[ED]").
+- **Signalement d'incidents** (comme l'assistant Diablo, déploiement Apps Script
+  SÉPARÉ) : section "⚠ Signaler un problème" (type + description, envoie aussi
+  site/anime/épisode/version/navigateur/état du lecteur) →
+  `google-apps-script/incidents-collector.gs` → feuille "Incidents" avec colonne
+  Statut à liste déroulante (Nouveau/En cours/Résolu/Ignoré) + Notes. Secret
+  partagé + quota 200/jour. Copie `continuum-incidents-collector.txt` sur le
+  Bureau. **En attente** : l'utilisateur doit créer la feuille + déployer et
+  fournir l'URL `/exec` (`INCIDENTS_ENDPOINT_URL`) ; d'ici là, repli sur une issue
+  GitHub pré-remplie (testé).
+- **Installateur** renommé `VideoContinuum-Installateur.exe` : ouvre désormais
+  l'URL brute GitHub (l'ami n'a besoin que de l'exe, mises à jour auto) au lieu
+  d'un fichier local ; rappel "Autoriser les scripts utilisateur" pour Chrome.
+  Recompilé (csc .NET Framework), démarrage vérifié.

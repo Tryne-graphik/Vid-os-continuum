@@ -1,17 +1,17 @@
 using System;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.IO;
 
 namespace EspritDonghuaInstaller
 {
     class Program
     {
-        // Nom du fichier .user.js a installer, cherche dans le dossier
-        // parent de celui de cet executable (le repo du projet). A changer
-        // pour anime-tracker-generique.user.js une fois cette version
-        // validee en usage reel (voir HISTORIQUE.md).
-        const string TargetScriptFileName = "esprit-donghua-suivi-progression-v6.user.js";
+        // 2026-10-01 : installe depuis l'URL brute GitHub (depot public)
+        // plutot qu'un fichier local - l'ami testeur n'a besoin que de cet
+        // .exe, et Tampermonkey enregistre cette URL comme source de mise a
+        // jour (@updateURL + bouton "Verifier MAJ" du script). Evite aussi
+        // l'autorisation "acces aux URL de fichier" qu'un file:// demande.
+        const string ScriptUrl = "https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js";
 
         const string TampermonkeyUrlChrome = "https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo";
         const string TampermonkeyUrlFirefox = "https://addons.mozilla.org/firefox/addon/tampermonkey/";
@@ -25,17 +25,8 @@ namespace EspritDonghuaInstaller
 
         static int Main(string[] args)
         {
-            Console.WriteLine("=== Installateur Esprit Donghua Tracker ===");
+            Console.WriteLine("=== Installateur Video Continuum ===");
             Console.WriteLine();
-
-            string scriptPath = FindScriptPath();
-            if (scriptPath == null)
-            {
-                Console.WriteLine("Erreur : fichier " + TargetScriptFileName + " introuvable a cote de cet installateur.");
-                Console.WriteLine("Verifie que l'executable est bien reste dans le dossier du projet.");
-                Pause();
-                return 1;
-            }
 
             string browserExe;
             string tampermonkeyUrl;
@@ -55,20 +46,26 @@ namespace EspritDonghuaInstaller
             }
 
             Console.WriteLine();
+            Console.WriteLine("Chrome/Edge/Opera : apres l'installation, active aussi \"Autoriser les scripts");
+            Console.WriteLine("utilisateur\" (ou le \"Mode developpeur\") dans la page des extensions,");
+            Console.WriteLine("sinon Tampermonkey n'execute aucun script.");
+            Console.WriteLine();
             Console.WriteLine("Appuie sur Entree une fois Tampermonkey installe (ou s'il l'etait deja).");
             Console.ReadLine();
 
             Console.WriteLine("Etape 2/2 : ouverture du script - la fenetre d'installation Tampermonkey doit s'afficher.");
-            if (!TryOpen(browserExe, scriptPath))
+            if (!TryOpen(browserExe, ScriptUrl))
             {
                 Console.WriteLine("Impossible d'ouvrir ce navigateur pour le script.");
-                Console.WriteLine("Ouvre-le manuellement : " + scriptPath);
+                Console.WriteLine("Ouvre ce lien manuellement : " + ScriptUrl);
                 Pause();
                 return 1;
             }
 
             Console.WriteLine();
-            Console.WriteLine("Termine. Confirme l'installation dans la fenetre Tampermonkey qui s'est ouverte.");
+            Console.WriteLine("Termine. Clique sur \"Installer\" dans la fenetre Tampermonkey qui s'est ouverte.");
+            Console.WriteLine("Les mises a jour arriveront ensuite automatiquement (ou bouton \"Verifier MAJ\").");
+            Console.WriteLine("Un souci ? Panneau du script > \"Signaler un probleme\".");
             Pause();
             return 0;
         }
@@ -143,18 +140,6 @@ namespace EspritDonghuaInstaller
             {
                 return false;
             }
-        }
-
-        static string FindScriptPath()
-        {
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            string candidate = Path.Combine(baseDir, TargetScriptFileName);
-            if (File.Exists(candidate)) return candidate;
-
-            string parentCandidate = Path.Combine(baseDir, "..", TargetScriptFileName);
-            if (File.Exists(parentCandidate)) return Path.GetFullPath(parentCandidate);
-
-            return null;
         }
 
         static void Pause()
