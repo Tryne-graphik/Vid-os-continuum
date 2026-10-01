@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.9
+// @version      6.10
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1028,6 +1028,41 @@
         runPollutionAnalysis();
 
         const STORE_KEY = 'progress';
+        // ---- Securite (v6.10, partage avec des inconnus) ----
+        // Toute donnee venue d'une page scrapee ou d'un fichier importe est
+        // echappee avant d'entrer dans du innerHTML : un fichier de sauvegarde
+        // partage pouvait sinon injecter du HTML/JS dans le panneau.
+        function escapeHtml(value) {
+            return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        // Import : liste blanche de champs, longueurs plafonnees, et lien
+        // accepte seulement s'il pointe vers le site de l'entree (bloque
+        // javascript:/data: et les domaines arbitraires). Etiquette/libelle
+        // tires de SITES (l'ancien repli "site.slice(0, 2)" donnait "[ES]").
+        function sanitizeImportedEntry(e) {
+            if (!e || typeof e !== 'object') return null;
+            const siteId = typeof e.site === 'string' ? e.site : 'esprit-donghua';
+            const known = SITES.find((x) => x.id === siteId);
+            if (!known) return null;
+            const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+            const episodeUrl = str(e.episodeUrl, 1000);
+            if (!/^https:\/\//i.test(episodeUrl) || !known.matchesUrl(episodeUrl)) return null;
+            const seriesName = str(e.seriesName, 300);
+            if (!seriesName) return null;
+            let seriesUrl = str(e.seriesUrl, 1000);
+            if (!(/^https:\/\//i.test(seriesUrl) && known.matchesUrl(seriesUrl)) && seriesUrl.indexOf('legacy:') !== 0) seriesUrl = 'legacy:' + seriesName;
+            const num = Number(e.episodeNumber);
+            const watched = e.watchedAt && !isNaN(new Date(e.watchedAt).getTime()) ? new Date(e.watchedAt).toISOString() : null;
+            return {
+                site: known.id, siteLabel: known.label, siteTag: known.tag,
+                seriesName: seriesName, seriesUrl: seriesUrl,
+                episodeLabel: str(e.episodeLabel, 100),
+                episodeNumber: num > 0 && num < 100000 ? Math.floor(num) : null,
+                episodeUrl: episodeUrl, watchedAt: watched
+            };
+        }
+
         function loadProgress() {
             const data = GM_getValue(STORE_KEY, {});
             // Etiquette/libelle toujours tires de SITES : une vieille sauvegarde
@@ -1303,9 +1338,9 @@
                 items = '<ul>';
                 let currentSite = null;
                 entries.forEach((e) => {
-                    if (e.siteLabel !== currentSite) { items += '</ul><h2>' + (e.siteLabel || 'Site inconnu') + '</h2><ul>'; currentSite = e.siteLabel; }
-                    items += '<li><strong>' + e.seriesName + '</strong> - ' + e.episodeLabel +
-                        ' - <a href="' + e.episodeUrl + '">Reprendre ici</a>' +
+                    if (e.siteLabel !== currentSite) { items += '</ul><h2>' + escapeHtml(e.siteLabel || 'Site inconnu') + '</h2><ul>'; currentSite = e.siteLabel; }
+                    items += '<li><strong>' + escapeHtml(e.seriesName) + '</strong> - ' + escapeHtml(e.episodeLabel) +
+                        ' - <a href="' + escapeHtml(e.episodeUrl) + '">Reprendre ici</a>' +
                         ' <span style="color:#888;font-size:12px;">(' + formatDate(e.watchedAt) + ')</span></li>';
                 });
                 items += '</ul>';
@@ -1458,10 +1493,11 @@
         function mergeImportedEntries(entries) {
             const progress = loadProgress();
             let added = 0, updated = 0, skipped = 0;
-            entries.forEach((e) => {
-                if (!e || !e.seriesName || !e.episodeUrl) return;
-                const site = e.site || 'esprit-donghua';
-                const seriesUrl = e.seriesUrl || ('legacy:' + e.seriesName);
+            entries.forEach((raw) => {
+                const e = sanitizeImportedEntry(raw);
+                if (!e) { skipped++; return; }
+                const site = e.site;
+                const seriesUrl = e.seriesUrl;
                 const key = site + '::' + seriesUrl;
                 const existing = progress[key];
                 if (existing) {
@@ -1469,7 +1505,7 @@
                     progress[key] = Object.assign({}, existing, e, { site: site, seriesUrl: seriesUrl });
                     updated++;
                 } else {
-                    progress[key] = Object.assign({}, e, { site: site, seriesUrl: seriesUrl, siteLabel: e.siteLabel || site, siteTag: e.siteTag || site.slice(0, 2).toUpperCase() });
+                    progress[key] = e;
                     added++;
                 }
             });
@@ -2177,7 +2213,7 @@
                     const rowStyle = unconfigured ? 'background:rgba(255,179,0,.08);' : '';
                     html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + e.key + '">' +
                         '<td style="padding:6px 4px;color:#888;">' + (e.siteTag || '') + '</td>' +
-                        '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + e.seriesName + '</td>' +
+                        '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + escapeHtml(e.seriesName) + '</td>' +
                         '<td style="padding:6px 4px;"><input type="text" class="ep-set-intro-input" placeholder="mm:ss" style="width:70px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
                         '<td style="padding:6px 4px;"><input type="text" class="ep-set-outro-input" placeholder="mm:ss" style="width:70px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroStart) + '"></td>' +
                         '<td style="padding:6px 4px;text-align:center;"><input type="checkbox" class="ep-set-tracked-input" ' + (tracked ? 'checked' : '') + '></td>' +
@@ -2403,11 +2439,11 @@
                 const link = nb ? newEpisodes[e.key].url : e.episodeUrl;
                 const action = nb ? 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')' : 'Reprendre';
                 html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : '') + '">' +
-                    '<td style="padding:6px 4px;" title="' + e.seriesName + '">' + displayName(e.seriesName) + '</td>' +
+                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
-                    '<td style="padding:6px 4px;text-align:right;"><a href="' + link + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td></tr>';
+                    '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td></tr>';
             });
             html += '</table><div style="margin-top:16px;text-align:right;">' +
                 '<button id="ep-tracking-check" style="background:#333;color:#fff;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;margin-right:8px;">&#8635; Verifier maintenant</button>' +
@@ -2562,7 +2598,7 @@
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + disp.fullName + '">' + disp.name + '</div>';
+                html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
                 html += '<div style="font-size:13px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<span id="ep-player-status" style="font-size:11px;color:#ccc;"></span>';
@@ -2584,7 +2620,7 @@
                     const style = newEpisodes[e.key] ? ' style="color:#ffb300;font-weight:bold;"' : '';
                     const since = formatRelativeDays(e.watchedAt);
                     const titleAttr = since ? ` title="${since}"` : '';
-                    html += `<option value="${e.episodeUrl}"${selected}${style}${titleAttr}>${label}</option>`;
+                    html += `<option value="${escapeHtml(e.episodeUrl)}"${selected}${style}${titleAttr}>${escapeHtml(label)}</option>`;
                 });
                 html += '</select>';
             }

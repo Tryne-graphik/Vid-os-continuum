@@ -352,3 +352,26 @@ résultat était effacé par la reconstruction du panneau (1re vérification des
 nouveaux épisodes 8 s après le chargement) — désormais gardé hors du DOM
 (`setIncidentNote`). Leçon banc de test : le shim `GM_xmlhttpRequest` doit
 transmettre `data`/`headers`, sinon faux "réponse serveur inattendue".
+
+### 2026-10-01 (suite 4) — v6.10 : sécurisation avant partage avec des inconnus
+
+Audit (demande : "sécuriser nos projets pour les partager avec des inconnus") :
+- **Import de sauvegarde = vrai risque** : champs repris tels quels → un fichier
+  partagé pouvait injecter du HTML/JS dans le panneau (nom d'anime) ou un lien
+  `javascript:` (navigation via la liste). Corrigé : `sanitizeImportedEntry()`
+  (liste blanche de champs, longueurs plafonnées, lien accepté seulement s'il
+  pointe vers le site de l'entrée via `matchesUrl`) + `escapeHtml()` sur tous les
+  noms/liens insérés en HTML (panneau, pop-up, Configuration, fichier exporté).
+  **Testé** avec un fichier piégé (Chrome) : injection affichée en texte brut,
+  lien `javascript:` et domaine étranger rejetés, aucune exécution.
+  Cause racine du "[ES]" trouvée : repli `site.slice(0, 2)` à l'import.
+- **Injection de formule Google Sheets** dans les collecteurs (ici ET dans
+  l'assistant Diablo) : un texte commençant par `= + - @` était interprété comme
+  formule (ex. IMPORTXML qui exfiltre des données). `cap()` préfixe désormais une
+  apostrophe. Testé (assertions node). **À redéployer côté Apps Script** (les 2).
+- `LICENSE` (tous droits réservés, usage perso libre, non-affiliation) + `README.md`
+  (installation, empreinte SHA-256 de l'installateur, ce qui est envoyé par
+  "Signaler un problème").
+- Vérifié : aucun chemin local / e-mail / clé / ID de feuille dans les fichiers
+  suivis ; `save/` (historique perso) bien ignoré. Reste visible : l'e-mail
+  d'auteur des commits (métadonnées git publiques).

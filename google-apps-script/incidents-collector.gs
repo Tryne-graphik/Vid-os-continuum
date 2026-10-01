@@ -92,7 +92,12 @@ function getOrCreateSheet() {
 }
 
 function cap(value, maxLen) {
-  return String(value == null ? "" : value).slice(0, maxLen);
+  var s = String(value == null ? "" : value).slice(0, maxLen);
+  // 2026-10-01 anti-injection de formule : Sheets interprete un texte
+  // commencant par = + - @ comme une formule (ex. IMPORTXML/HYPERLINK qui
+  // fait sortir des donnees de la feuille). L'apostrophe force le texte et
+  // n'est pas stockee dans la valeur (getValues la renvoie sans).
+  return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
 }
 
 function jsonResponse(obj) {

@@ -1,0 +1,28 @@
+Copyright (c) 2026 Tryne. Tous droits réservés.
+
+Ce dépôt est rendu public uniquement pour permettre :
+- l'installation du script via Tampermonkey (mise à jour automatique) ;
+- la relecture du code par les utilisateurs, pour vérifier ce qu'il fait
+  réellement avant de l'installer.
+
+Sauf accord écrit préalable de l'auteur, ce dépôt et son contenu (code,
+données, documentation) NE PEUVENT PAS être :
+- redistribués, republiés ou remis en ligne ailleurs (dépôt miroir, store
+  d'extensions, site tiers) ;
+- réutilisés, en tout ou partie, dans un autre projet ;
+- modifiés puis redistribués sous un autre nom.
+
+L'usage personnel (installer et utiliser le script tel quel via
+Tampermonkey) est autorisé gratuitement pour tous.
+
+Aucune garantie n'est fournie sur ce logiciel, fourni "en l'état".
+
+---
+
+Ce projet n'est ni affilié à, ni approuvé par, ni sponsorisé par les sites
+sur lesquels il fonctionne ni par les hébergeurs vidéo qu'ils utilisent.
+Il n'héberge, ne copie et ne redistribue aucune vidéo : il ne fait
+qu'afficher le lecteur que le site visité fournit déjà, et retenir la
+progression de l'utilisateur sur son propre navigateur. Chaque utilisateur
+reste seul responsable des sites qu'il visite et du respect du droit
+applicable dans son pays.
