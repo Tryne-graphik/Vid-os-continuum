@@ -503,3 +503,23 @@ Demandes de l'utilisateur après usage sur anime-sama :
   exclue et ligne retirée. Pas encore testé dans Tampermonkey réel.
 - Non porté : le transfert intro/outro esprit-donghua → Odysee ne copie que
   `introEnd`/`outroStart`.
+
+### 2026-10-02 (suite) — v6.16 : bouton "✓ Tout vu" dans la fenêtre de suivi
+
+Demande : marquer une série comme entièrement vue sans relancer l'épisode (ex.
+Clevatess sur anime-sama). Bouton entre "Regarder" et ✕, affiché seulement si la
+série a des épisodes à rattraper, un dernier épisode connu, et qu'on sait
+construire l'URL de ce dernier épisode (`lastEpisodeUrlFor` : anime-sama `#ep=N`,
+sinon `site.buildEpisodeUrl`). Confirmation, puis progression placée sur le
+dernier épisode connu. **Pas affiché** sur animoflix (dernier épisode inconnu) ni
+sur Odysee (URL non constructible).
+
+**Bug trouvé en testant (préexistant)** : `checkForNewEpisodes()` réutilisait
+l'épisode affiché sur la page pour la série en cours même s'il ne correspondait
+pas à la progression enregistrée → "Tout vu" sur Bleach depuis la page de l'ép. 1
+était annulé à la vérification suivante ("1 nouveau"). Raccourci désormais limité
+au cas où le numéro affiché = numéro enregistré.
+
+**Testé** dans Chrome (Playwright, shims GM) sur anime-sama : Bleach et Clevatess
+marqués, Bleach 366/366 "Reprendre", résumé "à jour", et ça tient après "Vérifier
+maintenant".

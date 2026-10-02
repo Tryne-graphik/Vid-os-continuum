@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.15
+// @version      6.16
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2383,7 +2383,9 @@
             const checks = entries.map((e) => {
                 const site = SITES.find((s) => s.id === e.site);
                 if (!site) return Promise.resolve();
-                if (currentEpisode && storageKey(currentEpisode) === e.key) {
+                // Raccourci seulement si la page affiche bien l'episode enregistre
+                // (sinon "Tout vu" etait annule par la page ouverte, ex. ep. 1).
+                if (currentEpisode && storageKey(currentEpisode) === e.key && Number(currentEpisode.episodeNumber) === Number(e.episodeNumber)) {
                     applyResultFor(e, currentEpisode, changed_ => { if (changed_) changed = true; });
                     return Promise.resolve();
                 }
@@ -2536,6 +2538,26 @@
             if (document.getElementById('ep-tracking-overlay')) openTrackingPopup(trackingPopupSite);
         }
 
+        // "Deja tout vu" (demande 2026-10-02) : place la progression sur le
+        // dernier episode connu sans le relancer. Seulement quand on sait
+        // construire son URL (sinon la prochaine verification reprendrait
+        // l'ancienne page et resignalerait des nouveaux episodes).
+        function lastEpisodeUrlFor(e, latest) {
+            if (e.site === 'anime-sama') return e.seriesUrl + '#ep=' + latest;
+            const site = SITES.find((s) => s.id === e.site);
+            return site && site.buildEpisodeUrl && e.episodeUrl ? site.buildEpisodeUrl(e.episodeUrl, latest) : null;
+        }
+        function markSeriesFullyWatched(key) {
+            const progress = loadProgress();
+            const e = progress[key];
+            const latest = latestKnownEpisode[key];
+            const url = e && latest ? lastEpisodeUrlFor(e, latest) : null;
+            if (!url) return;
+            progress[key] = Object.assign({}, e, { episodeNumber: latest, episodeLabel: 'Episode ' + latest, episodeUrl: url, watchedAt: new Date().toISOString() });
+            saveProgress(progress);
+            delete newEpisodes[key];
+        }
+
         function openTrackingPopup(siteId) {
             trackingPopupSite = siteId;
             const old = document.getElementById('ep-tracking-overlay');
@@ -2554,7 +2576,7 @@
                 '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">Suivi - ' + siteObj.label + '</h2>' +
                 '<div style="font-size:11px;color:#888;margin-bottom:12px;">' + entries.length + ' anime(s) suivi(s) &middot; ' + checkedText + '</div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th></tr>';
+                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th></tr>';
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const latest = latestKnownEpisode[e.key];
@@ -2566,6 +2588,7 @@
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
                     '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
+                    '<td style="padding:6px 2px;">' + (nb && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
             html += '</table><div style="margin-top:16px;text-align:right;">' +
@@ -2588,6 +2611,12 @@
             }));
             // Meme effet que decocher "Suivre cet anime" : reactivable via
             // Configuration (case "Suivi").
+            pop.querySelectorAll('.ep-tracking-allseen').forEach((btn) => btn.addEventListener('click', () => {
+                if (!confirm('Marquer "' + btn.getAttribute('data-name') + '" comme vu jusqu\'a l\'episode ' + btn.getAttribute('data-latest') + ' ?')) return;
+                markSeriesFullyWatched(btn.getAttribute('data-key'));
+                buildPersistentPanel();
+                refreshTrackingPopup();
+            }));
             pop.querySelectorAll('.ep-tracking-drop').forEach((btn) => btn.addEventListener('click', () => {
                 if (!confirm('Abandonner le suivi de "' + btn.getAttribute('data-name') + '" ?')) return;
                 setSeriesExcluded(btn.getAttribute('data-key'), true);
