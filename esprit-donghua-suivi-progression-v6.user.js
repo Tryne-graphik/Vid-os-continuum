@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.22
+// @version      6.23
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -440,7 +440,14 @@
 
     function fetchPageHtml(url, retriesLeft) {
         if (retriesLeft === undefined) retriesLeft = 1;
-        return gmRequest({ method: 'GET', url: url }).then((res) => {
+        // Meme site que la page : fetch() du navigateur, pas besoin d'@connect
+        // (sites ajoutes par l'utilisateur, inconnus a l'avance - v6.23).
+        let sameOrigin = false;
+        try { sameOrigin = new URL(url, location.href).origin === location.origin; } catch (e) {}
+        const req = sameOrigin
+            ? fetch(url, { credentials: 'include' }).then((r) => r.text().then((t) => ({ status: r.status, responseText: t })))
+            : gmRequest({ method: 'GET', url: url });
+        return req.then((res) => {
             if (res.status >= 200 && res.status < 300) return res.responseText;
             if (res.status >= 500 && res.status < 600 && retriesLeft > 0) {
                 return new Promise((resolve) => setTimeout(resolve, 1000)).then(() => fetchPageHtml(url, retriesLeft - 1));
@@ -1945,6 +1952,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.23', ['Fiche de l\'anime sur tous les sites (bouton \u2139 dans le lecteur, le panneau et la fenetre de suivi) : synopsis en francais quand le site le fournit (sinon AniList en anglais), genres, tags sans spoilers, note, nombre d\'episodes, statut et prochain episode.',
+                'Sites ajoutes : la verification des nouveaux episodes n\'etait pas autorisee par Tampermonkey, corrige.']],
             ['6.22', ['"Ajouter ce site" (fenetre \u25B6 Mes animes, depuis la page d\'un episode) : le lecteur, le suivi, la reprise, l\'enchainement et AniSkip sur un site non prevu. Teste sur french-anime.com et myfluneo.eu. Menu Tampermonkey : "Retirer ce site".']],
             ['6.21', ['Lecteur de secours automatique : si le lecteur d\'un episode est mort (ex. "video not found"), le lecteur suivant de la page est essaye tout seul.',
                 'Si aucun lecteur ne marche, un encadre explique que c\'est le site (video supprimee, hebergeur en panne) et non Video Continuum, cherche tout seul le meme episode sur l\'autre site (Anime-Sama / Animoflix), et propose "Rechercher sur Google" et "Episode suivant".',
@@ -2056,6 +2065,7 @@
                 collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), false) +
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
+                '<button id="ed-info-btn" title="Synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">&#8505; Fiche de l\'anime</button>' +
                 '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
                 '<div id="ed-aniskip" style="display:none;font-size:10px;color:#aaa;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
@@ -2139,6 +2149,7 @@
             topbar.querySelector('#ed-set-outro-btn').addEventListener('click', () => promptIntroOutro('outroStart'));
             topbar.querySelector('#ed-set-outroend-btn').addEventListener('click', () => promptIntroOutro('outroEnd'));
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
+            topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
             bindIncidentSection(topbar, 'ed');
             bindNewsSection(topbar);
@@ -2515,6 +2526,77 @@
                     if (st.cfg) applyUpdatedConfigIfCurrent(st.key);
                 });
         }
+        // ---- Fiche de l'anime (v6.23) : synopsis + genres/tags, tous sites ----
+        // Synopsis FR tire de la page de l'anime sur le site (anime-sama :
+        // #synopsisText ; ailleurs : description JSON-LD / og / meta), sinon
+        // celui d'AniList (anglais). Le reste vient d'AniList (meme
+        // association que pour AniSkip).
+        const GENRES_FR = { 'Action': 'Action', 'Adventure': 'Aventure', 'Comedy': 'Comedie', 'Drama': 'Drame', 'Ecchi': 'Ecchi', 'Fantasy': 'Fantasy', 'Horror': 'Horreur',
+            'Mahou Shoujo': 'Magical girl', 'Mecha': 'Mecha', 'Music': 'Musique', 'Mystery': 'Mystere', 'Psychological': 'Psychologique', 'Romance': 'Romance',
+            'Sci-Fi': 'Science-fiction', 'Slice of Life': 'Tranche de vie', 'Sports': 'Sport', 'Supernatural': 'Surnaturel', 'Thriller': 'Thriller' };
+        const STATUS_FR = { FINISHED: 'Termine', RELEASING: 'En cours de diffusion', NOT_YET_RELEASED: 'Pas encore sorti', CANCELLED: 'Annule', HIATUS: 'En pause' };
+        function anilistDetails(idMal) {
+            const query = 'query($id:Int){Media(idMal:$id,type:ANIME){siteUrl episodes status averageScore seasonYear genres description(asHtml:false) coverImage{large} title{romaji english} tags{name rank isMediaSpoiler isGeneralSpoiler} nextAiringEpisode{episode timeUntilAiring}}}';
+            return gmRequest({ method: 'POST', url: 'https://graphql.anilist.co', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.stringify({ query: query, variables: { id: idMal } }), anonymous: true, timeout: 15000 })
+                .then((res) => JSON.parse(res.responseText).data.Media);
+        }
+        function siteSynopsis(info) {
+            const slug = ((info.seriesUrl || '').match(/anime-sama\.to\/catalogue\/([^/]+)/) || [])[1];
+            const url = slug ? 'https://anime-sama.to/catalogue/' + slug + '/' : info.seriesUrl;
+            if (!url) return Promise.resolve(null);
+            return fetchPageHtml(url).then((html) => {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const cands = [];
+                const el = doc.querySelector('#synopsisText, .synopsis-content, .anime-synopsis p, .full-text, [itemprop="description"]');
+                if (el) cands.push(el.textContent);
+                doc.querySelectorAll('script[type="application/ld+json"]').forEach((sc) => { try { const j = JSON.parse(sc.textContent); [].concat(j).forEach((o) => { if (o && typeof o.description === 'string') cands.push(o.description); }); } catch (e) {} });
+                ['meta[property="og:description"]', 'meta[name="description"]'].forEach((sel) => { const m = doc.querySelector(sel); if (m) cands.push(m.getAttribute('content') || ''); });
+                // Le plus long qui ne ressemble pas a un texte publicitaire du site.
+                const good = cands.map((t) => String(t).replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 80 && !(t.length < 220 && /streaming|regarder|gratuit|t[e\u00e9]l[e\u00e9]charg/i.test(t)));
+                return good.sort((a, b) => b.length - a.length)[0] || null;
+            }).catch(() => null);
+        }
+        function openSeriesInfo(info) {
+            const key = storageKey(info);
+            const old = document.getElementById('ep-info-overlay');
+            if (old) old.remove();
+            const pop = document.createElement('div');
+            pop.id = 'ep-info-overlay';
+            pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+            pop.innerHTML = '<div id="ep-info-box" style="background:#15151f;color:#eee;max-width:640px;width:92%;max-height:84vh;overflow:auto;border-radius:8px;padding:18px;font-size:13px;line-height:1.5;">Chargement de la fiche de ' + escapeHtml(displayName(info.seriesName)) + '...</div>';
+            (overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body).appendChild(pop);
+            pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
+            const box = pop.querySelector('#ep-info-box');
+            const media = resolveAniLink(key, info).then((link) => (link && link.idMal ? anilistDetails(link.idMal) : null)).catch(() => null);
+            Promise.all([media, siteSynopsis(info)]).then(([m, frSyn]) => {
+                if (!document.body.contains(pop)) return;
+                const chip = (t, c) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:10px;font-size:11px;background:' + c + ';">' + escapeHtml(t) + '</span>';
+                let html = '<div style="display:flex;gap:14px;">';
+                if (m && m.coverImage && /^https:\/\//.test(m.coverImage.large)) html += '<img src="' + escapeHtml(m.coverImage.large) + '" alt="" style="width:110px;height:auto;border-radius:6px;align-self:flex-start;">';
+                html += '<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:bold;color:#03d0fc;">' + escapeHtml(displayName(info.seriesName)) + '</div>';
+                if (m) {
+                    const meta = [];
+                    if (m.seasonYear) meta.push(m.seasonYear);
+                    if (m.episodes) meta.push(m.episodes + ' episodes');
+                    if (STATUS_FR[m.status]) meta.push(STATUS_FR[m.status]);
+                    if (m.averageScore) meta.push('note ' + (m.averageScore / 10).toFixed(1) + '/10');
+                    html += '<div style="color:#aaa;font-size:12px;margin:2px 0 6px;">' + escapeHtml(meta.join(' \u00b7 ')) + '</div>';
+                    if (m.nextAiringEpisode) html += '<div style="color:#ffb300;font-size:12px;">Prochain episode (' + m.nextAiringEpisode.episode + ') dans ' + Math.max(1, Math.round(m.nextAiringEpisode.timeUntilAiring / 86400)) + ' j</div>';
+                    html += '<div style="margin-top:6px;">' + (m.genres || []).map((g) => chip(GENRES_FR[g] || g, '#1f3a4d')).join('') + '</div>';
+                    const tags = (m.tags || []).filter((t) => !t.isMediaSpoiler && !t.isGeneralSpoiler && t.rank >= 60).slice(0, 8);
+                    if (tags.length) html += '<div>' + tags.map((t) => chip(t.name, '#2a2a35')).join('') + '</div>';
+                } else html += '<div style="color:#aaa;font-size:12px;">Anime non trouve sur AniList (genres indisponibles).</div>';
+                html += '</div></div>';
+                const enSyn = m && m.description ? m.description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
+                html += '<div style="margin-top:12px;"><b>Synopsis</b>' + (frSyn ? '' : (enSyn ? ' <span style="color:#888;font-size:11px;">(AniList, en anglais)</span>' : '')) +
+                    '<p style="margin:4px 0 0;color:#ddd;">' + escapeHtml(frSyn || enSyn || 'Aucun synopsis trouve.') + '</p></div>';
+                html += '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">' +
+                    (m && /^https:\/\/anilist\.co\//.test(m.siteUrl || '') ? '<a href="' + escapeHtml(m.siteUrl) + '" target="_blank" rel="noopener" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;text-decoration:none;">Voir sur AniList</a>' : '') +
+                    '<button type="button" id="ep-info-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
+                box.innerHTML = html;
+            });
+        }
+
         function changeAniLink() {
             if (!currentEpisode || !aniSkip) return;
             const key = aniSkip.key;
@@ -3132,7 +3214,7 @@
                 '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">Suivi - ' + siteObj.label + '</h2>' +
                 '<div style="font-size:11px;color:#888;margin-bottom:12px;">' + entries.length + ' anime(s) suivi(s) &middot; ' + checkedText + '</div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th></tr>';
+                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th><th></th></tr>';
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const latest = latestKnownEpisode[e.key];
@@ -3144,6 +3226,7 @@
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
                     '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
+                    '<td style="padding:6px 2px;"><button class="ep-tracking-info" data-key="' + escapeHtml(e.key) + '" title="Fiche : synopsis, genres" style="background:none;border:1px solid #03d0fc;border-radius:4px;color:#03d0fc;cursor:pointer;font-size:12px;padding:2px 6px;">&#8505;</button></td>' +
                     '<td style="padding:6px 2px;">' + (nb && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
@@ -3167,6 +3250,10 @@
             }));
             // Meme effet que decocher "Suivre cet anime" : reactivable via
             // Configuration (case "Suivi").
+            pop.querySelectorAll('.ep-tracking-info').forEach((btn) => btn.addEventListener('click', () => {
+                const e = entries.find((x) => x.key === btn.getAttribute('data-key'));
+                if (e) openSeriesInfo(e);
+            }));
             pop.querySelectorAll('.ep-tracking-allseen').forEach((btn) => btn.addEventListener('click', () => {
                 if (!confirm('Marquer "' + btn.getAttribute('data-name') + '" comme vu jusqu\'a l\'episode ' + btn.getAttribute('data-latest') + ' ?')) return;
                 markSeriesFullyWatched(btn.getAttribute('data-key'));
@@ -3317,6 +3404,7 @@
                 html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
                 html += '<div style="font-size:13px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
+                html += '<button id="ep-info-btn" style="' + BTN_STYLE + '">&#8505; Fiche de l\'anime</button>';
                 html += '<span id="ep-player-status" style="font-size:11px;color:#ccc;"></span>';
                 if (currentEpisode.site === 'esprit-donghua') {
                     html += '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>';
@@ -3418,6 +3506,8 @@
             if (reauthBackupBtn) reauthBackupBtn.addEventListener('click', reauthorizeBackupFile);
             updateBackupStatusUi();
 
+            const infoBtn = panel.querySelector('#ep-info-btn');
+            if (infoBtn) infoBtn.addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             const openPlayerBtn = panel.querySelector('#ep-open-player');
             if (openPlayerBtn) openPlayerBtn.addEventListener('click', () => startEpisode(getEpisodeInfoForCurrentPage(), 'clic manuel'));
 

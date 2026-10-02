@@ -712,3 +712,23 @@ Domaines : seul `finisheddaysflamboyant.com` est dans EasyList ;
 Piste restante si besoin un jour : mettre nos commandes dans une iframe
 (about:blank) pour que les écouteurs de la page ne voient plus nos clics — gros
 remaniement. En pratique : uBlock Origin Lite en mode "Complet" pour ce site seul.
+
+### 2026-10-02 (suite 10) — v6.23 : fiche de l'anime sur tous les sites
+
+Demande : synopsis + genres/tags lisibles avant de commencer un anime, sur tous
+les sites. Bouton **ℹ** dans le lecteur ("Fiche de l'anime"), le panneau et chaque
+ligne de la fenêtre de suivi → fenêtre avec couverture, année, nb d'épisodes,
+statut, note, prochain épisode, genres (traduits), tags AniList sans spoilers
+(rang ≥ 60, 8 max), synopsis.
+- Synopsis **FR depuis le site** : anime-sama → page `/catalogue/<nom>/`
+  (`#synopsisText`) ; ailleurs → page de la série, plus long texte parmi
+  `.synopsis-content`/`[itemprop=description]`/JSON-LD/`og:description`/meta,
+  en écartant les textes publicitaires courts ("regarder… streaming"). Sinon
+  synopsis AniList (anglais, signalé). Infos AniList via la même association que
+  AniSkip (`aniLinks`).
+- **Correctif** : `fetchPageHtml` passe par `fetch()` du navigateur pour le même
+  site que la page → plus besoin d'`@connect` pour les sites ajoutés (leur
+  vérification des nouveaux épisodes était refusée par Tampermonkey en v6.22).
+- **Testé** (Playwright) : Bleach/anime-sama (synopsis FR complet, 366 ép., 7.9),
+  Thunder 3/animoflix (FR, mais tronqué par le site lui-même), Thunder 3/french-anime
+  (FR complet).
