@@ -523,3 +523,10 @@ au cas où le numéro affiché = numéro enregistré.
 **Testé** dans Chrome (Playwright, shims GM) sur anime-sama : Bleach et Clevatess
 marqués, Bleach 366/366 "Reprendre", résumé "à jour", et ça tient après "Vérifier
 maintenant".
+
+### 2026-10-02 (suite 2) — v6.17 : titre du panneau
+
+Titre centré "Vidéo Continuum" (sans le _), 13 → 15 px ; version sur la même ligne,
+en jaune `#ffd400`, 10 → 12 px. Appliqué au panneau de page et au calque plein
+écran. Le titre de l'export HTML garde "Vidéo_Continuum". Vérifié par capture
+d'écran (Playwright).
