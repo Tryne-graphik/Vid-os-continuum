@@ -752,3 +752,15 @@ chaînes et avec des titres variables → une entrée par variante.
   "Ten Thousand Worlds" conservé ; Bleach S1 (50) et S2 (3) intacts.
 - À suivre : l'utilisateur évoque un "problème de mise en cache" côté Odysee et
   l'envie de continuer via YouTube — à préciser.
+
+### 2026-10-02 (suite 12) — v6.25 : vérification des sites ajoutés depuis un autre site
+
+Vu dans la console de l'utilisateur (sur Odysee) : "Refused to connect to
+https://myfluneo.eu/… not part of the @connect list". `checkForNewEpisodes()`
+tentait de vérifier l'entrée myfluneo depuis Odysee ; les sites ajoutés ne sont
+pas dans `@connect`. Désormais ignorés sauf depuis leur propre site.
+En cours : blocages de lecture récurrents sur Wan Jie Du Zun (Odysee /
+esprit-donghua : pause, F5 = quelques secondes puis re-blocage, tampon qui ne
+reprend pas). Pas encore reproduit (lecture OK au moment du test) ; l'utilisateur
+capturera l'onglet Réseau filtré "odycdn" + la console au prochain blocage.
+Piste à tester : case "720p".
