@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.25
+// @version      6.26
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -362,6 +362,27 @@
                     window.parent.postMessage({ type: MSG_PREFIX + 'outro-reached' }, '*');
                 }
             });
+            // Lecture qui cale (v6.26) : position figee ET donnees insuffisantes
+            // pendant 15 s alors que la lecture avait demarre (une vraie pause
+            // de l'utilisateur garde readyState >= 3). Cas reel : fichiers MP4
+            // bruts mal prepares sur certaines chaines Odysee (index en fin de
+            // fichier, ~8 Mbit/s) - le navigateur n'arrive pas a les lire.
+            let stallLastT = -1, stallFor = 0, stallSent = false;
+            setInterval(() => {
+                if (!playbackStarted || video.ended) return;
+                const frozen = Math.abs(video.currentTime - stallLastT) < 0.2 && video.readyState < 3;
+                stallLastT = video.currentTime;
+                if (!frozen) {
+                    if (stallSent) window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'stall-fini' }, '*');
+                    stallSent = false; stallFor = 0; return;
+                }
+                if (++stallFor >= 15 && !stallSent) {
+                    stallSent = true;
+                    console.log('[AnimeTracker v6] (' + cfg.label + ') lecture bloquee depuis 15 s a ' + Math.round(video.currentTime) + 's');
+                    window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'stall' }, '*');
+                }
+            }, 1000);
+
             video.addEventListener('ended', () => {
                 if (outroSignalSent) return;
                 outroSignalSent = true;
@@ -1985,6 +2006,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.26', ['Si la video cale chez l\'hebergeur (fichier trop lourd ou mal prepare, cas de certaines chaines Odysee pour Wan Jie Du Zun), un encadre l\'explique et propose : Reessayer, Chercher sur YouTube, Rechercher sur Google, Episode suivant.']],
             ['6.25', ['Plus de message "@connect" dans la console : les nouveaux episodes des sites ajoutes ne sont verifies que depuis ces sites.']],
             ['6.24', ['Odysee : un meme anime publie par plusieurs chaines (ou avec des titres differents) ne cree plus plusieurs lignes de suivi. Les doublons existants sont fusionnes une fois, en gardant le plus ancien episode vu.']],
             ['6.23', ['Fiche de l\'anime sur tous les sites (bouton \u2139 dans le lecteur, le panneau et la fenetre de suivi) : synopsis en francais quand le site le fournit (sinon AniList en anglais), genres, tags sans spoilers, note, nombre d\'episodes, statut et prochain episode.',
@@ -2358,29 +2380,42 @@
 
         // Demande utilisateur : dire clairement que c'est le site (video
         // supprimee / hebergeur en panne), pas Video Continuum.
-        function showSiteError(nbPlayers) {
+        function showSiteError(nbPlayers, kind) {
             const box = overlayEls.siteErrorBox;
             const siteLabel = currentEpisode ? currentEpisode.siteLabel : 'le site';
-            setStatus('Episode indisponible sur ' + siteLabel + ' (probleme du site)');
-            box.innerHTML = '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; Episode indisponible sur ' + escapeHtml(siteLabel) + '</div>' +
-                (nbPlayers > 1 ? 'Les ' + nbPlayers + ' lecteurs proposes par le site ont ete essayes : ' : 'Le lecteur propose par le site ') +
-                'la video a ete supprimee ou l\'hebergeur est en panne.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>' +
+            let host = '';
+            try { host = new URL(overlayEls.playerFrame.src).hostname.replace(/^www\./, ''); } catch (e) {}
+            const stall = kind === 'stall';
+            box.setAttribute('data-kind', stall ? 'stall' : 'dead');
+            setStatus(stall ? 'Lecture bloquee par le fichier video de l\'hebergeur' : 'Episode indisponible sur ' + siteLabel + ' (probleme du site)');
+            const BTN = 'background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;cursor:pointer;';
+            box.innerHTML = (stall
+                ? '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; La video cale chez l\'hebergeur (' + escapeHtml(host || siteLabel) + ')</div>' +
+                  'Le fichier publie pour cet episode est trop lourd ou mal prepare (cas de certaines chaines Odysee) : le navigateur n\'arrive pas a le lire d\'une traite.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>' +
+                  '<span style="font-size:12px;color:#d9b77a;">Astuce : colle un lien YouTube de cet episode dans "Lien YouTube de secours" pour le lire a la place.</span>'
+                : '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; Episode indisponible sur ' + escapeHtml(siteLabel) + '</div>' +
+                  (nbPlayers > 1 ? 'Les ' + nbPlayers + ' lecteurs proposes par le site ont ete essayes : ' : 'Le lecteur propose par le site ') +
+                  'la video a ete supprimee ou l\'hebergeur est en panne.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>') +
                 '<div id="ed-site-alt" style="margin-top:10px;font-size:12px;color:#d9b77a;">Recherche de cet episode sur les autres sites...</div>' +
                 '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
-                '<button type="button" data-act="google" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;cursor:pointer;">Rechercher sur Google</button>' +
+                (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
+                '<button type="button" data-act="youtube" style="' + BTN + '">Chercher sur YouTube</button>' +
+                '<button type="button" data-act="google" style="' + BTN + '">Rechercher sur Google</button>' +
                 (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Episode suivant</button>' : '') +
                 '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             const info = currentEpisode;
             box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
-                if (act === 'google') {
-                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr streaming';
-                    window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
+                if (act === 'google' || act === 'youtube') {
+                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr' + (act === 'google' ? ' streaming' : '');
+                    window.open(act === 'google' ? 'https://www.google.com/search?q=' + encodeURIComponent(q) : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q), '_blank', 'noopener');
                     return;
                 }
                 box.style.display = 'none';
                 if (act === 'next') advanceToNextEpisode();
+                // Recharge le lecteur : la position est reprise (sauvegardee toutes les 5 s).
+                if (act === 'retry') { positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src; }
             }));
             findEpisodeElsewhere(info, playerCandidates.slice()).then((found) => {
                 const alt = box.querySelector('#ed-site-alt');
@@ -2455,6 +2490,8 @@
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
+                else if (event.data.stage === 'stall') showSiteError(0, 'stall');
+                else if (event.data.stage === 'stall-fini') { if (overlayEls.siteErrorBox.getAttribute('data-kind') === 'stall') overlayEls.siteErrorBox.style.display = 'none'; }
                 else if (event.data.stage === 'video-trouvee') setStatus('Chargement...');
                 else if (event.data.stage === 'buffering') {
                     if (event.data.pct > lastBufferPct) {

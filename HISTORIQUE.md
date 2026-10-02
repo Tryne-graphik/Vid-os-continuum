@@ -764,3 +764,30 @@ esprit-donghua : pause, F5 = quelques secondes puis re-blocage, tampon qui ne
 reprend pas). Pas encore reproduit (lecture OK au moment du test) ; l'utilisateur
 capturera l'onglet Réseau filtré "odycdn" + la console au prochain blocage.
 Piste à tester : case "720p".
+
+### 2026-10-02 (suite 13) — v6.26 : vidéo qui cale chez l'hébergeur (Wan Jie Du Zun)
+
+**Cause trouvée** grâce à la capture Réseau de l'utilisateur (filtre `odycdn`) :
+l'épisode lu via esprit-donghua (S3 E90 = "Season 2 Episode 364", chaîne
+**@chaineparrainage**, claim 5cccc0e4…) est servi par Odysee en **MP4 brut non
+transcodé** (`61864d.mp4`, 595 Mo pour 9 min 49 ≈ 8 Mbit/s, 1080p, H.264), avec
+l'**atome `moov` (index) en fin de fichier** (`ftyp, free, mdat 623 Mo, moov`) :
+dizaines de requêtes `206` dont beaucoup `(canceled)`, la vidéo cale après
+quelques secondes, F5 → idem. Comparaison : S3 E99 de la chaîne @Akirama est
+servi en HLS (`v1_s0000xx.ts`) et se lit sans souci, saut de reprise compris.
+→ Problème du fichier publié par cette chaîne, pas du script ni de la reprise.
+- **Détection dans le lecteur** (tous hébergeurs) : position figée + `readyState
+  < 3` pendant 15 s alors que la lecture avait démarré → message `stall` ; reprise
+  → `stall-fini` (l'encadré se referme seul). Une vraie pause utilisateur garde
+  `readyState ≥ 3` et ne déclenche rien.
+- **Encadré** (même que les liens morts, variante "La vidéo cale chez
+  l'hébergeur") : "Ce n'est pas un problème de Vidéo Continuum", astuce "Lien
+  YouTube de secours", boutons **Réessayer** (recharge le lecteur, reprise à la
+  dernière position), **Chercher sur YouTube**, **Rechercher sur Google**,
+  **Épisode suivant**. "Chercher sur YouTube" ajouté aussi à l'encadré des liens
+  morts.
+- **Testé** (Playwright, faux lecteur qui cale de 6 à 30 s) : encadré à 21 s,
+  refermé à 30 s, boutons présents.
+- Piste non faite : chercher le même épisode sur une autre chaîne Odysee
+  (transcodée HLS) — numérotations différentes selon les chaînes (S2 E364 vs
+  S3 E90/E99), à voir si le problème se répète.
