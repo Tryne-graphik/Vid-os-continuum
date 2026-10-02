@@ -732,3 +732,23 @@ statut, note, prochain épisode, genres (traduits), tags AniList sans spoilers
 - **Testé** (Playwright) : Bleach/anime-sama (synopsis FR complet, 366 ép., 7.9),
   Thunder 3/animoflix (FR, mais tronqué par le site lui-même), Thunder 3/french-anime
   (FR complet).
+
+### 2026-10-02 (suite 11) — v6.24 : doublons de suivi sur Odysee
+
+Signalé (capture) : 5 lignes pour le même anime dans le suivi Odysee ("Wan Jie
+Du Zun Ten Thousand Worlds" ×4 à 317/319/327/328 + "Ten Thousand Worlds" 326) →
+impossible de savoir où on en est. Cause : clé Odysee = chaîne + préfixe du titre
+de la vidéo (`deriveOdyseeSeriesPrefix`) ; le même anime est publié par plusieurs
+chaînes et avec des titres variables → une entrée par variante.
+- `recordEpisodeProgress` : sur **Odysee seulement**, l'épisode vu remplace les
+  autres entrées au même nom normalisé (`normalizeSeriesName`). Pas ailleurs :
+  anime-sama donne le même nom à toutes les saisons (Bleach saison1/saison2).
+- `mergeOdyseeDuplicatesOnce()` (drapeau `odyseeDedupDone`) : fusion unique des
+  doublons existants en gardant **l'épisode le moins avancé** (choix de
+  l'utilisateur : "repartir du plus ancien", pas de risque de sauter).
+- "Ten Thousand Worlds" (nom différent) n'est pas fusionné : à retirer avec ✕ si
+  c'est le même.
+- **Testé** (Playwright, données simulées) : 4 doublons → 1 entrée ép. 317 ;
+  "Ten Thousand Worlds" conservé ; Bleach S1 (50) et S2 (3) intacts.
+- À suivre : l'utilisateur évoque un "problème de mise en cache" côté Odysee et
+  l'envie de continuer via YouTube — à préciser.

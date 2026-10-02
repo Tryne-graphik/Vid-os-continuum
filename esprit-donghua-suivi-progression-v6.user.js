@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.23
+// @version      6.24
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1647,7 +1647,40 @@
                 episodeUrl: info.resumeUrl,
                 watchedAt: new Date().toISOString()
             };
+            // Odysee : la serie est reperee par chaine + titre de la video, et
+            // le meme anime existe sur plusieurs chaines / avec des titres
+            // varies -> une entree par variante (5 lignes "Wan Jie Du Zun",
+            // signale 2026-10-02). Une seule entree par anime : la derniere vue
+            // remplace les autres. Pas sur les autres sites : anime-sama donne
+            // le meme nom a toutes les saisons.
+            if (info.site === 'odysee') {
+                const norm = normalizeSeriesName(info.seriesName);
+                Object.keys(progress).forEach((k) => {
+                    if (k !== key && progress[k].site === 'odysee' && normalizeSeriesName(progress[k].seriesName) === norm) delete progress[k];
+                });
+            }
             saveProgress(progress);
+        }
+
+        // Nettoyage unique des doublons Odysee deja enregistres : on garde le
+        // moins avance (demande de l'utilisateur : ne pas sauter d'episodes).
+        function mergeOdyseeDuplicatesOnce() {
+            if (GM_getValue('odyseeDedupDone', false)) return;
+            const progress = loadProgress();
+            const keep = {};
+            Object.keys(progress).forEach((k) => {
+                const e = progress[k];
+                if (e.site !== 'odysee') return;
+                const norm = normalizeSeriesName(e.seriesName);
+                if (!keep[norm] || Number(e.episodeNumber) < Number(progress[keep[norm]].episodeNumber)) keep[norm] = k;
+            });
+            let removed = 0;
+            Object.keys(progress).forEach((k) => {
+                const e = progress[k];
+                if (e.site === 'odysee' && keep[normalizeSeriesName(e.seriesName)] !== k) { delete progress[k]; removed++; }
+            });
+            if (removed) { saveProgress(progress); console.log('[AnimeTracker v6] doublons Odysee fusionnes : ' + removed); }
+            GM_setValue('odyseeDedupDone', true);
         }
 
         function deleteProgressEntry(key) {
@@ -1952,6 +1985,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.24', ['Odysee : un meme anime publie par plusieurs chaines (ou avec des titres differents) ne cree plus plusieurs lignes de suivi. Les doublons existants sont fusionnes une fois, en gardant le plus ancien episode vu.']],
             ['6.23', ['Fiche de l\'anime sur tous les sites (bouton \u2139 dans le lecteur, le panneau et la fenetre de suivi) : synopsis en francais quand le site le fournit (sinon AniList en anglais), genres, tags sans spoilers, note, nombre d\'episodes, statut et prochain episode.',
                 'Sites ajoutes : la verification des nouveaux episodes n\'etait pas autorisee par Tampermonkey, corrige.']],
             ['6.22', ['"Ajouter ce site" (fenetre \u25B6 Mes animes, depuis la page d\'un episode) : le lecteur, le suivi, la reprise, l\'enchainement et AniSkip sur un site non prevu. Teste sur french-anime.com et myfluneo.eu. Menu Tampermonkey : "Retirer ce site".']],
@@ -3623,6 +3657,7 @@
                 .observe(document.body, { childList: true, subtree: true });
         }
 
+        mergeOdyseeDuplicatesOnce();
         const liveInfoPromise = getLiveEpisodeInfo();
         liveInfoPromise.then((liveInfo) => {
             if (liveInfo) {
