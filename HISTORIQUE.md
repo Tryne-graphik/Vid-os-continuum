@@ -577,3 +577,24 @@ verrouillé y est encore) — à faire avec le nouveau nom.
   du jour** (téléchargement) → pré-remplir `lastAutoExport` = date du jour dans
   les shims. Aussi : ne pas appeler `addInitScript` deux fois sur le même onglet
   (script injecté en double = deux calques).
+
+### 2026-10-02 (suite 5) — v6.19 : liens des sites + "Mes animes" sur tous les sites
+
+- **Section "Sites"** (panneau + lecteur, repliable) : un bouton par site géré +
+  sélecteur **"Ouvrir dans"** (nouvel onglet / nouvelle fenêtre `popup` / cet
+  onglet, `GM openMode`), partagé avec "Mes animes". Délégation globale sur
+  `a.vc-open-link` et `select.vc-open-mode`.
+- **`@match *://*/*`** ajouté : sur un site non géré (cadre principal seulement),
+  le script ne fait que proposer **"Mes animes"** — commande du menu Tampermonkey
+  + petit bouton ▶ en bas à gauche (masquable via le menu, `floatingButtonEverywhere`,
+  affiché par défaut). Fenêtre = liste des animes suivis par site, triés par
+  dernier visionnage, bouton "Reprendre" (liens `http(s)` uniquement, noms échappés).
+  Le stockage GM_* étant propre au script, la liste est la même sur tous les sites.
+  Les iframes des autres sites sortent toujours tout de suite (`window.name`).
+- Code placé hors de `main()` (avant `detectSite()`), donc sans dépendre des
+  helpers de `main` (petit `escHtml` dédié).
+- **Testé** (Playwright) sur example.com : bouton ▶ + 2 commandes de menu, fenêtre
+  correcte (nom piégé `<b>` affiché en texte, lien `javascript:` ignoré),
+  "Reprendre" → nouvel onglet en gardant la page, mode "Nouvelle fenêtre"
+  enregistré puis lien Odysee ouvert en fenêtre. Sur anime-sama : section Sites
+  dans le panneau, pas de bouton ▶ (le panneau suffit).

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.18
+// @version      6.19
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -9,6 +9,7 @@
 // @match        https://anime-sama.to/*
 // @match        https://video.sibnet.ru/*
 // @match        https://ansembed.net/*
+// @match        *://*/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -1064,8 +1065,122 @@
     // leur "zone morte temporelle" tant que leur ligne n'a pas encore
     // ete executee) existent - ReferenceError immediat qui arretait TOUT
     // le script silencieusement, sur les 3 sites y compris esprit-donghua.xyz).
+    // ================= Partout : "mes animes" + liens des sites (v6.19) =================
+    //
+    // Le script tourne desormais sur tous les sites (@match *://*/*) pour
+    // offrir, depuis n'importe quelle page, la liste des animes suivis
+    // (comme des favoris) sans quitter ce qu'on fait : ouverture au choix
+    // dans un nouvel onglet, une nouvelle fenetre ou l'onglet courant. Le
+    // stockage GM_* est celui du script, donc le meme sur tous les sites.
+    const SITE_LINKS = [
+        ['Esprit Donghua', 'https://esprit-donghua.xyz/'],
+        ['Animoflix', 'https://animoflix.to/'],
+        ['Anime-Sama', 'https://anime-sama.to/'],
+        ['Odysee', 'https://odysee.com/']
+    ];
+    const OPEN_MODES = [['tab', 'Nouvel onglet'], ['window', 'Nouvelle fenetre'], ['same', 'Cet onglet']];
+    function escHtml(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function getOpenMode() { return GM_getValue('openMode', 'tab'); }
+    function openWithMode(url) {
+        const mode = getOpenMode();
+        if (mode === 'same') { location.href = url; return; }
+        const w = window.open(url, '_blank', mode === 'window' ? 'popup,width=1280,height=760' : '');
+        if (w) w.opener = null;
+    }
+    function siteLinksHtml() {
+        return '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + SITE_LINKS.map(([label, url]) =>
+            '<a href="' + url + '" class="vc-open-link" style="flex:1 1 45%;text-align:center;background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;border-radius:4px;padding:5px 4px;font:bold 11px Arial,sans-serif;text-decoration:none;white-space:nowrap;">' + label + '</a>').join('') + '</div>';
+    }
+    function openModeSelectHtml() {
+        const cur = getOpenMode();
+        return '<label style="display:flex;align-items:center;gap:6px;font:11px Arial,sans-serif;color:#ccc;">Ouvrir dans :' +
+            '<select class="vc-open-mode" style="flex:1;padding:3px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+            OPEN_MODES.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>';
+    }
+    // Delegation globale : liens de sites/"Reprendre" et selecteur de mode,
+    // ou qu'ils soient (panneau, calque, fenetre "Mes animes").
+    if (isTopFrame) {
+        document.addEventListener('click', (ev) => {
+            const a = ev.target.closest && ev.target.closest('a.vc-open-link');
+            if (!a) return;
+            ev.preventDefault();
+            openWithMode(a.href);
+        }, true);
+        document.addEventListener('change', (ev) => {
+            if (!ev.target.classList || !ev.target.classList.contains('vc-open-mode')) return;
+            GM_setValue('openMode', ev.target.value);
+            document.querySelectorAll('select.vc-open-mode').forEach((sel) => { sel.value = ev.target.value; });
+        }, true);
+    }
+    function relativeDays(iso) {
+        if (!iso) return '';
+        const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+        return days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : 'il y a ' + days + 'j';
+    }
+    function openFavoritesPopup() {
+        const old = document.getElementById('vc-favorites');
+        if (old) { old.remove(); return; }
+        const progress = GM_getValue('progress', {});
+        const excluded = GM_getValue('excludedSeries', {});
+        const entries = Object.keys(progress).filter((k) => !excluded[k]).map((k) => progress[k])
+            .sort((a, b) => String(b.watchedAt || '').localeCompare(String(a.watchedAt || '')));
+        const bySite = {};
+        entries.forEach((e) => { (bySite[e.siteLabel || e.site] = bySite[e.siteLabel || e.site] || []).push(e); });
+        const version = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '';
+        let html = '<div style="background:#15151f;color:#eee;width:min(520px,92vw);max-height:80vh;overflow:auto;border-radius:8px;padding:16px;font-family:Arial,sans-serif;display:flex;flex-direction:column;gap:10px;">' +
+            '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + escHtml(version) + '</span></div>' +
+            siteLinksHtml() + openModeSelectHtml();
+        if (!entries.length) html += '<div style="font-size:12px;color:#aaa;">Aucun anime suivi pour le moment.</div>';
+        Object.keys(bySite).forEach((siteLabel) => {
+            html += '<div style="font-size:12px;font-weight:bold;color:#03d0fc;border-top:1px solid #2a2a35;padding-top:6px;">' + escHtml(siteLabel) + '</div>';
+            bySite[siteLabel].forEach((e) => {
+                html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;">' +
+                    '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(e.seriesName) + '">' + escHtml(e.seriesName) + '</span>' +
+                    '<span style="color:#aaa;white-space:nowrap;">ep. ' + escHtml(e.episodeNumber || '?') + ' &middot; ' + relativeDays(e.watchedAt) + '</span>' +
+                    (/^https?:\/\//.test(e.episodeUrl || '') ? '<a href="' + escHtml(e.episodeUrl) + '" class="vc-open-link" style="background:#03d0fc;color:#000;text-decoration:none;padding:3px 8px;border-radius:4px;font-weight:bold;white-space:nowrap;">Reprendre</a>' : '') +
+                    '</div>';
+            });
+        });
+        html += '<div style="text-align:right;"><button type="button" id="vc-fav-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div></div>';
+        const pop = document.createElement('div');
+        pop.id = 'vc-favorites';
+        pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;';
+        pop.innerHTML = html;
+        pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'vc-fav-close') pop.remove(); });
+        // Dans le calque plein ecran s'il est affiche (sinon invisible).
+        (document.fullscreenElement || document.body).appendChild(pop);
+    }
+    function isFloatingButtonEnabled() { return GM_getValue('floatingButtonEverywhere', true); }
+    function installFloatingButton() {
+        if (document.getElementById('vc-float-btn')) return;
+        const b = document.createElement('button');
+        b.id = 'vc-float-btn';
+        b.type = 'button';
+        b.title = 'Vidéo Continuum - mes animes (masquable via le menu Tampermonkey)';
+        b.textContent = '\u25B6';
+        b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483646;width:30px;height:30px;border-radius:50%;border:1px solid #03d0fc;background:#15151f;color:#03d0fc;font-size:13px;cursor:pointer;opacity:.55;box-shadow:0 2px 8px rgba(0,0,0,.4);padding:0;';
+        b.addEventListener('mouseenter', () => { b.style.opacity = '1'; });
+        b.addEventListener('mouseleave', () => { b.style.opacity = '.55'; });
+        b.addEventListener('click', openFavoritesPopup);
+        document.body.appendChild(b);
+    }
+
     const CURRENT_SITE = detectSite();
-    if (!CURRENT_SITE) return; // domaine matche par Tampermonkey mais pas une page qu'on sait gerer
+    if (!CURRENT_SITE) {
+        // Autre site : juste "Mes animes" (menu Tampermonkey + petit bouton).
+        if (!isTopFrame) return;
+        GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
+        GM_registerMenuCommand((isFloatingButtonEnabled() ? 'Masquer' : 'Afficher') + ' le bouton sur tous les sites', () => {
+            GM_setValue('floatingButtonEverywhere', !isFloatingButtonEnabled());
+            const b = document.getElementById('vc-float-btn');
+            if (b) b.remove(); else installFloatingButton();
+        });
+        if (isFloatingButtonEnabled()) {
+            if (document.body) installFloatingButton();
+            else document.addEventListener('DOMContentLoaded', installFloatingButton, { once: true });
+        }
+        return;
+    }
 
     if (!document.body) {
         document.addEventListener('DOMContentLoaded', () => main(CURRENT_SITE), { once: true });
@@ -1667,6 +1782,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.19', ['Section "Sites" : un bouton par site gere (Esprit Donghua, Animoflix, Anime-Sama, Odysee) + choix "Ouvrir dans" : nouvel onglet, nouvelle fenetre ou cet onglet.',
+                '"Mes animes" disponible sur TOUS les sites : petit bouton \u25B6 en bas a gauche (ou menu Tampermonkey) qui liste tes animes suivis avec "Reprendre", sans quitter ta page. Le bouton se masque via le menu Tampermonkey.']],
             ['6.18', ['Bouton \u2139 Fiche sur les vignettes d\'Anime-Sama : ouvre la page de l\'anime (synopsis, genres) au lieu de l\'episode.',
                 'AniSkip : intro, resume et generique de fin sautes automatiquement quand la communaute AniSkip a les temps de l\'episode (ligne "AniSkip" dans le lecteur, "Changer" si le mauvais anime est reconnu). Tes reglages manuels restent prioritaires : vide-les dans Configuration pour laisser AniSkip faire.',
                 'Cet encart Nouveautes.']],
@@ -1767,6 +1884,7 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
+                collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), false) +
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
                 '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
@@ -2904,6 +3022,7 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
 
             let html = '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>';
+            html += collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), prevOpen.sites);
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';
             html += renderTrackingSummary();
@@ -3087,6 +3206,7 @@
 
         console.log('[AnimeTracker v6] enregistrement des commandes de menu...');
         GM_registerMenuCommand('Voir ma progression', () => buildPersistentPanel());
+        GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
         GM_registerMenuCommand('Exporter en fichier', exportProgress);
         GM_registerMenuCommand('Choisir le fichier de sauvegarde', chooseBackupFile);
         GM_registerMenuCommand('Ouvrir le lecteur', () => startEpisode(getEpisodeInfoForCurrentPage(), 'commande menu'));
