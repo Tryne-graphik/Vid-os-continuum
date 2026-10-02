@@ -1,5 +1,9 @@
 # Plan v7 — Vidéo Continuum en extension avec panneau latéral
 
+> **En pause (décision de l'utilisateur, 2026-10-02)** : d'abord terminer la v6.xx,
+> puis créer une page GitHub de présentation de tous les projets (avec une partie
+> « rejoindre un projet »). La v7 sera reprise si des contributeurs nous rejoignent.
+
 Rédigé le 2026-10-02. Décisions prises par Claude sur délégation de l'utilisateur
 (« je te laisse gérer les décisions »). La v6 (userscript) reste en service
 pendant tout le chantier, en corrections de bugs uniquement — même schéma que
