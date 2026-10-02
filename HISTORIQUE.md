@@ -611,3 +611,41 @@ génériques, rien d'autre à toucher. Sélecteurs de page (nom de série, numé
 navigation) vérifiés inchangés.
 **Testé** (Playwright, vrai lecteur ansembed cette fois) : Thunder 3 ép. 11,
 vidéo qui avance (durée 23:33), ligne AniSkip affichée ("pas de données").
+
+### 2026-10-02 (suite 7) — v6.21 : lecteur de secours + "c'est le site, pas nous"
+
+Signalé : "le bouton épisode suivant ne fonctionne pas" (animoflix, The Insipid
+Prince's Furtive Grab for the Throne, ép. 7 → 8). Cause : le lien ansembed de
+l'ép. 8 est **mort chez l'hébergeur** ("Sorry, this video not found", 404) — le
+calque passait bien à l'ép. 8 mais n'avait rien à lire. Le lecteur 2 du site est
+minochinos.com (injoignable depuis ici, DNS).
+- **Lecteurs de secours** : l'extracteur animoflix renvoie `embedCandidates`
+  (tous les lecteurs de la page, ansembed puis sibnet d'abord, dédoublonnés).
+  Le calque passe au suivant si le script du lecteur abandonne (nouveau message
+  `load-status` `echec`, envoyé quand le chien de garde renonce, ~20 s) ou si
+  aucun `ready` n'arrive en 25 s (hébergeur injoignable, aucun script dedans).
+- **Pilote générique** dans NOTRE iframe pour tout autre hébergeur (possible depuis
+  `@match *://*/*`) ; les messages entrants sont acceptés depuis l'origine réelle
+  de l'iframe en plus des origines connues.
+- **Encadré "Épisode indisponible sur <site>"** au centre du calque, à la demande
+  de l'utilisateur : dit explicitement que c'est le site (vidéo supprimée /
+  hébergeur en panne) et pas Vidéo Continuum ; boutons "Rechercher sur Google"
+  (`<nom> episode N vostfr streaming`), "Épisode suivant", "Fermer".
+- **Recherche sur l'autre site** : anime-sama et animoflix partagent le même nom
+  court dans leurs adresses et renvoient une vraie 404 sinon →
+  `findEpisodeElsewhere()` essaie l'adresse équivalente sur l'autre site et ne la
+  propose que si elle a un lecteur **différent des liens déjà morts** (les deux
+  sites partagent souvent les mêmes sources : ép. 8 = même ansembed mort sur
+  anime-sama). Limite : côté anime-sama on ne voit qu'un lien par épisode
+  (ansembed puis sibnet), pas ses autres hébergeurs (embed4me, minochinos…).
+- `@connect odysee.com` ajouté : la vérification des nouveaux épisodes Odysee
+  était refusée par Tampermonkey ("not part of the @connect list", vu dans la
+  console de l'utilisateur).
+- Alerte Bitdefender "phishing" sur `finisheddaysflamboyant.com/sbar.json` :
+  domaine de pub du site, absent du script (vérifié) — ne pas l'autoriser.
+- Le 1er clic sur l'encadré peut être avalé par une pub du site (nouvel onglet) ;
+  le bouton marche au clic suivant.
+- **Testé** (Playwright) : ép. 8 → lecteur 1 en échec à 21 s → lecteur 2 → encadré
+  à 46 s ; "Épisode suivant" → ép. 9 qui se charge ; Google ouvre la recherche ;
+  recherche sur l'autre site → "pas trouvé" (lien identique exclu). Cas positif
+  non démontré (Bleach : le 2e lecteur animoflix, my.mail.ru, a suffi).

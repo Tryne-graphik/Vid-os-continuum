@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.20
+// @version      6.21
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -18,6 +18,7 @@
 // @connect      animoflix.to
 // @connect      anime-sama.to
 // @connect      api.na-backend.odysee.com
+// @connect      odysee.com
 // @connect      www.googleapis.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
@@ -124,6 +125,13 @@
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
         if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
+        // Autre hebergeur (ex. lecteur 2 d'animoflix) : pilote generique,
+        // possible depuis @match *://*/* (v6.21). Marche si la <video> est
+        // dans cette page ; sinon le calque passe au lecteur suivant.
+        runInsidePlayerFrameGeneric({
+            label: location.hostname,
+            playSelectors: ['.jw-icon-display', '.vjs-big-play-button', '.plyr__control--overlaid', 'button[aria-label="Play"]', 'button[aria-label="Lecture"]']
+        });
         return;
     }
 
@@ -186,6 +194,7 @@
             const reloadKey = 'anime-tracker-reload-' + location.href;
             if (sessionStorage.getItem(reloadKey)) {
                 console.log('[AnimeTracker v6] (' + cfg.label + ') video toujours non demarree apres rechargement, abandon');
+                window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'echec' }, '*');
                 return;
             }
             sessionStorage.setItem(reloadKey, '1');
@@ -705,9 +714,14 @@
             // ansembed d'abord (v6.20 : sibnet ferme, animoflix n'a plus que
             // ansembed), sibnet en secours. Aucun des deux (ex. sendvid seul) :
             // embedSrc reste null et le lecteur natif du site reste utilisable.
+            // Tous les lecteurs de la page, ansembed puis sibnet d'abord : si
+            // le 1er est mort (lien 404 chez l'hebergeur), le calque essaie le
+            // suivant (v6.21).
             const options = Array.from(lecteurSelect.querySelectorAll('option'));
-            const hostOption = ['ansembed.net', 'video.sibnet.ru'].map((h) => options.find((o) => o.getAttribute('data-host') === h)).find(Boolean);
-            const embedSrc = hostOption ? hostOption.getAttribute('value') : null;
+            const rank = (o) => { const i = ['ansembed.net', 'video.sibnet.ru'].indexOf(o.getAttribute('data-host')); return i === -1 ? 9 : i; };
+            const embedCandidates = options.slice().sort((a, b) => rank(a) - rank(b)).map((o) => o.getAttribute('value'))
+                .filter((v, i, all) => /^https:\/\//.test(v || '') && all.indexOf(v) === i);
+            const embedSrc = embedCandidates[0] || null;
 
             const seriesLink = doc.querySelector('a.ep-anime-link');
             const seriesUrl = seriesLink && seriesLink.getAttribute('href') ? resolveUrl(seriesLink.getAttribute('href'), pageUrl) : null;
@@ -723,7 +737,7 @@
             if (!seriesUrl) return Promise.resolve(null);
             return Promise.resolve({
                 site: this.id, siteLabel: this.label, siteTag: this.tag, playerOrigin: this.playerOrigin, navStyle: 'page',
-                embedSrc: embedSrc, pageUrl: pageUrl, resumeUrl: pageUrl,
+                embedSrc: embedSrc, embedCandidates: embedCandidates, pageUrl: pageUrl, resumeUrl: pageUrl,
                 seriesUrl: seriesUrl, seriesName: seriesName,
                 episodeLabel: h1 ? h1.textContent.replace(/\s+/g, ' ').trim() : null,
                 episodeNumber: epNumMatch ? epNumMatch[1] : null,
@@ -1782,6 +1796,10 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.21', ['Lecteur de secours automatique : si le lecteur d\'un episode est mort (ex. "video not found"), le lecteur suivant de la page est essaye tout seul.',
+                'Si aucun lecteur ne marche, un encadre explique que c\'est le site (video supprimee, hebergeur en panne) et non Video Continuum, cherche tout seul le meme episode sur l\'autre site (Anime-Sama / Animoflix), et propose "Rechercher sur Google" et "Episode suivant".',
+                'Les lecteurs d\'autres hebergeurs (ex. lecteur 2 d\'animoflix) peuvent etre pilotes.',
+                'Odysee : la verification des nouveaux episodes n\'etait plus autorisee, corrige.']],
             ['6.20', ['Animoflix : le lecteur fonctionne de nouveau (le site est passe de Sibnet, ferme, a ansembed).']],
             ['6.19', ['Section "Sites" : un bouton par site gere (Esprit Donghua, Animoflix, Anime-Sama, Odysee) + choix "Ouvrir dans" : nouvel onglet, nouvelle fenetre ou cet onglet.',
                 '"Mes animes" disponible sur TOUS les sites : petit bouton \u25B6 en bas a gauche (ou menu Tampermonkey) qui liste tes animes suivis avec "Reprendre", sans quitter ta page. Le bouton se masque via le menu Tampermonkey.']],
@@ -1940,6 +1958,11 @@
                 toggleBtn.textContent = hidden ? '✕' : '☰';
             });
 
+            const siteErrorBox = document.createElement('div');
+            siteErrorBox.id = 'ed-site-error';
+            siteErrorBox.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:12;max-width:440px;background:#2a1a05;color:#ffd27a;border:2px solid #ffb020;border-radius:10px;padding:18px 22px;font-family:Arial,sans-serif;font-size:14px;line-height:1.45;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.7);display:none;';
+            overlay.appendChild(siteErrorBox);
+
             const toast = document.createElement('div');
             toast.id = 'ed-toast';
             toast.style.cssText = 'position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:10;background:#15151f;color:#eee;padding:14px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.6);font-family:Arial,sans-serif;display:none;align-items:center;gap:12px;';
@@ -2066,7 +2089,7 @@
             overlayEls = {
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
                 seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, lowQualityCb: lowQualityCb, trackCb: trackCb,
-                backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl
+                backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl, siteErrorBox: siteErrorBox
             };
             return overlayEls;
         }
@@ -2114,6 +2137,90 @@
             const r = loadResumePositions()[storageKey(info)];
             return r && r.ep === info.episodeNumber ? r.t : null;
         }
+        // Lecteurs de secours (v6.21) : si le lecteur ne trouve pas de video
+        // (lien mort, 'echec' envoye par le script du lecteur) ou ne repond
+        // pas du tout (hebergeur injoignable, aucun script dedans), on
+        // passe au lecteur suivant de la page.
+        let playerCandidates = [], playerCandidateIndex = 0, playerReadyTimer = null;
+        function armPlayerReadyTimer() {
+            clearTimeout(playerReadyTimer);
+            playerReadyTimer = setTimeout(tryNextPlayer, 25000);
+        }
+        function tryNextPlayer() {
+            clearTimeout(playerReadyTimer);
+            if (!overlayEls || playerCandidateIndex + 1 >= playerCandidates.length) {
+                if (playerCandidates.length) showSiteError(playerCandidates.length);
+                return;
+            }
+            playerCandidateIndex++;
+            positionArmed = false;
+            outroSignalSent = false;
+            setStatus('Lecteur ' + playerCandidateIndex + ' du site indisponible, essai du lecteur ' + (playerCandidateIndex + 1) + '...');
+            overlayEls.playerFrame.src = playerCandidates[playerCandidateIndex];
+            armPlayerReadyTimer();
+        }
+
+        // Demande utilisateur : dire clairement que c'est le site (video
+        // supprimee / hebergeur en panne), pas Video Continuum.
+        function showSiteError(nbPlayers) {
+            const box = overlayEls.siteErrorBox;
+            const siteLabel = currentEpisode ? currentEpisode.siteLabel : 'le site';
+            setStatus('Episode indisponible sur ' + siteLabel + ' (probleme du site)');
+            box.innerHTML = '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; Episode indisponible sur ' + escapeHtml(siteLabel) + '</div>' +
+                (nbPlayers > 1 ? 'Les ' + nbPlayers + ' lecteurs proposes par le site ont ete essayes : ' : 'Le lecteur propose par le site ') +
+                'la video a ete supprimee ou l\'hebergeur est en panne.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>' +
+                '<div id="ed-site-alt" style="margin-top:10px;font-size:12px;color:#d9b77a;">Recherche de cet episode sur les autres sites...</div>' +
+                '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
+                '<button type="button" data-act="google" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;cursor:pointer;">Rechercher sur Google</button>' +
+                (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Episode suivant</button>' : '') +
+                '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
+            box.style.display = 'block';
+            const info = currentEpisode;
+            box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+                const act = b.getAttribute('data-act');
+                if (act === 'google') {
+                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr streaming';
+                    window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
+                    return;
+                }
+                box.style.display = 'none';
+                if (act === 'next') advanceToNextEpisode();
+            }));
+            findEpisodeElsewhere(info, playerCandidates.slice()).then((found) => {
+                const alt = box.querySelector('#ed-site-alt');
+                if (!alt || currentEpisode !== info) return;
+                if (!found.length) { alt.textContent = 'Pas trouve sur les autres sites geres - essaie la recherche Google.'; return; }
+                alt.innerHTML = 'Disponible ailleurs : ' + found.map((f) => '<a href="' + escapeHtml(f.url) + '" style="display:inline-block;margin:4px;background:#4caf50;color:#000;font-weight:bold;text-decoration:none;padding:5px 10px;border-radius:4px;">Regarder l\'ep. ' + escapeHtml(String(info.episodeNumber)) + ' sur ' + escapeHtml(f.label) + '</a>').join('');
+            });
+        }
+
+        // Meme episode sur l'autre site (v6.21) : anime-sama et animoflix
+        // utilisent le meme nom court d'anime dans leurs adresses
+        // (/catalogue/<nom>/saison1/vostfr/ et /anime/<nom>/saison-1/vostfr/
+        // episode-N/) et renvoient une vraie 404 s'il n'existe pas. On
+        // verifie que l'episode y a bien un lecteur gere.
+        // deadEmbeds : liens deja essayes sans succes - les deux sites
+        // partagent souvent les memes sources (ex. meme lien ansembed mort).
+        function findEpisodeElsewhere(info, deadEmbeds) {
+            const n = Number(info.episodeNumber);
+            const url = info.resumeUrl || info.pageUrl || '';
+            const m = url.match(/animoflix\.to\/anime\/([^/]+)\/saison-(\d+)\/([^/]+)\//) || url.match(/anime-sama\.to\/catalogue\/([^/]+)\/saison(\d+)\/([^/#]+)/);
+            if (!m || !n) return Promise.resolve([]);
+            const [, slug, season, lang] = m;
+            const tries = [];
+            if (info.site !== 'anime-sama') {
+                const u = 'https://anime-sama.to/catalogue/' + slug + '/saison' + season + '/' + lang + '/#ep=' + n;
+                tries.push(fetchPageHtml(u).then((html) => SITE_ANIME_SAMA.extract(new DOMParser().parseFromString(html, 'text/html'), u))
+                    .then((i) => (i && i.embedByIndex[n - 1] && deadEmbeds.indexOf(i.embedByIndex[n - 1]) === -1 ? { label: 'Anime-Sama', url: u } : null)));
+            }
+            if (info.site !== 'animoflix') {
+                const u = 'https://animoflix.to/anime/' + slug + '/saison-' + season + '/' + lang + '/episode-' + n + '/';
+                tries.push(fetchPageHtml(u).then((html) => SITE_ANIMOFLIX.extract(new DOMParser().parseFromString(html, 'text/html'), u))
+                    .then((i) => (i && (i.embedCandidates || []).some((e) => deadEmbeds.indexOf(e) === -1) ? { label: 'Animoflix', url: u } : null)));
+            }
+            return Promise.all(tries.map((t) => t.catch(() => null))).then((r) => r.filter(Boolean));
+        }
+
         function sendConfigToPlayerFrame() {
             postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: currentConfig.introStart, introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, outroEnd: currentConfig.outroEnd, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
         }
@@ -2123,12 +2230,14 @@
         // ensemble n'est qu'un premier filtre rapide.
         const PLAYER_ORIGINS = new Set([PLAYER_ORIGIN_ODYSEE, PLAYER_ORIGIN_SIBNET, PLAYER_ORIGIN_ANSEMBED]);
         window.addEventListener('message', (event) => {
-            if (!PLAYER_ORIGINS.has(event.origin)) return;
+            let frameOrigin = null;
+            try { frameOrigin = overlayEls && new URL(overlayEls.playerFrame.src).origin; } catch (e) {}
+            if (!PLAYER_ORIGINS.has(event.origin) && event.origin !== frameOrigin) return;
             if (!event.data || typeof event.data.type !== 'string' || event.data.type.indexOf(MSG_PREFIX) !== 0) return;
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
-            if (type === 'ready') { positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'ready') { clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed) {
                 const t = Number(event.data.t), d = Number(event.data.d);
                 if (isFinite(d) && d > 0) requestAniSkip(d);
@@ -2149,7 +2258,8 @@
             }
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
-                if (event.data.stage === 'video-trouvee') setStatus('Chargement...');
+                if (event.data.stage === 'echec') tryNextPlayer();
+                else if (event.data.stage === 'video-trouvee') setStatus('Chargement...');
                 else if (event.data.stage === 'buffering') {
                     if (event.data.pct > lastBufferPct) {
                         lastBufferPct = event.data.pct;
@@ -2374,6 +2484,10 @@
             outroSignalSent = false;
             positionArmed = false;
             overlayEls.playerFrame.src = youtubeOverride || info.embedSrc;
+            playerCandidates = youtubeOverride ? [] : (info.embedCandidates && info.embedCandidates.length ? info.embedCandidates : [info.embedSrc]);
+            playerCandidateIndex = 0;
+            overlayEls.siteErrorBox.style.display = 'none';
+            if (playerCandidates.length) armPlayerReadyTimer(); else clearTimeout(playerReadyTimer);
             if (youtubeOverride) {
                 setStatus('Lecture via lien YouTube de secours - pas de saut intro/outro ni enchainement auto sur cette source.');
             } else {
