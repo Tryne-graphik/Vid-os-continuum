@@ -649,3 +649,44 @@ minochinos.com (injoignable depuis ici, DNS).
   à 46 s ; "Épisode suivant" → ép. 9 qui se charge ; Google ouvre la recherche ;
   recherche sur l'autre site → "pas trouvé" (lien identique exclu). Cas positif
   non démontré (Bleach : le 2e lecteur animoflix, my.mail.ru, a suffi).
+
+### 2026-10-02 (suite 8) — v6.22 : "Ajouter ce site" (1re brique du lecteur générique)
+
+Idée de l'utilisateur, à partir de l'incident v6.21 : pouvoir ajouter d'autres
+sites. Sites de test fournis : **french-anime.com** et **myfluneo.eu**.
+- **Bouton "➕ Ajouter ce site"** dans la fenêtre ▶ Mes animes (sites non gérés) :
+  analyse la page courante, montre ce qui est détecté (anime, épisode, lecteur +
+  nb de secours, épisode suivant), confirmation → `GM customSites[host]` → recharge.
+  Menu Tampermonkey "Retirer <site> de Vidéo Continuum". Sites ajoutés listés
+  dans la section Sites.
+- **Adaptateur générique** `makeGenericSite(host)` (ajouté à `SITES`, id
+  `custom:<host>`), deux formes reconnues :
+  - **liste "DLE"** cachée `<div class="eps">` `N!lien1,lien2,…` (french-anime ;
+    moteur courant des sites FR) → style `index` comme anime-sama, `#ep=N`,
+    `embedCandidatesByIndex` (tous les lecteurs en secours, `vidmoly.me/w/X`
+    converti comme le fait le site, `up4fun` ignoré) ;
+  - **une page par épisode** (`episode-N` dans l'adresse, myfluneo/Next.js) : lecteur =
+    plus grande iframe (attendue jusqu'à 10 s, insérée en JS) ; **lecteur "emballé"
+    décodé** (`/embed-player?v=<base64 de l'adresse ansembed>`) ; suivant/précédent
+    = liens "Épisode suivant/précédent" du site ; navigation par changement de page
+    (`navigate: true`) + drapeau de session pour rouvrir le lecteur sur la page
+    suivante même sans "Lecteur auto". Série = adresse sans le segment épisode.
+  - Nom : `h1` > `og:title` > `title`, nettoyé ("en DDL STREAMING", "| Site",
+    "S1 Ep.1", "VF/VOSTFR").
+- Index : `embedCandidates` propagé en suivant/précédent/aller-à (sinon les
+  secours restaient ceux du 1er épisode). AniSkip : saison lue aussi en `saison-N`.
+- **Son en double** : french-anime recrée son lecteur (`#film_iframe`) après le
+  chargement → relu et recoupé à 1/3/6/10 s sur les sites ajoutés.
+- Hébergeurs de french-anime testés dans NOTRE iframe : vidmoly ✓, VOE
+  (jeremyparticipantanything.com) ✓, vidara ✗ (échec → secours), luluvdo ✗
+  (rien → délai 25 s → secours).
+- **Testé** (Playwright, GM_xmlhttpRequest sans CORS via `page.request`) :
+  french-anime → détection "Thunder 3, ép. 1 sur 12, vidmoly (+3)", lecture ép. 1,
+  suivant → ép. 2, ouverture directe `#ep=3` avec lecteur natif coupé ;
+  myfluneo → détection "Aho-Girl, ép. 1, ansembed, suivant trouvé", lecture,
+  suivant → page `episode-2` puis lecteur rouvert tout seul, progression
+  `myfluneo.eu | Aho-Girl ép. 2 | …/saison-1`.
+- **Limite connue (pub des sites)** : sur french-anime, la pub ouvre un onglet dès
+  l'appui souris (`pointerdown`) → le 1er clic sur nos boutons est perdu, le 2e
+  passe. Contournement possible : petit écouteur placé avant les scripts du site
+  (`@run-at document-start`) — proposé, pas fait.

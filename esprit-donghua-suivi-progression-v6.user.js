@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.21
+// @version      6.22
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1061,7 +1061,129 @@
         }
     };
 
-    const SITES = [SITE_ESPRIT_DONGHUA, SITE_ANIMOFLIX, SITE_ANIME_SAMA, SITE_ODYSEE];
+    // ---- Sites ajoutes par l'utilisateur (v6.22, 1re brique du lecteur generique) ----
+    //
+    // "Ajouter ce site" (fenetre Mes animes) enregistre un domaine dans
+    // GM customSites ; il recoit alors un adaptateur generique qui reconnait
+    // deux formes de pages :
+    //  - liste d'episodes "DLE" cachee dans la page (<div class="eps">
+    //    "N!lien1,lien2,..." - french-anime.com et les sites du meme moteur) :
+    //    navigation interne comme anime-sama, tous les lecteurs en secours ;
+    //  - une page par episode avec un lecteur en iframe (myfluneo.eu) : le
+    //    lecteur = la plus grande iframe, "suivant" = lien "Episode suivant"
+    //    du site, suivi par navigation (les pages peuvent etre generees en JS,
+    //    donc pas de lecture du HTML brut).
+    function loadCustomSites() { try { return GM_getValue('customSites', {}) || {}; } catch (e) { return {}; } }
+    function hostOf(url) { try { return new URL(url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } }
+    function hostMatches(url, host) { const h = hostOf(url); return h === host || h.endsWith('.' + host); }
+    function cleanSeriesTitle(t) {
+        return String(t || '').replace(/\s+/g, ' ').replace(/\s*\|.*$/, '')
+            .replace(/\s+(?:en\s+)?(?:DDL\s+)?streaming\b.*$/i, '')
+            .replace(/\s+(?:S\d+\s*)?(?:Ep\.?|Episode|\u00c9pisode)\s*\d+.*$/i, '')
+            .replace(/\s+(?:VF|VOSTFR)\b.*$/i, '').trim();
+    }
+    // Lecteur "emballe" par le site (myfluneo : /embed-player?v=<base64 de
+    // l'adresse ansembed>) : on decode pour piloter le vrai lecteur.
+    function unwrapEmbed(src) {
+        try {
+            const u = new URL(src);
+            for (const v of u.searchParams.values()) {
+                if (/^https?:\/\//.test(v)) return v;
+                if (/^[A-Za-z0-9+/=_-]{16,}$/.test(v)) {
+                    const d = atob(v.replace(/-/g, '+').replace(/_/g, '/'));
+                    if (/^https?:\/\/\S+$/.test(d)) return d;
+                }
+            }
+        } catch (e) {}
+        return src;
+    }
+    function parseDleEps(doc) {
+        const box = doc.querySelector('.eps');
+        if (!box) return null;
+        const eps = box.textContent.split(/\r?\n|__NEWL__/).map((l) => l.trim().match(/^(\d+)!(.+)$/)).filter(Boolean).map((m) => ({
+            num: Number(m[1]),
+            urls: m[2].split(',').map((x) => x.trim().replace(/^https?:\/\/vidmoly\.me\/w\/([A-Za-z0-9]+).*$/, 'https://vidmoly.org/embed-$1.html'))
+                .filter((x) => /^https:\/\//.test(x) && !/up4fun/i.test(x))
+        })).filter((e) => e.urls.length);
+        return eps.length ? eps.sort((a, b) => a.num - b.num) : null;
+    }
+    function findPlayerIframe(doc) {
+        let best = null, bestArea = 0;
+        doc.querySelectorAll('iframe').forEach((f) => {
+            if (!/^https?:\/\//.test(f.src || '') || f.name === PLAYER_FRAME_NAME) return;
+            const r = f.getBoundingClientRect ? f.getBoundingClientRect() : { width: 0, height: 0 };
+            const area = r.width * r.height;
+            if (r.width >= 300 && area > bestArea) { best = f; bestArea = area; }
+        });
+        return best;
+    }
+    const EP_IN_URL = /(episode|ep)[-_]?(\d+)/i;
+    function makeGenericSite(host) {
+        const site = {
+            id: 'custom:' + host, label: host, tag: host.replace(/[^a-z0-9]/gi, '').slice(0, 2).toUpperCase(), playerOrigin: null, custom: true,
+            matchesUrl(url) { return hostMatches(url, host); },
+            isPlayablePage(doc) { return !!parseDleEps(doc) || EP_IN_URL.test(location.pathname); },
+            buildEpisodeUrl(currentPageUrl, n) { return EP_IN_URL.test(currentPageUrl) ? currentPageUrl.replace(EP_IN_URL, (m0, w) => w + (m0.charAt(w.length) === '-' || m0.charAt(w.length) === '_' ? m0.charAt(w.length) : '') + n) : null; },
+            extract(doc, pageUrl) {
+                const h1 = doc.querySelector('h1');
+                const og = doc.querySelector('meta[property="og:title"]');
+                const seriesName = cleanSeriesTitle((h1 && h1.textContent) || (og && og.getAttribute('content')) || doc.title) || host;
+                const eps = parseDleEps(doc);
+                if (eps) {
+                    const canon = doc.querySelector('link[rel="canonical"]');
+                    const seriesUrl = ((canon && canon.getAttribute('href')) || pageUrl).replace(/#.*$/, '');
+                    const nums = eps.map((e) => e.num);
+                    const hash = pageUrl.match(/#ep=(\d+)/);
+                    let idx = hash ? nums.indexOf(Number(hash[1])) : 0;
+                    if (idx < 0) idx = 0;
+                    const cands = eps.map((e) => e.urls);
+                    const resumeUrls = nums.map((n) => seriesUrl + '#ep=' + n);
+                    if (doc === document) site.liveIframe = doc.querySelector('#film_iframe') || findPlayerIframe(doc);
+                    return Promise.resolve({
+                        site: site.id, siteLabel: site.label, siteTag: site.tag, playerOrigin: null, navStyle: 'index',
+                        embedSrc: cands[idx][0], embedCandidates: cands[idx], embedCandidatesByIndex: cands,
+                        pageUrl: seriesUrl, resumeUrl: resumeUrls[idx], seriesUrl: seriesUrl, seriesName: seriesName,
+                        episodeLabel: 'Episode ' + nums[idx], episodeNumber: nums[idx],
+                        latestEpisodeNumber: nums[nums.length - 1], latestEpisodeUrl: resumeUrls[resumeUrls.length - 1],
+                        episodeIndex: idx, totalEpisodes: eps.length, embedByIndex: cands.map((c) => c[0]),
+                        episodeNumbersByIndex: nums, resumeUrlsByIndex: resumeUrls
+                    });
+                }
+                // Page d'episode : seulement sur la page vivante (lecteur souvent
+                // insere en JS apres le chargement -> on l'attend jusqu'a 10 s).
+                if (doc !== document) return Promise.resolve(null);
+                const m = location.pathname.match(EP_IN_URL);
+                if (!m) return Promise.resolve(null);
+                return new Promise((resolve) => {
+                    let tries = 0;
+                    (function poll() {
+                        const f = findPlayerIframe(doc);
+                        if (!f && ++tries < 20) { setTimeout(poll, 500); return; }
+                        if (!f) { resolve(null); return; }
+                        site.liveIframe = f;
+                        const n = Number(m[2]);
+                        const links = Array.from(doc.querySelectorAll('a[href]'));
+                        const findLink = (re) => { const a = links.find((l) => re.test((l.textContent + ' ' + (l.getAttribute('aria-label') || '')).trim()) && l.href.replace(/#.*$/, '') !== location.href.replace(/#.*$/, '')); return a ? a.href : null; };
+                        const pageNoHash = location.href.replace(/#.*$/, '');
+                        resolve({
+                            site: site.id, siteLabel: site.label, siteTag: site.tag, playerOrigin: null, navStyle: 'page', navigate: true,
+                            embedSrc: unwrapEmbed(f.src), embedCandidates: [unwrapEmbed(f.src)],
+                            pageUrl: pageNoHash, resumeUrl: pageNoHash,
+                            // Serie = adresse sans le segment de l'episode (une saison = une entree, comme anime-sama).
+                            seriesUrl: pageNoHash.replace(/\/[^/]*(?:episode|ep)[-_]?\d+[^/]*\/?$/i, '') || pageNoHash,
+                            seriesName: seriesName, episodeLabel: 'Episode ' + n, episodeNumber: n,
+                            latestEpisodeNumber: null, latestEpisodeUrl: null,
+                            nextPageUrl: findLink(/(?:\u00e9pisode|episode)\s+suivant|^suivant|\bnext\b/i),
+                            prevPageUrl: findLink(/(?:\u00e9pisode|episode)\s+pr\u00e9c\u00e9dent|pr\u00e9c\u00e9dent|\bprev(?:ious)?\b/i)
+                        });
+                    })();
+                });
+            }
+        };
+        return site;
+    }
+
+    const SITES = [SITE_ESPRIT_DONGHUA, SITE_ANIMOFLIX, SITE_ANIME_SAMA, SITE_ODYSEE].concat(Object.keys(loadCustomSites()).map(makeGenericSite));
 
     function detectSite() {
         const url = location.href.replace(/#.*$/, '');
@@ -1102,7 +1224,8 @@
         if (w) w.opener = null;
     }
     function siteLinksHtml() {
-        return '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + SITE_LINKS.map(([label, url]) =>
+        const links = SITE_LINKS.concat(Object.keys(loadCustomSites()).map((h) => [h, 'https://' + h + '/']));
+        return '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + links.map(([label, url]) =>
             '<a href="' + url + '" class="vc-open-link" style="flex:1 1 45%;text-align:center;background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;border-radius:4px;padding:5px 4px;font:bold 11px Arial,sans-serif;text-decoration:none;white-space:nowrap;">' + label + '</a>').join('') + '</div>';
     }
     function openModeSelectHtml() {
@@ -1155,14 +1278,40 @@
                     '</div>';
             });
         });
+        if (!detectSite()) html += '<button type="button" id="vc-add-site" style="background:#1f2a33;color:#4caf50;border:1px solid #4caf50;border-radius:4px;padding:7px;font:bold 12px Arial,sans-serif;cursor:pointer;">&#10133; Ajouter ce site (' + escHtml(hostOf(location.href)) + ') a Video Continuum</button>' +
+            '<div style="font-size:10px;color:#888;margin-top:-6px;">A faire depuis la page d\'un episode, avec son lecteur affiche.</div>';
         html += '<div style="text-align:right;"><button type="button" id="vc-fav-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div></div>';
         const pop = document.createElement('div');
         pop.id = 'vc-favorites';
         pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;';
         pop.innerHTML = html;
-        pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'vc-fav-close') pop.remove(); });
+        pop.addEventListener('click', (ev) => {
+            if (ev.target === pop || ev.target.id === 'vc-fav-close') pop.remove();
+            if (ev.target.id === 'vc-add-site') addCurrentSite(ev.target);
+        });
         // Dans le calque plein ecran s'il est affiche (sinon invisible).
         (document.fullscreenElement || document.body).appendChild(pop);
+    }
+    function addCurrentSite(btn) {
+        const host = hostOf(location.href);
+        const site = makeGenericSite(host);
+        btn.disabled = true; btn.textContent = 'Analyse de la page...';
+        Promise.resolve(site.isPlayablePage(document) ? site.extract(document, location.href) : null).then((info) => {
+            btn.disabled = false; btn.textContent = 'Ajouter ce site (' + host + ')';
+            if (!info || !info.embedSrc) {
+                alert('Aucun lecteur video reconnu sur cette page.\n\nOuvre la page d\'un episode (lecteur visible), puis reessaie.');
+                return;
+            }
+            const nbPlayers = (info.embedCandidates || []).length;
+            if (!confirm('Detecte sur ' + host + ' :\n\nAnime : ' + info.seriesName + '\nEpisode : ' + info.episodeNumber + (info.totalEpisodes ? ' (sur ' + info.totalEpisodes + ')' : '') +
+                '\nLecteur : ' + hostOf(info.embedSrc) + (nbPlayers > 1 ? ' (+' + (nbPlayers - 1) + ' de secours)' : '') +
+                '\nEpisode suivant : ' + (info.navStyle === 'index' ? 'liste du site' : (info.nextPageUrl ? 'lien trouve' : 'non trouve')) +
+                '\n\nAjouter ' + host + ' a Video Continuum ? (la page va se recharger)')) return;
+            const all = loadCustomSites();
+            all[host] = { addedAt: new Date().toISOString() };
+            GM_setValue('customSites', all);
+            location.reload();
+        });
     }
     function isFloatingButtonEnabled() { return GM_getValue('floatingButtonEverywhere', true); }
     function installFloatingButton() {
@@ -1796,6 +1945,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.22', ['"Ajouter ce site" (fenetre \u25B6 Mes animes, depuis la page d\'un episode) : le lecteur, le suivi, la reprise, l\'enchainement et AniSkip sur un site non prevu. Teste sur french-anime.com et myfluneo.eu. Menu Tampermonkey : "Retirer ce site".']],
             ['6.21', ['Lecteur de secours automatique : si le lecteur d\'un episode est mort (ex. "video not found"), le lecteur suivant de la page est essaye tout seul.',
                 'Si aucun lecteur ne marche, un encadre explique que c\'est le site (video supprimee, hebergeur en panne) et non Video Continuum, cherche tout seul le meme episode sur l\'autre site (Anime-Sama / Animoflix), et propose "Rechercher sur Google" et "Episode suivant".',
                 'Les lecteurs d\'autres hebergeurs (ex. lecteur 2 d\'animoflix) peuvent etre pilotes.',
@@ -2283,7 +2433,7 @@
         function loadAniLinks() { return GM_getValue('aniLinks', {}); }
         function setAniLink(key, link) { const all = loadAniLinks(); all[key] = link; GM_setValue('aniLinks', all); }
         function aniSearchQuery(info) {
-            const season = ((info.seriesUrl || '').match(/\/saison(\d+)/i) || [])[1];
+            const season = ((info.seriesUrl || '').match(/\/saison-?(\d+)/i) || [])[1];
             const name = displayName(info.seriesName) || '';
             return season && season !== '1' ? name + ' ' + season : name;
         }
@@ -2431,13 +2581,14 @@
                 const nextIndex = currentEpisode.episodeIndex + 1;
                 const nextNumber = currentEpisode.episodeNumbersByIndex[nextIndex];
                 return Promise.resolve(Object.assign({}, currentEpisode, {
-                    embedSrc: currentEpisode.embedByIndex[nextIndex],
+                    embedSrc: currentEpisode.embedByIndex[nextIndex], embedCandidates: currentEpisode.embedCandidatesByIndex ? currentEpisode.embedCandidatesByIndex[nextIndex] : undefined,
                     episodeIndex: nextIndex, episodeNumber: nextNumber, episodeLabel: 'Episode ' + nextNumber,
                     resumeUrl: currentEpisode.resumeUrlsByIndex[nextIndex]
                 }));
             }
             const site = SITES.find((s) => s.id === currentEpisode.site);
             const nextPageUrl = currentEpisode.nextPageUrl;
+            if (currentEpisode.navigate) return navigateToEpisodePage(nextPageUrl);
             return fetchPageHtml(nextPageUrl).then((html) => {
                 const doc = new DOMParser().parseFromString(html, 'text/html');
                 return site.extract(doc, nextPageUrl);
@@ -2448,13 +2599,14 @@
                 const prevIndex = currentEpisode.episodeIndex - 1;
                 const prevNumber = currentEpisode.episodeNumbersByIndex[prevIndex];
                 return Promise.resolve(Object.assign({}, currentEpisode, {
-                    embedSrc: currentEpisode.embedByIndex[prevIndex],
+                    embedSrc: currentEpisode.embedByIndex[prevIndex], embedCandidates: currentEpisode.embedCandidatesByIndex ? currentEpisode.embedCandidatesByIndex[prevIndex] : undefined,
                     episodeIndex: prevIndex, episodeNumber: prevNumber, episodeLabel: 'Episode ' + prevNumber,
                     resumeUrl: currentEpisode.resumeUrlsByIndex[prevIndex]
                 }));
             }
             const site = SITES.find((s) => s.id === currentEpisode.site);
             const prevPageUrl = currentEpisode.prevPageUrl;
+            if (currentEpisode.navigate) return navigateToEpisodePage(prevPageUrl);
             return fetchPageHtml(prevPageUrl).then((html) => {
                 const doc = new DOMParser().parseFromString(html, 'text/html');
                 return site.extract(doc, prevPageUrl);
@@ -2532,6 +2684,16 @@
             el.querySelector('button').addEventListener('click', () => { el.style.display = 'none'; goToEpisodeNumber(next); });
         }
 
+        // Sites "une page par episode" generes en JS (sites ajoutes) : on va
+        // sur la page et le lecteur se rouvre tout seul (meme sans "Lecteur
+        // auto", via ce drapeau de session).
+        function navigateToEpisodePage(url) {
+            try { sessionStorage.setItem('vc-continue-playing', '1'); } catch (e) {}
+            setStatus('Chargement de la page de l\'episode...');
+            location.href = url;
+            return new Promise(() => {});
+        }
+
         function advanceToNextEpisode() {
             if (advancingToNext) return;
             if (!currentEpisode || !hasNextEpisode(currentEpisode)) return;
@@ -2568,7 +2730,7 @@
                 const idx = currentEpisode.episodeNumbersByIndex.indexOf(targetNumber);
                 if (idx === -1) { setStatus('Pas d\'episode ' + targetNumber + ' dans la playlist connue (total : ' + currentEpisode.totalEpisodes + ').'); return; }
                 applyLoadedEpisode(Object.assign({}, currentEpisode, {
-                    embedSrc: currentEpisode.embedByIndex[idx], episodeIndex: idx, episodeNumber: targetNumber, episodeLabel: 'Episode ' + targetNumber,
+                    embedSrc: currentEpisode.embedByIndex[idx], embedCandidates: currentEpisode.embedCandidatesByIndex ? currentEpisode.embedCandidatesByIndex[idx] : undefined, episodeIndex: idx, episodeNumber: targetNumber, episodeLabel: 'Episode ' + targetNumber,
                     resumeUrl: currentEpisode.resumeUrlsByIndex[idx]
                 }), true);
                 return;
@@ -2578,6 +2740,7 @@
             if (latest && targetNumber > Number(latest)) { setStatus('Pas d\'episode ' + targetNumber + ' (dernier connu : ' + latest + ').'); return; }
             const targetUrl = site.buildEpisodeUrl ? site.buildEpisodeUrl(currentEpisode.pageUrl, targetNumber) : null;
             if (!targetUrl) { setStatus('Impossible de deviner l\'URL de cet episode.'); return; }
+            if (currentEpisode.navigate) { navigateToEpisodePage(targetUrl); return; }
             setStatus('Recherche de l\'episode ' + targetNumber + '...');
             fetchPageHtml(targetUrl).then((html) => {
                 const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -2595,7 +2758,9 @@
             // esprit-donghua/animoflix : neutralise l'iframe native du
             // lecteur pour eviter un flux video en double sous notre calque.
             // anime-sama : #playerDF charge desormais ansembed par defaut.
-            const iframe = document.getElementById('odysee-iframe') || document.querySelector('iframe[src*="odysee.com"]') || document.querySelector('#epVideoFrame') || document.getElementById('playerDF');
+            const iframe = document.getElementById('odysee-iframe') || document.querySelector('iframe[src*="odysee.com"]') || document.querySelector('#epVideoFrame') || document.getElementById('playerDF') ||
+                // Sites ajoutes : relu ici (french-anime recree son lecteur apres le chargement).
+                (site.custom ? document.getElementById('film_iframe') || findPlayerIframe(document) || site.liveIframe : null);
             if (iframe && iframe.src && iframe.src !== 'about:blank') {
                 iframe.src = 'about:blank';
                 console.log('[AnimeTracker v6] lecteur natif de la page desactive (evite un flux video en double)');
@@ -2606,6 +2771,9 @@
             Promise.resolve(infoPromise).then((info) => {
                 if (!info) { console.log('[AnimeTracker v6] aucun episode detecte sur cette page'); return; }
                 disableLiveVideoOnPage();
+                // Sites ajoutes : le site peut (re)creer son lecteur apres coup
+                // (french-anime le fait apres le chargement) -> son en double.
+                if (site.custom) [1000, 3000, 6000, 10000].forEach((ms) => setTimeout(disableLiveVideoOnPage, ms));
                 const { overlay } = buildOverlay();
                 overlay.style.display = 'block';
 
@@ -2626,7 +2794,9 @@
         }
 
         function maybeAutoOpenPlayer(liveInfoPromise) {
-            if (!isAutoOpenEnabled()) return;
+            let continuing = false;
+            try { continuing = sessionStorage.getItem('vc-continue-playing') === '1'; sessionStorage.removeItem('vc-continue-playing'); } catch (e) {}
+            if (!isAutoOpenEnabled() && !continuing) return;
             Promise.resolve(liveInfoPromise).then((info) => {
                 if (!info || isSeriesExcluded(storageKey(info))) return;
                 startEpisode(Promise.resolve(info), 'auto au chargement de la page');
@@ -3321,6 +3491,10 @@
 
         console.log('[AnimeTracker v6] enregistrement des commandes de menu...');
         GM_registerMenuCommand('Voir ma progression', () => buildPersistentPanel());
+        if (site.custom) GM_registerMenuCommand('Retirer ' + site.label + ' de Video Continuum', () => {
+            if (!confirm('Retirer ' + site.label + ' des sites geres ? (les animes suivis restent dans la liste)')) return;
+            const all = loadCustomSites(); delete all[site.label]; GM_setValue('customSites', all); location.reload();
+        });
         GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
         GM_registerMenuCommand('Exporter en fichier', exportProgress);
         GM_registerMenuCommand('Choisir le fichier de sauvegarde', chooseBackupFile);
