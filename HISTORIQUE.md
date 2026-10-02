@@ -791,3 +791,39 @@ servi en HLS (`v1_s0000xx.ts`) et se lit sans souci, saut de reprise compris.
 - Piste non faite : chercher le même épisode sur une autre chaîne Odysee
   (transcodée HLS) — numérotations différentes selon les chaînes (S2 E364 vs
   S3 E90/E99), à voir si le problème se répète.
+
+### 2026-10-02 (suite 14) — v6.27 : YouTube sans clé d'API, compilations, sous-titres FR, bascule auto
+
+Demande : basculer automatiquement sur YouTube pour Wan Jie Du Zun (fichiers
+Odysee illisibles, même source sur animoflix). Source trouvée par l'utilisateur :
+chaîne **Anime Zone** (UCUZxkPZPkzObCb7aCDjUNmg), titres "✨Ten Thousand Worlds EP 364
+[MULTI SUB]" et compilations "EP 365-384" / "EP 201 - EP 250 Full Version", même
+numérotation que notre suivi, pas de chapitres, épisodes ≈ 7 min 04, sous-titres
+anglais de la chaîne (traduisibles).
+- **Remplace la v6.5** (clé API YouTube Data obligatoire, jamais utilisée) : code
+  API supprimé (`youtubeApiRequest`, playlists, menu "Configurer la clé API").
+- **Association** par série (`youtubeChannelAssociations`, une fois) : lien d'une
+  vidéo → chaîne (`ytInitialPlayerResponse.videoDetails`) + nom de la série déduit
+  du titre (modifiable).
+- **Recherche sans clé** : page `youtube.com/channel/<id>/search?query=<nom> EP <n>`
+  (puis sans "EP n" en repli), lecture de `ytInitialData` ; épisode seul en
+  priorité, sinon la plus petite compilation contenant n ; position =
+  (n − premier) × durée ÷ nb d'épisodes. `@connect www.youtube.com` ajouté.
+- **Lecteur** : embed `?start=…&cc_load_policy=1&cc_lang_pref=fr&hl=fr` +
+  fragment `#vcseg=premier-dernier-duréeParÉpisode`. Pilote in-frame YouTube :
+  `movie_player.setOption('captions','track', {languageCode:'en',
+  translationLanguage:{languageCode:'fr'}})` (piste FR directe si elle existe) —
+  vérifié : "Anglais >> Français".
+- **Mode YouTube par série** (`youtubeMode`) : activé à la bascule ; ensuite chaque
+  épisode de la série est cherché sur YouTube avant de charger ; "Revenir à la
+  source du site" l'annule. Sur YouTube : pas d'intro/outro/AniSkip/reprise (temps
+  faux dans une compilation) ; le **suivi avance tout seul** quand la lecture passe
+  la limite d'un épisode ; suivant / aller-à cherchent sur YouTube (les pages
+  esprit-donghua ne correspondent pas aux numéros : "S3 E90" = ép. 345).
+- **Bascule automatique** : vidéo qui cale (v6.26) + chaîne associée → YouTube
+  sans intervention ; sinon le bouton "Lire sur YouTube" de l'encadré demande le
+  lien la 1re fois.
+- **Testé** (Playwright, vraie chaîne) : esprit-donghua ép. 373 → vidéo "EP 373",
+  sous-titres FR ("Dois-je lui dire ?") ; page rouverte → directement YouTube ;
+  aller-à 210 → "EP 201 - EP 250" à 3812 s (9 × 424) ; passage de limite → suivi
+  ép. 211.

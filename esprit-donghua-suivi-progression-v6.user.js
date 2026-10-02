@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.26
+// @version      6.27
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -20,6 +20,7 @@
 // @connect      api.na-backend.odysee.com
 // @connect      odysee.com
 // @connect      www.googleapis.com
+// @connect      www.youtube.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
 // @connect      graphql.anilist.co
@@ -125,6 +126,7 @@
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
         if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
+        if (/(^|\.)youtube(-nocookie)?\.com$/.test(location.hostname)) { runInsidePlayerFrame_youtube(); return; }
         // Autre hebergeur (ex. lecteur 2 d'animoflix) : pilote generique,
         // possible depuis @match *://*/* (v6.21). Marche si la <video> est
         // dans cette page ; sinon le calque passe au lecteur suivant.
@@ -443,6 +445,31 @@
     // site lui-meme ; le lecteur par defaut du site est desormais ansembed.net
     // (JW Player, vraie balise <video> dans le meme document - clic sur
     // .jw-icon-display + seek verifies en vrai navigateur).
+    // YouTube (v6.27) : pilote generique + sous-titres en francais - piste FR
+    // si elle existe, sinon traduction automatique YouTube de la 1re piste
+    // (anglais de preference). API du lecteur (#movie_player) lue cote page.
+    function runInsidePlayerFrame_youtube() {
+        runInsidePlayerFrameGeneric({ label: 'YouTube', playSelectors: ['.ytp-large-play-button'] });
+        const doc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.document) || document;
+        let tries = 0;
+        const timer = setInterval(() => {
+            if (++tries > 40) { clearInterval(timer); return; }
+            const p = doc.getElementById('movie_player');
+            if (!p || typeof p.getOption !== 'function') return;
+            try { if (p.loadModule) p.loadModule('captions'); } catch (e) {}
+            let list = [];
+            try { list = p.getOption('captions', 'tracklist') || []; } catch (e) {}
+            if (!list.length) return;
+            const fr = list.find((x) => x.languageCode === 'fr');
+            const src = fr || list.find((x) => /^en/.test(x.languageCode)) || list[0];
+            try {
+                p.setOption('captions', 'track', fr ? { languageCode: 'fr' } : { languageCode: src.languageCode, translationLanguage: { languageCode: 'fr', languageName: 'Francais' } });
+                clearInterval(timer);
+                console.log('[AnimeTracker v6] (YouTube) sous-titres en francais' + (fr ? '' : ' (traduction automatique depuis ' + src.languageCode + ')'));
+            } catch (e) {}
+        }, 1000);
+    }
+
     function runInsidePlayerFrame_ansembed() {
         runInsidePlayerFrameGeneric({
             label: 'Ansembed',
@@ -1482,150 +1509,118 @@
             saveYoutubeOverrides(all);
         }
 
-        // ---- Playlist YouTube automatique (par chaine associee) ----
+        // ---- YouTube sans cle d'API (v6.27) ----
         //
-        // Complement au lien manuel ci-dessus : au lieu de chercher/coller
-        // un lien par episode, on associe UNE FOIS une chaine YouTube +
-        // un mot-cle (les titres de chaines comme celle de Tencent Video
-        // melangent plein de series differentes, pas de structure fiable a
-        // scraper - le mot-cle est fourni par l'utilisateur, plus simple et
-        // plus fiable qu'une heuristique de prefixe comme pour Odysee vu la
-        // variete des formats de titre). Necessite une cle API YouTube Data
-        // v3 (gratuite, configurable via le menu Tampermonkey) - l'API
-        // publique Odysee n'a pas d'equivalent chez YouTube.
-        function getYoutubeApiKey() { return GM_getValue('youtubeApiKey', ''); }
-        function setYoutubeApiKey(key) { GM_setValue('youtubeApiKey', key); }
-
-        function youtubeApiRequest(path, params) {
-            const apiKey = getYoutubeApiKey();
-            if (!apiKey) return Promise.reject(new Error('Cle API YouTube non configuree (menu Tampermonkey > Configurer la cle API YouTube).'));
-            const query = Object.assign({}, params, { key: apiKey });
-            const qs = Object.keys(query).map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(query[k])).join('&');
-            return gmRequest({ method: 'GET', url: 'https://www.googleapis.com/youtube/v3/' + path + '?' + qs }).then((res) => {
-                let parsed;
-                try { parsed = JSON.parse(res.responseText); } catch (e) { throw new Error('Reponse API YouTube illisible (statut ' + res.status + ')'); }
-                if (parsed.error) throw new Error('API YouTube : ' + parsed.error.message);
-                return parsed;
-            });
-        }
-
-        function normalizeYoutubeChannelHandle(input) {
-            const trimmed = input.trim();
-            const urlMatch = trimmed.match(/youtube\.com\/(@[\w.-]+)/i);
-            if (urlMatch) return urlMatch[1];
-            return trimmed.indexOf('@') === 0 ? trimmed : '@' + trimmed;
-        }
-
-        function resolveYoutubeUploadsPlaylistId(channelHandle) {
-            return youtubeApiRequest('channels', { forHandle: channelHandle, part: 'contentDetails' }).then((data) => {
-                const item = data.items && data.items[0];
-                const uploadsId = item && item.contentDetails && item.contentDetails.relatedPlaylists && item.contentDetails.relatedPlaylists.uploads;
-                if (!uploadsId) throw new Error('Chaine YouTube introuvable : ' + channelHandle);
-                return uploadsId;
-            });
-        }
-
-        // Pagine tant que la chaine a d'autres resultats - plafonne a 2000
-        // videos par securite (playlistItems.list coute 1 unite de quota
-        // par page de 50, largement sous la limite gratuite quotidienne).
-        function fetchAllYoutubeUploads(uploadsPlaylistId) {
-            function fetchPage(pageToken, acc) {
-                const params = { playlistId: uploadsPlaylistId, part: 'snippet', maxResults: 50 };
-                if (pageToken) params.pageToken = pageToken;
-                return youtubeApiRequest('playlistItems', params).then((data) => {
-                    const items = data.items || [];
-                    const merged = acc.concat(items);
-                    if (data.nextPageToken && merged.length < 2000) return fetchPage(data.nextPageToken, merged);
-                    return merged;
-                });
-            }
-            return fetchPage(null, []);
-        }
-
-        // Numero d'episode = dernier nombre trouve dans le titre - meme
-        // heuristique que pour Odysee, marche sur "EP326" comme sur
-        // "Episode 326".
-        function guessYoutubeEpisodeNumber(title) {
-            const matches = title.match(/\d+/g);
-            return matches ? parseInt(matches[matches.length - 1], 10) : null;
-        }
-
-        function buildYoutubePlaylist(channelHandle, titleKeywordLower) {
-            return resolveYoutubeUploadsPlaylistId(channelHandle).then((uploadsId) => fetchAllYoutubeUploads(uploadsId)).then((items) => {
-                const entries = [];
-                items.forEach((item) => {
-                    const snippet = item.snippet || {};
-                    const title = snippet.title || '';
-                    if (title.toLowerCase().indexOf(titleKeywordLower) === -1) return;
-                    const videoId = snippet.resourceId && snippet.resourceId.videoId;
-                    if (!videoId) return;
-                    const episodeNumber = guessYoutubeEpisodeNumber(title);
-                    if (episodeNumber === null) return;
-                    entries.push({ episodeNumber: episodeNumber, title: title, videoId: videoId });
-                });
-                entries.sort((a, b) => a.episodeNumber - b.episodeNumber);
-                return entries;
-            });
-        }
-
-        function youtubePlaylistCacheKey(channelHandle, titleKeywordLower) { return channelHandle + '::' + titleKeywordLower; }
-
-        function getYoutubePlaylist(channelHandle, titleKeywordLower) {
-            const cacheKey = youtubePlaylistCacheKey(channelHandle, titleKeywordLower);
-            const all = GM_getValue('youtubePlaylists', {});
-            const cached = all[cacheKey];
-            if (cached && (Date.now() - cached.builtAt) < 60 * 60 * 1000) return Promise.resolve(cached.entries);
-            return buildYoutubePlaylist(channelHandle, titleKeywordLower).then((entries) => {
-                if (entries.length === 0 && cached) return cached.entries;
-                const fresh = GM_getValue('youtubePlaylists', {});
-                fresh[cacheKey] = { builtAt: Date.now(), entries: entries };
-                GM_setValue('youtubePlaylists', fresh);
-                return entries;
-            }).catch((e) => {
-                console.log('[AnimeTracker v6] (youtube) echec construction playlist', e);
-                if (cached) return cached.entries;
-                throw e;
-            });
-        }
-
-        function getYoutubeChannelAssociation(info) {
+        // Une chaine + un mot-cle associes a la serie (une fois, a partir du
+        // lien d'une de ses videos). Recherche via la page "rechercher" de la
+        // chaine (ytInitialData). Titres "EP 364" ou compilations "EP 365-384"
+        // / "EP 201 - EP 250" : episode seul d'abord, sinon la plus petite
+        // compilation qui le contient, position = (n - premier) x duree / nb
+        // (pas de chapitres sur la chaine testee "Anime Zone", episodes de
+        // duree egale ~7 min). Remplace la version v6.5 (cle API obligatoire).
+        function getYoutubeChannelAssociation(info) { return GM_getValue('youtubeChannelAssociations', {})[storageKey(info)] || null; }
+        function setYoutubeChannelAssociation(info, assoc) {
             const all = GM_getValue('youtubeChannelAssociations', {});
-            return info ? (all[storageKey(info)] || null) : null;
-        }
-        function setYoutubeChannelAssociation(info, channelHandle, titleKeyword) {
-            const all = GM_getValue('youtubeChannelAssociations', {});
-            all[storageKey(info)] = { channelHandle: channelHandle, titleKeyword: titleKeyword };
+            all[storageKey(info)] = assoc;
             GM_setValue('youtubeChannelAssociations', all);
         }
-
-        // Action bouton "Trouver sur YouTube (chaine associee)" - demande
-        // la chaine/le mot-cle une seule fois par serie (prompt()), puis
-        // recherche l'episode courant dans la playlist (mise en cache) et
-        // applique directement le lien trouve, sans copier-coller manuel.
+        function isYoutubeMode(info) { return !!GM_getValue('youtubeMode', {})[storageKey(info)]; }
+        function setYoutubeMode(info, on) {
+            const all = GM_getValue('youtubeMode', {});
+            if (on) all[storageKey(info)] = true; else delete all[storageKey(info)];
+            GM_setValue('youtubeMode', all);
+        }
+        function ytInitialJson(html, varName) {
+            const m = html.match(new RegExp(varName + '\\s*=\\s*(\\{.+?\\});(?:var |<\\/script>)', 's'));
+            return m ? JSON.parse(m[1]) : null;
+        }
+        function ytTimeToSec(t) { return String(t || '').split(':').reduce((acc, x) => acc * 60 + Number(x), 0); }
+        function askYoutubeAssociation(info) {
+            const input = prompt('Lien d\'une video YouTube de "' + displayName(info.seriesName) + '" (la chaine et le nom seront deduits) :');
+            if (!input) return Promise.resolve(null);
+            const vid = youtubeVideoIdFromUrl(input);
+            const base = vid
+                ? fetchPageHtml('https://www.youtube.com/watch?v=' + vid).then((html) => {
+                    const pr = ytInitialJson(html, 'ytInitialPlayerResponse');
+                    const vd = pr && pr.videoDetails;
+                    if (!vd || !vd.channelId) throw new Error('video introuvable');
+                    const guess = vd.title.replace(/\[[^\]]*\]/g, ' ').replace(/\bEP\.?\s*\d.*$/i, '').replace(/[^\p{L}\p{N}\s'-]/gu, ' ').replace(/\s+/g, ' ').trim();
+                    return { channelId: vd.channelId, channelName: vd.author, guess: guess };
+                })
+                : Promise.resolve({ channelHandle: (input.match(/@[\w.-]+/) || [null])[0], channelId: (input.match(/UC[\w-]{22}/) || [null])[0], channelName: input.trim(), guess: displayName(info.seriesName) });
+            return base.then((a) => {
+                if (!a.channelId && !a.channelHandle) throw new Error('lien non reconnu');
+                const kw = prompt('Nom de la serie dans les titres de la chaine "' + a.channelName + '" :', a.guess || displayName(info.seriesName));
+                if (!kw) return null;
+                const assoc = { channelId: a.channelId || null, channelHandle: a.channelHandle || null, channelName: a.channelName, titleKeyword: kw.trim() };
+                setYoutubeChannelAssociation(info, assoc);
+                return assoc;
+            });
+        }
+        function findYoutubeEpisode(assoc, n) {
+            const path = assoc.channelId ? 'channel/' + assoc.channelId : assoc.channelHandle;
+            const kw = normalizeSeriesName(assoc.titleKeyword);
+            const search = (q) => fetchPageHtml('https://www.youtube.com/' + path + '/search?query=' + encodeURIComponent(q)).then((html) => {
+                const vids = [];
+                (function walk(o) {
+                    if (Array.isArray(o)) { o.forEach(walk); return; }
+                    if (!o || typeof o !== 'object') return;
+                    if (o.videoId && o.title && o.lengthText) vids.push({ id: o.videoId, title: o.title.simpleText || (o.title.runs || []).map((r) => r.text).join(''), len: ytTimeToSec(o.lengthText.simpleText) });
+                    Object.keys(o).forEach((k) => walk(o[k]));
+                })(ytInitialJson(html, 'var ytInitialData'));
+                let best = null;
+                vids.forEach((v) => {
+                    if (!v.len || normalizeSeriesName(v.title).indexOf(kw) === -1) return;
+                    const m = v.title.match(/\bEP\.?\s*(\d+)(?:\s*-\s*(?:EP\.?\s*)?(\d+))?/i);
+                    if (!m) return;
+                    const a = Number(m[1]), b = Number(m[2] || m[1]);
+                    if (n < a || n > b) return;
+                    if (!best || (b - a) < (best.last - best.first)) best = { id: v.id, title: v.title, first: a, last: b, len: v.len };
+                });
+                if (best) {
+                    best.perEp = best.len / (best.last - best.first + 1);
+                    best.start = Math.floor((n - best.first) * best.perEp);
+                }
+                return best;
+            });
+            return search(assoc.titleKeyword + ' EP ' + n).then((hit) => hit || search(assoc.titleKeyword));
+        }
+        // Le fragment #vcseg garde les bornes de la compilation : le suivi
+        // avance tout seul quand la video passe a l'episode suivant.
+        function youtubeEmbedFor(hit) {
+            return 'https://www.youtube.com/embed/' + hit.id + '?autoplay=1&start=' + hit.start + '&cc_load_policy=1&cc_lang_pref=fr&hl=fr#vcseg=' + hit.first + '-' + hit.last + '-' + Math.round(hit.perEp);
+        }
+        function storeYoutubeHit(info, hit) {
+            const all = loadYoutubeOverrides();
+            all[youtubeOverrideKey(info)] = youtubeEmbedFor(hit);
+            saveYoutubeOverrides(all);
+        }
+        // Bascule l'episode (et la suite de la serie) sur YouTube.
+        function switchToYoutube(info, reason) {
+            const go = (assoc) => {
+                if (!assoc) return;
+                setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube (' + assoc.channelName + ')...');
+                return findYoutubeEpisode(assoc, Number(info.episodeNumber)).then((hit) => {
+                    if (!hit) { setStatus('Episode ' + info.episodeNumber + ' introuvable sur la chaine YouTube ' + assoc.channelName); return; }
+                    storeYoutubeHit(info, hit);
+                    setYoutubeMode(info, true);
+                    console.log('[AnimeTracker v6] YouTube (' + reason + ') : ' + hit.title + ' a ' + hit.start + 's');
+                    applyLoadedEpisode(info, false, true);
+                }).catch((e) => setStatus('Recherche YouTube impossible : ' + e.message));
+            };
+            const assoc = getYoutubeChannelAssociation(info);
+            if (assoc && assoc.titleKeyword && (assoc.channelId || assoc.channelHandle)) return go(assoc);
+            return askYoutubeAssociation(info).then(go).catch((e) => alert('Chaine YouTube non reconnue : ' + e.message));
+        }
         function useYoutubeAutoForCurrentEpisode() {
             if (!currentEpisode) { alert('Ouvre d\'abord un episode.'); return; }
-            if (!getYoutubeApiKey()) {
-                alert('Configure d\'abord une cle API YouTube (menu Tampermonkey > Configurer la cle API YouTube).');
-                return;
-            }
-            let assoc = getYoutubeChannelAssociation(currentEpisode);
-            if (!assoc) {
-                const channelInput = prompt('Chaine YouTube (lien ou @handle) pour cette serie :');
-                if (!channelInput) return;
-                const keywordInput = prompt('Mot-cle a chercher dans les titres pour reconnaitre cette serie sur la chaine (ex: "Ten Thousand Worlds") :');
-                if (!keywordInput) return;
-                assoc = { channelHandle: normalizeYoutubeChannelHandle(channelInput), titleKeyword: keywordInput.trim() };
-                setYoutubeChannelAssociation(currentEpisode, assoc.channelHandle, assoc.titleKeyword);
-            }
-            setStatus('Recherche sur YouTube...');
-            getYoutubePlaylist(assoc.channelHandle, assoc.titleKeyword.toLowerCase()).then((entries) => {
-                const match = entries.find((e) => e.episodeNumber === currentEpisode.episodeNumber);
-                if (!match) { alert('Episode ' + currentEpisode.episodeNumber + ' introuvable sur ' + assoc.channelHandle + ' avec le mot-cle "' + assoc.titleKeyword + '".'); return; }
-                const all = loadYoutubeOverrides();
-                all[youtubeOverrideKey(currentEpisode)] = 'https://www.youtube.com/embed/' + match.videoId + '?autoplay=1';
-                saveYoutubeOverrides(all);
-                applyLoadedEpisode(currentEpisode, false);
-            }).catch((e) => { alert('Erreur recherche YouTube : ' + e.message); setStatus('Erreur recherche YouTube'); });
+            switchToYoutube(currentEpisode, 'bouton');
+        }
+        function leaveYoutubeMode() {
+            if (!currentEpisode) return;
+            setYoutubeMode(currentEpisode, false);
+            clearYoutubeOverride(currentEpisode);
+            applyLoadedEpisode(currentEpisode, false, true);
         }
 
         function isAutoNextEnabled() { return GM_getValue('autoNextEnabled', true); }
@@ -2006,6 +2001,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.27', ['YouTube sans cle API : "Lire sur YouTube" (ou bouton "Trouver sur YouTube") demande une seule fois le lien d\'une video de la serie, puis trouve l\'episode, meme dans une compilation de 10 ou 20 episodes, avec les sous-titres traduits en francais.',
+                'Quand la video cale chez l\'hebergeur, bascule automatique sur YouTube si une chaine est associee ; la serie reste sur YouTube ensuite ("Revenir a la source du site" pour annuler). Le suivi avance tout seul pendant une compilation.']],
             ['6.26', ['Si la video cale chez l\'hebergeur (fichier trop lourd ou mal prepare, cas de certaines chaines Odysee pour Wan Jie Du Zun), un encadre l\'explique et propose : Reessayer, Chercher sur YouTube, Rechercher sur Google, Episode suivant.']],
             ['6.25', ['Plus de message "@connect" dans la console : les nouveaux episodes des sites ajoutes ne sont verifies que depuis ces sites.']],
             ['6.24', ['Odysee : un meme anime publie par plusieurs chaines (ou avec des titres differents) ne cree plus plusieurs lignes de suivi. Les doublons existants sont fusionnes une fois, en gardant le plus ancien episode vu.']],
@@ -2156,7 +2153,8 @@
                     '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
                     '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + B + '">Utiliser ce lien YouTube</button>' +
                     '<button id="ed-youtube-clear-btn" style="' + B + '">Retirer le lien YouTube</button>' +
-                    '<button id="ed-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="' + B + '">Trouver sur YouTube (chaine associee)</button>') +
+                    '<button id="ed-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - pas besoin de cle API." style="' + B + '">Trouver sur YouTube (chaine associee)</button>' +
+                    '<button id="ed-youtube-off-btn" style="' + B + '">Revenir a la source du site</button>') +
                 collapsibleSection('sauvegarde', 'Sauvegarde',
                     '<button id="ed-export-btn" style="' + B + '">Exporter</button>' +
                     '<button id="ed-import-btn" style="' + B + '">Importer</button>' +
@@ -2267,7 +2265,7 @@
             topbar.querySelector('#ed-next-btn').addEventListener('click', () => {
                 if (cancelCountdown) cancelCountdown();
                 outroSkipSuspended = false;
-                if (!currentEpisode || !hasNextEpisode(currentEpisode)) { alert('Aucun episode suivant detecte.'); return; }
+                if (!currentEpisode || !(ytActive || hasNextEpisode(currentEpisode))) { alert('Aucun episode suivant detecte.'); return; }
                 advanceToNextEpisode();
             });
             topbar.querySelector('#ed-prev-btn').addEventListener('click', () => {
@@ -2302,6 +2300,7 @@
                 applyLoadedEpisode(currentEpisode, false);
             });
             topbar.querySelector('#ed-youtube-auto-btn').addEventListener('click', useYoutubeAutoForCurrentEpisode);
+            topbar.querySelector('#ed-youtube-off-btn').addEventListener('click', leaveYoutubeMode);
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
 
             overlayEls = {
@@ -2360,6 +2359,7 @@
         // pas du tout (hebergeur injoignable, aucun script dedans), on
         // passe au lecteur suivant de la page.
         let playerCandidates = [], playerCandidateIndex = 0, playerReadyTimer = null;
+        let ytActive = false, ytSegment = null; // lecture YouTube en cours (v6.27)
         function armPlayerReadyTimer() {
             clearTimeout(playerReadyTimer);
             playerReadyTimer = setTimeout(tryNextPlayer, 25000);
@@ -2392,14 +2392,14 @@
             box.innerHTML = (stall
                 ? '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; La video cale chez l\'hebergeur (' + escapeHtml(host || siteLabel) + ')</div>' +
                   'Le fichier publie pour cet episode est trop lourd ou mal prepare (cas de certaines chaines Odysee) : le navigateur n\'arrive pas a le lire d\'une traite.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>' +
-                  '<span style="font-size:12px;color:#d9b77a;">Astuce : colle un lien YouTube de cet episode dans "Lien YouTube de secours" pour le lire a la place.</span>'
+                  '<span style="font-size:12px;color:#d9b77a;">"Lire sur YouTube" : la 1re fois, colle le lien d\'une video YouTube de la serie ; ensuite la bascule est automatique.</span>'
                 : '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; Episode indisponible sur ' + escapeHtml(siteLabel) + '</div>' +
                   (nbPlayers > 1 ? 'Les ' + nbPlayers + ' lecteurs proposes par le site ont ete essayes : ' : 'Le lecteur propose par le site ') +
                   'la video a ete supprimee ou l\'hebergeur est en panne.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>') +
                 '<div id="ed-site-alt" style="margin-top:10px;font-size:12px;color:#d9b77a;">Recherche de cet episode sur les autres sites...</div>' +
                 '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
                 (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
-                '<button type="button" data-act="youtube" style="' + BTN + '">Chercher sur YouTube</button>' +
+                '<button type="button" data-act="youtube" style="' + BTN + '">Lire sur YouTube</button>' +
                 '<button type="button" data-act="google" style="' + BTN + '">Rechercher sur Google</button>' +
                 (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Episode suivant</button>' : '') +
                 '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
@@ -2407,11 +2407,12 @@
             const info = currentEpisode;
             box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
-                if (act === 'google' || act === 'youtube') {
-                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr' + (act === 'google' ? ' streaming' : '');
-                    window.open(act === 'google' ? 'https://www.google.com/search?q=' + encodeURIComponent(q) : 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q), '_blank', 'noopener');
+                if (act === 'google') {
+                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr streaming';
+                    window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
                     return;
                 }
+                if (act === 'youtube') { box.style.display = 'none'; switchToYoutube(info, 'bouton de l\'encadre'); return; }
                 box.style.display = 'none';
                 if (act === 'next') advanceToNextEpisode();
                 // Recharge le lecteur : la position est reprise (sauvegardee toutes les 5 s).
@@ -2453,6 +2454,7 @@
         }
 
         function sendConfigToPlayerFrame() {
+            if (ytActive) { postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: null, introEnd: null, outroStart: null, outroEnd: null, preferredQuality: currentConfig.preferredQuality, resumeAt: null }); return; }
             postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: currentConfig.introStart, introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, outroEnd: currentConfig.outroEnd, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
         }
 
@@ -2469,7 +2471,13 @@
             const type = event.data.type.slice(MSG_PREFIX.length);
 
             if (type === 'ready') { clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
-            if (type === 'position' && currentEpisode && positionArmed) {
+            if (type === 'position' && currentEpisode && positionArmed && ytActive) {
+                // Compilation YouTube : le suivi suit l'episode en cours de lecture.
+                if (ytSegment) {
+                    const ep = ytSegment.first + Math.floor(Number(event.data.t) / ytSegment.perEp);
+                    if (ep > Number(currentEpisode.episodeNumber) && ep <= ytSegment.last) advanceTrackingTo(ep);
+                }
+            } else if (type === 'position' && currentEpisode && positionArmed) {
                 const t = Number(event.data.t), d = Number(event.data.d);
                 if (isFinite(d) && d > 0) requestAniSkip(d);
                 // < 30s : rien a reprendre ; dernieres 2 min : considere fini.
@@ -2490,7 +2498,12 @@
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
-                else if (event.data.stage === 'stall') showSiteError(0, 'stall');
+                else if (event.data.stage === 'stall') {
+                    if (!ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode)) {
+                        setStatus('La video cale chez l\'hebergeur : bascule automatique sur YouTube...');
+                        switchToYoutube(currentEpisode, 'auto, video bloquee');
+                    } else showSiteError(0, 'stall');
+                }
                 else if (event.data.stage === 'stall-fini') { if (overlayEls.siteErrorBox.getAttribute('data-kind') === 'stall') overlayEls.siteErrorBox.style.display = 'none'; }
                 else if (event.data.stage === 'video-trouvee') setStatus('Chargement...');
                 else if (event.data.stage === 'buffering') {
@@ -2708,7 +2721,7 @@
 
         function triggerNextEpisode(reason) {
             if (!currentConfig.autoNext) return;
-            if (!currentEpisode || !hasNextEpisode(currentEpisode)) { setStatus('Episode termine - pas de suivant detecte'); return; }
+            if (!currentEpisode || !(ytActive || hasNextEpisode(currentEpisode))) { setStatus('Episode termine - pas de suivant detecte'); return; }
             showNextToast();
         }
 
@@ -2767,9 +2780,21 @@
             });
         }
 
-        function applyLoadedEpisode(info, pushHistory) {
+        function applyLoadedEpisode(info, pushHistory, skipYoutubeLookup) {
             if (!info) throw new Error('episode introuvable ou aucun lecteur compatible pour cet episode');
+            // Serie passee sur YouTube : chercher d'abord cet episode la-bas.
+            if (!skipYoutubeLookup && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
+                setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube...');
+                findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber))
+                    .then((hit) => { if (hit) storeYoutubeHit(info, hit); })
+                    .catch(() => {})
+                    .then(() => applyLoadedEpisode(info, pushHistory, true));
+                return;
+            }
             const youtubeOverride = getYoutubeOverrideUrl(info);
+            ytActive = !!youtubeOverride;
+            const segM = youtubeOverride && youtubeOverride.match(/#vcseg=(\d+)-(\d+)-(\d+)/);
+            ytSegment = segM ? { first: Number(segM[1]), last: Number(segM[2]), perEp: Number(segM[3]) } : null;
             if (!info.embedSrc && !youtubeOverride) {
                 // Ex. anime-sama : cet episode precis n'existe que sur un
                 // hebergeur qu'on ne gere pas encore (v1 = sibnet
@@ -2795,7 +2820,7 @@
             overlayEls.siteErrorBox.style.display = 'none';
             if (playerCandidates.length) armPlayerReadyTimer(); else clearTimeout(playerReadyTimer);
             if (youtubeOverride) {
-                setStatus('Lecture via lien YouTube de secours - pas de saut intro/outro ni enchainement auto sur cette source.');
+                setStatus('Lecture via YouTube' + (ytSegment && ytSegment.last > ytSegment.first ? ' (compilation ep. ' + ytSegment.first + '-' + ytSegment.last + ')' : '') + ', sous-titres en francais - pas de saut intro/outro sur cette source.');
             } else {
                 startBufferStallTracking();
                 setStatus('Chargement...');
@@ -2848,9 +2873,33 @@
             return new Promise(() => {});
         }
 
+        // Suivi pendant une compilation YouTube (et suite apres la compilation).
+        function episodeInfoForNumber(cur, ep) {
+            if (cur.navStyle === 'index') {
+                const i = cur.episodeNumbersByIndex.indexOf(ep);
+                if (i === -1) return null;
+                return Object.assign({}, cur, { episodeIndex: i, episodeNumber: ep, episodeLabel: 'Episode ' + ep, resumeUrl: cur.resumeUrlsByIndex[i], embedSrc: cur.embedByIndex[i],
+                    embedCandidates: cur.embedCandidatesByIndex ? cur.embedCandidatesByIndex[i] : undefined });
+            }
+            // Page par episode : numero d'episode du site != numero d'adresse
+            // (esprit-donghua : "S3 E90" = episode 345) -> on garde la page.
+            return Object.assign({}, cur, { episodeNumber: ep, episodeLabel: 'Episode ' + ep, nextPageUrl: null, prevPageUrl: null });
+        }
+        function advanceTrackingTo(ep) {
+            const next = episodeInfoForNumber(currentEpisode, ep);
+            if (!next) return;
+            currentEpisode = next;
+            recordEpisodeProgress(next);
+            buildPersistentPanel();
+        }
+
         function advanceToNextEpisode() {
             if (advancingToNext) return;
-            if (!currentEpisode || !hasNextEpisode(currentEpisode)) return;
+            if (ytActive && currentEpisode) {
+                const next = episodeInfoForNumber(currentEpisode, Number(currentEpisode.episodeNumber) + 1);
+                if (next) { applyLoadedEpisode(next, true); return; }
+            }
+            if (!currentEpisode || !(ytActive || hasNextEpisode(currentEpisode))) return;
             advancingToNext = true;
             setStatus('Chargement de l\'episode suivant...');
             buildNextEpisodeInfo().then((info) => {
@@ -2877,6 +2926,8 @@
 
         function goToEpisodeNumber(targetNumber) {
             if (!currentEpisode) { setStatus('Ouvre d\'abord un episode.'); return; }
+            // Serie sur YouTube : on cherche directement l'episode la-bas.
+            if (ytActive) { const info = episodeInfoForNumber(currentEpisode, targetNumber); if (info) applyLoadedEpisode(info, true); return; }
             if (currentEpisode.navStyle === 'index') {
                 // indexOf plutot que "targetNumber - 1" : la numerotation
                 // peut avoir des trous (SITE_ODYSEE) ou la position dans le
@@ -3520,7 +3571,8 @@
                     '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
                     '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + BTN_STYLE + '">Utiliser ce lien YouTube</button>' +
                     '<button id="ep-youtube-clear-btn" style="' + BTN_STYLE + '">Retirer le lien YouTube</button>' +
-                    '<button id="ep-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - necessite une cle API YouTube configuree." style="' + BTN_STYLE + '">Trouver sur YouTube (chaine associee)</button>',
+                    '<button id="ep-youtube-auto-btn" title="Recherche automatiquement cet episode sur une chaine YouTube associee (demande la chaine/le mot-cle la premiere fois) - pas besoin de cle API." style="' + BTN_STYLE + '">Trouver sur YouTube (chaine associee)</button>' +
+                    '<button id="ep-youtube-off-btn" style="' + BTN_STYLE + '">Revenir a la source du site</button>',
                     prevOpen.youtube);
             }
             html += collapsibleSection('sauvegarde', 'Sauvegarde',
@@ -3607,6 +3659,8 @@
             });
             const youtubeAutoBtn = panel.querySelector('#ep-youtube-auto-btn');
             if (youtubeAutoBtn) youtubeAutoBtn.addEventListener('click', useYoutubeAutoForCurrentEpisode);
+            const youtubeOffBtn = panel.querySelector('#ep-youtube-off-btn');
+            if (youtubeOffBtn) youtubeOffBtn.addEventListener('click', leaveYoutubeMode);
 
             const autoNextCheckbox = panel.querySelector('#ep-autonext');
             if (autoNextCheckbox) autoNextCheckbox.addEventListener('change', () => {
@@ -3664,11 +3718,6 @@
         GM_registerMenuCommand('Exporter en fichier', exportProgress);
         GM_registerMenuCommand('Choisir le fichier de sauvegarde', chooseBackupFile);
         GM_registerMenuCommand('Ouvrir le lecteur', () => startEpisode(getEpisodeInfoForCurrentPage(), 'commande menu'));
-        GM_registerMenuCommand('Configurer la cle API YouTube', () => {
-            const current = getYoutubeApiKey();
-            const key = prompt('Cle API YouTube Data v3 (console.cloud.google.com > API et services > Identifiants) :', current);
-            if (key !== null) setYoutubeApiKey(key.trim());
-        });
 
         // Vignettes anime-sama (v6.18) : elles menent a la page de saison, ou
         // "Lecteur auto" lance l'episode. Petit bouton "Fiche" vers la page
