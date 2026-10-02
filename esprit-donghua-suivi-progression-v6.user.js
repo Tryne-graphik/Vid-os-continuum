@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.14
+// @version      6.15
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -204,7 +204,9 @@
 
         function applyIntroSkipIfNeeded(video) {
             applyResumeIfNeeded(video);
-            if (!config || !config.introEnd) return;
+            // introStart > 0 (resume avant le generique) : gere au fil de la
+            // lecture par le timeupdate plus bas, pas au demarrage.
+            if (!config || !config.introEnd || config.introStart) return;
             if (video.currentTime < config.introEnd) {
                 video.currentTime = config.introEnd;
                 const p = video.play();
@@ -319,8 +321,30 @@
                     window.parent.postMessage({ type: MSG_PREFIX + 'position', t: video.currentTime, d: video.duration }, '*');
                 }
             });
+            // Plages intro/outro (v6.15) : chacune sautee une seule fois par
+            // episode, pour pouvoir revenir en arriere volontairement.
+            let introRangeSkipped = false, outroRangeSkipped = false;
             video.addEventListener('timeupdate', () => {
-                if (!config || !config.outroStart || outroSignalSent) return;
+                if (!config) return;
+                const t = video.currentTime;
+                if (!introRangeSkipped && config.introStart && config.introEnd > config.introStart &&
+                    t >= config.introStart && t < config.introEnd) {
+                    introRangeSkipped = true;
+                    video.currentTime = config.introEnd;
+                    console.log('[AnimeTracker v6] (' + cfg.label + ') intro sautee ' + config.introStart + 's -> ' + config.introEnd + 's');
+                }
+                // Fin d'outro renseignee : l'episode continue apres le
+                // generique (ex. Bleach) - on saute le generique et on laisse
+                // 'ended' declencher l'episode suivant.
+                if (!outroRangeSkipped && config.outroStart && config.outroEnd > config.outroStart &&
+                    t >= config.outroStart && t < config.outroEnd) {
+                    outroRangeSkipped = true;
+                    video.currentTime = config.outroEnd;
+                    console.log('[AnimeTracker v6] (' + cfg.label + ') outro sautee ' + config.outroStart + 's -> ' + config.outroEnd + 's');
+                }
+            });
+            video.addEventListener('timeupdate', () => {
+                if (!config || !config.outroStart || config.outroEnd > config.outroStart || outroSignalSent) return;
                 if (video.currentTime >= config.outroStart) {
                     outroSignalSent = true;
                     window.parent.postMessage({ type: MSG_PREFIX + 'outro-reached' }, '*');
@@ -1556,7 +1580,7 @@
         // ---- Calque plein ecran ----
 
         let currentEpisode = null;
-        let currentConfig = { introEnd: null, outroStart: null, autoNext: true, preferredQuality: '1080p' };
+        let currentConfig = { introStart: null, introEnd: null, outroStart: null, outroEnd: null, autoNext: true, preferredQuality: '1080p' };
         let outroSignalSent = false;
         let advancingToNext = false;
         let cancelCountdown = null;
@@ -1718,6 +1742,7 @@
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
                 '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
+                '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
@@ -1739,8 +1764,8 @@
                 '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
                 '<label style="' + CHECK + '"><input type="checkbox" id="ed-track-cb"> Suivre cet anime</label>' +
                 collapsibleSection('reglages', 'Reglages',
-                    '<button id="ed-set-intro-btn" style="' + B + '">Fin intro</button>' +
-                    '<button id="ed-set-outro-btn" style="' + B + '">Debut outro</button>' +
+                    '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button></div>' +
+                    '<div style="display:flex;gap:4px;"><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
                     '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
                     '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
                     '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>') +
@@ -1787,8 +1812,10 @@
             const backupStatusEl = topbar.querySelector('#ed-backup-status');
 
             topbar.querySelector('#ed-reload-btn').addEventListener('click', () => location.reload());
-            topbar.querySelector('#ed-set-intro-btn').addEventListener('click', promptIntroEnd);
-            topbar.querySelector('#ed-set-outro-btn').addEventListener('click', promptOutroStart);
+            topbar.querySelector('#ed-set-introstart-btn').addEventListener('click', () => promptIntroOutro('introStart'));
+            topbar.querySelector('#ed-set-intro-btn').addEventListener('click', () => promptIntroOutro('introEnd'));
+            topbar.querySelector('#ed-set-outro-btn').addEventListener('click', () => promptIntroOutro('outroStart'));
+            topbar.querySelector('#ed-set-outroend-btn').addEventListener('click', () => promptIntroOutro('outroEnd'));
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
             bindIncidentSection(topbar, 'ed');
@@ -1938,7 +1965,7 @@
             return r && r.ep === info.episodeNumber ? r.t : null;
         }
         function sendConfigToPlayerFrame() {
-            postToPlayerFrame({ type: MSG_PREFIX + 'config', introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
+            postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: currentConfig.introStart, introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, outroEnd: currentConfig.outroEnd, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
         }
 
         // Origines autorisees pour les messages ENTRANTS du lecteur - le
@@ -1986,8 +2013,10 @@
         function applyRuntimeConfig(key) {
             const introOutro = getIntroOutroForKey(key);
             currentConfig = {
+                introStart: introOutro.introStart || null,
                 introEnd: introOutro.introEnd || null,
                 outroStart: introOutro.outroStart || null,
+                outroEnd: introOutro.outroEnd || null,
                 autoNext: isAutoNextEnabled(),
                 preferredQuality: isLowQualityEnabled() ? '720p' : '1080p'
             };
@@ -2068,6 +2097,7 @@
             }
             currentEpisode = info;
             recordEpisodeProgress(info);
+            renderCrossSiteHint(info);
             applyRuntimeConfig(storageKey(info));
             outroSignalSent = false;
             positionArmed = false;
@@ -2080,6 +2110,40 @@
             }
             if (pushHistory) { try { history.pushState(null, '', info.resumeUrl); } catch (e) {} }
             buildPersistentPanel();
+        }
+
+        // Meme anime suivi sur un autre site (demande 2026-10-02, ex. Bleach
+        // ep. 120 sur anime-sama, ep. 1 sur animoflix) : rapprochement par
+        // nom normalise, sans fusionner les entrees (cles et numerotation
+        // propres a chaque site).
+        // ponytail: egalite stricte du nom normalise, ajouter un lien manuel si deux sites nomment differemment
+        function normalizeSeriesName(name) {
+            return (displayName(name) || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/\b(vostfr|vf)\b/g, '').replace(/[^a-z0-9]/g, '');
+        }
+        function findFurtherProgressElsewhere(info) {
+            const name = normalizeSeriesName(info.seriesName);
+            if (!name) return null;
+            const progress = loadProgress();
+            const excluded = loadExcludedSeries();
+            let best = null;
+            Object.keys(progress).forEach((k) => {
+                const e = progress[k];
+                if (excluded[k] || e.site === info.site || normalizeSeriesName(e.seriesName) !== name) return;
+                if (Number(e.episodeNumber) > Number(info.episodeNumber) && (!best || Number(e.episodeNumber) > Number(best.episodeNumber))) best = e;
+            });
+            return best;
+        }
+        function renderCrossSiteHint(info) {
+            const el = overlayEls && overlayEls.overlay.querySelector('#ed-cross-site');
+            if (!el) return;
+            const other = findFurtherProgressElsewhere(info);
+            if (!other) { el.style.display = 'none'; return; }
+            const next = Number(other.episodeNumber) + 1;
+            el.innerHTML = 'Deja vu jusqu\'a l\'ep. ' + escapeHtml(String(other.episodeNumber)) + ' sur ' + escapeHtml(other.siteLabel || other.site) +
+                '<br><button type="button" style="margin-top:4px;background:#ffb300;color:#000;border:none;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Aller a l\'ep. ' + next + '</button>';
+            el.style.display = 'block';
+            el.querySelector('button').addEventListener('click', () => { el.style.display = 'none'; goToEpisodeNumber(next); });
         }
 
         function advanceToNextEpisode() {
@@ -2189,24 +2253,22 @@
             sendConfigToPlayerFrame();
         }
 
-        function promptIntroEnd() {
+        const INTRO_OUTRO_LABELS = {
+            introStart: 'Debut du generique de debut (vide = il commence a 0:00, pas de resume avant)',
+            introEnd: 'Fin du generique de debut',
+            outroStart: 'Debut du generique de fin',
+            outroEnd: 'Fin du generique de fin (vide = episode suivant des le generique ; a remplir si l\'episode continue apres)'
+        };
+        function promptIntroOutro(field) {
             if (!currentEpisode) { alert('Ouvre d\'abord le lecteur sur un episode.'); return; }
             const key = storageKey(currentEpisode);
-            const current = getIntroOutroForKey(key).introEnd;
-            const input = prompt('Fin du generique de debut pour "' + currentEpisode.seriesName + '" (format mm:ss, ou ex. 0712 pour 7:12) :', formatTimecode(current));
-            const seconds = parseTimecode(input);
-            if (seconds === null) return;
-            setIntroOutroForKey(key, { introEnd: seconds });
-            applyUpdatedConfigIfCurrent(key);
-        }
-        function promptOutroStart() {
-            if (!currentEpisode) { alert('Ouvre d\'abord le lecteur sur un episode.'); return; }
-            const key = storageKey(currentEpisode);
-            const current = getIntroOutroForKey(key).outroStart;
-            const input = prompt('Debut du generique de fin pour "' + currentEpisode.seriesName + '" (format mm:ss, ou ex. 0712 pour 7:12) :', formatTimecode(current));
-            const seconds = parseTimecode(input);
-            if (seconds === null) return;
-            setIntroOutroForKey(key, { outroStart: seconds });
+            const current = getIntroOutroForKey(key)[field];
+            const input = prompt(INTRO_OUTRO_LABELS[field] + ' pour "' + currentEpisode.seriesName + '" (format mm:ss, ou ex. 0712 pour 7:12) :', formatTimecode(current));
+            if (input === null) return;
+            // Champ vide = effacer (utile pour les 2 bornes optionnelles).
+            const seconds = input.trim() ? parseTimecode(input) : null;
+            if (input.trim() && seconds === null) return;
+            setIntroOutroForKey(key, { [field]: seconds });
             applyUpdatedConfigIfCurrent(key);
         }
 
@@ -2262,7 +2324,7 @@
                 html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
                 html += '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;">' +
                     '<th style="padding:6px 4px;">Site</th><th style="padding:6px 4px;">Anime</th>' +
-                    '<th style="padding:6px 4px;">Fin intro</th><th style="padding:6px 4px;">Debut outro</th>' +
+                    '<th style="padding:6px 4px;">Debut intro</th><th style="padding:6px 4px;">Fin intro</th><th style="padding:6px 4px;">Debut outro</th><th style="padding:6px 4px;">Fin outro</th>' +
                     '<th style="padding:6px 4px;">Suivi</th></tr>';
                 entries.forEach((e) => {
                     const io = getIntroOutroForKey(e.key);
@@ -2272,8 +2334,10 @@
                     html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + e.key + '">' +
                         '<td style="padding:6px 4px;color:#888;">' + (e.siteTag || '') + '</td>' +
                         '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + escapeHtml(e.seriesName) + '</td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-intro-input" placeholder="mm:ss" style="width:70px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outro-input" placeholder="mm:ss" style="width:70px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroStart) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introStart-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introStart) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introEnd-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroStart-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroStart) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroEnd-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroEnd) + '"></td>' +
                         '<td style="padding:6px 4px;text-align:center;"><input type="checkbox" class="ep-set-tracked-input" ' + (tracked ? 'checked' : '') + '></td>' +
                         '</tr>';
                 });
@@ -2292,10 +2356,10 @@
             if (saveBtn) saveBtn.addEventListener('click', () => {
                 box.querySelectorAll('tr[data-key]').forEach((row) => {
                     const key = row.getAttribute('data-key');
-                    const introSeconds = parseTimecode(row.querySelector('.ep-set-intro-input').value);
-                    const outroSeconds = parseTimecode(row.querySelector('.ep-set-outro-input').value);
+                    const patch = {};
+                    ['introStart', 'introEnd', 'outroStart', 'outroEnd'].forEach((f) => { patch[f] = parseTimecode(row.querySelector('.ep-set-' + f + '-input').value); });
                     const tracked = row.querySelector('.ep-set-tracked-input').checked;
-                    setIntroOutroForKey(key, { introEnd: introSeconds, outroStart: outroSeconds });
+                    setIntroOutroForKey(key, patch);
                     setSeriesExcluded(key, !tracked);
                     applyUpdatedConfigIfCurrent(key);
                 });
@@ -2490,7 +2554,7 @@
                 '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">Suivi - ' + siteObj.label + '</h2>' +
                 '<div style="font-size:11px;color:#888;margin-bottom:12px;">' + entries.length + ' anime(s) suivi(s) &middot; ' + checkedText + '</div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th></tr>';
+                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th></tr>';
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const latest = latestKnownEpisode[e.key];
@@ -2501,7 +2565,8 @@
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
-                    '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td></tr>';
+                    '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
+                    '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
             html += '</table><div style="margin-top:16px;text-align:right;">' +
                 '<button id="ep-tracking-check" style="background:#333;color:#fff;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;margin-right:8px;">&#8635; Verifier maintenant</button>' +
@@ -2520,6 +2585,14 @@
                 ev.preventDefault();
                 location.href = a.href;
                 location.reload();
+            }));
+            // Meme effet que decocher "Suivre cet anime" : reactivable via
+            // Configuration (case "Suivi").
+            pop.querySelectorAll('.ep-tracking-drop').forEach((btn) => btn.addEventListener('click', () => {
+                if (!confirm('Abandonner le suivi de "' + btn.getAttribute('data-name') + '" ?')) return;
+                setSeriesExcluded(btn.getAttribute('data-key'), true);
+                buildPersistentPanel();
+                refreshTrackingPopup();
             }));
             pop.querySelector('#ep-tracking-check').addEventListener('click', (ev) => {
                 ev.currentTarget.disabled = true; ev.currentTarget.textContent = 'Recherche...';
@@ -2568,7 +2641,7 @@
             toggleBtn.id = 'ep-toggle-btn';
             toggleBtn.type = 'button';
             toggleBtn.title = 'Afficher/masquer le panneau de progression';
-            toggleBtn.style.cssText = 'position:fixed;top:10px;left:10px;z-index:999999;background:#15151f;color:#eee;border:none;border-radius:6px;width:34px;height:34px;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.4);';
+            toggleBtn.style.cssText = 'position:fixed;top:60px;left:10px;z-index:999999;background:#15151f;color:#eee;border:none;border-radius:6px;width:34px;height:34px;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.4);';
             toggleBtn.innerHTML = '<span id="ep-toggle-icon">☰</span>' +
                 '<span id="ep-toggle-badge" style="position:absolute;top:-6px;right:-6px;background:#ffb300;color:#000;font-size:10px;font-weight:bold;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;"></span>';
             document.body.appendChild(toggleBtn);
@@ -2633,7 +2706,7 @@
             if (!panel) {
                 panel = document.createElement('div');
                 panel.id = 'ep-panel';
-                panel.style.cssText = 'position:fixed;top:54px;left:10px;z-index:999998;background:#15151f;color:#eee;padding:12px;font-family:Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border-radius:8px;display:flex;flex-direction:column;gap:8px;width:260px;max-height:calc(100vh - 70px);overflow-y:auto;';
+                panel.style.cssText = 'position:fixed;top:104px;left:10px;z-index:999998;background:#15151f;color:#eee;padding:12px;font-family:Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border-radius:8px;display:flex;flex-direction:column;gap:8px;width:260px;max-height:calc(100vh - 120px);overflow-y:auto;';
                 document.body.appendChild(panel);
             }
 
@@ -2689,8 +2762,8 @@
             html += '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>';
 
             html += collapsibleSection('reglages', 'Reglages',
-                '<button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button>' +
-                '<button id="ep-set-outro" style="' + BTN_STYLE + '">Debut outro</button>' +
+                '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button></div>' +
+                '<div style="display:flex;gap:4px;"><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
                 '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
                 (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
                 prevOpen.reglages);
@@ -2796,10 +2869,10 @@
                 if (currentEpisode) applyUpdatedConfigIfCurrent(storageKey(currentEpisode));
             });
 
-            const setIntroBtn = panel.querySelector('#ep-set-intro');
-            if (setIntroBtn) setIntroBtn.addEventListener('click', promptIntroEnd);
-            const setOutroBtn = panel.querySelector('#ep-set-outro');
-            if (setOutroBtn) setOutroBtn.addEventListener('click', promptOutroStart);
+            [['#ep-set-introstart', 'introStart'], ['#ep-set-intro', 'introEnd'], ['#ep-set-outro', 'outroStart'], ['#ep-set-outroend', 'outroEnd']].forEach(([sel, field]) => {
+                const btn = panel.querySelector(sel);
+                if (btn) btn.addEventListener('click', () => promptIntroOutro(field));
+            });
             const settingsBtn = panel.querySelector('#ep-settings-btn');
             if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
             const checkUpdateBtn = panel.querySelector('#ep-check-update-btn');

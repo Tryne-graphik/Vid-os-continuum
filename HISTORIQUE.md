@@ -475,3 +475,31 @@ Rattrapé le 02/10 depuis `git log` (non journalisé sur le moment).
 Bitdefender (0.0.0.0, sha `b48621a8…`) est **toujours** dans `installateur/`, non
 suivi. Liste "à reprendre" du 01/10 toujours valable (retours de l'ami, exe propre
 à committer, ancien déploiement Apps Script à archiver, lignes `[TEST]`).
+
+### 2026-10-02 — v6.15 : plages intro/outro, abandon de suivi, progression multi-site
+
+Demandes de l'utilisateur après usage sur anime-sama :
+- **Panneau baissé de 50 px** (bouton ☰ top 60, panneau top 104) pour garder le
+  titre/logo du site visible. Le calque plein écran n'est pas concerné.
+- **Croix ✕ par ligne** dans la fenêtre de suivi par site → confirmation puis
+  `setSeriesExcluded` (même effet que décocher "Suivre cet anime", réactivable via
+  Configuration).
+- **Même anime sur plusieurs sites** (Bleach ép. 120+ sur anime-sama, ép. 1 sur
+  animoflix) : pas de fusion des entrées (clé et numérotation propres à chaque
+  site) ; à l'ouverture d'un épisode, si une autre entrée au **nom normalisé
+  identique** (`displayName`, minuscules, sans accents/VF/VOSTFR/ponctuation) est plus
+  avancée, encadré orange "Déjà vu jusqu'à l'ép. N sur X" + bouton "Aller à l'ép.
+  N+1" (`goToEpisodeNumber`). Limite : noms différents d'un site à l'autre = pas
+  de rapprochement (lien manuel à ajouter si besoin).
+- **Intro et outro en plages** : `introStart`/`outroEnd` en plus de
+  `introEnd`/`outroStart` (boutons Début/Fin intro et outro, 4 colonnes dans
+  Configuration ; champ vide = effacer). Intro avec début > 0 : sautée au passage
+  (résumé + bout d'épisode avant le générique). Outro avec fin : générique sauté,
+  l'épisode continue, et c'est `ended` qui enchaîne (ex. Bleach). Chaque plage
+  sautée une seule fois par épisode (retour en arrière volontaire possible).
+- **Testé** dans Chrome (Playwright, shims GM) sur Bleach anime-sama/ansembed :
+  panneau à 60/104 px, encadré multi-site affiché puis saut à #ep=121 OK, intro
+  5→20 s et outro 40→60 s sautées, `ended` → toast "Episode suivant", ✕ → série
+  exclue et ligne retirée. Pas encore testé dans Tampermonkey réel.
+- Non porté : le transfert intro/outro esprit-donghua → Odysee ne copie que
+  `introEnd`/`outroStart`.
