@@ -8,13 +8,13 @@ using System.Windows.Forms;
 
 // Fiche d'identite de l'exe (Proprietes > Details) : un executable anonyme
 // est juge plus suspect par les antivirus.
-[assembly: AssemblyTitle("Installateur Vidéo_Continuum")]
-[assembly: AssemblyDescription("Ouvre la page Tampermonkey puis la page d'installation du script Vidéo_Continuum. N'installe rien lui-même, ne demande pas de droits administrateur.")]
-[assembly: AssemblyProduct("Vidéo_Continuum")]
+[assembly: AssemblyTitle("Installateur Vidéo Continuum")]
+[assembly: AssemblyDescription("Ouvre la page Tampermonkey puis la page d'installation du script Vidéo Continuum. N'installe rien lui-même, ne demande pas de droits administrateur.")]
+[assembly: AssemblyProduct("Vidéo Continuum")]
 [assembly: AssemblyCompany("Tryne")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Tryne")]
-[assembly: AssemblyVersion("6.11.0.0")]
-[assembly: AssemblyFileVersion("6.11.0.0")]
+[assembly: AssemblyVersion("6.17.0.0")]
+[assembly: AssemblyFileVersion("6.17.0.0")]
 
 // 2026-10-01 : assistant en fenetre (au lieu de la console) avec un ecran
 // illustre par manipulation a faire par l'utilisateur. Illustrations :
@@ -100,7 +100,7 @@ namespace EspritDonghuaInstaller
             // ---- Etape 3 : installer le script ----
             Action openScript = () => TryOpen(b.Exe, ScriptUrl);
             openScript();
-            Page("Étape 3/3 - Installer Vidéo_Continuum",
+            Page("Étape 3/3 - Installer Vidéo Continuum",
                 "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n\n" +
                 "Mises à jour automatiques. Un souci ? \"Signaler un problème\" dans le panneau.",
                 "install.png", "Rouvrir la page", openScript, "Terminer");
@@ -112,7 +112,7 @@ namespace EspritDonghuaInstaller
         static Form NewForm(string title)
         {
             Form f = new Form();
-            f.Text = "Installateur Vidéo_Continuum";
+            f.Text = "Installateur Vidéo Continuum";
             f.ClientSize = new Size(580, 520);
             f.FormBorderStyle = FormBorderStyle.FixedDialog;
             f.MaximizeBox = false; f.MinimizeBox = false;
@@ -189,7 +189,7 @@ namespace EspritDonghuaInstaller
             string[] labels = { "Chrome", "Edge", "Firefox", "Opera", "Autre (navigateur par défaut)" };
             Form f = NewForm("Bienvenue !");
             Label intro = new Label();
-            intro.Text = "Cet assistant installe Vidéo_Continuum en 3 étapes, avec une image pour chaque clic à faire.\n\nQuel navigateur utilises-tu ?";
+            intro.Text = "Cet assistant installe Vidéo Continuum en 3 étapes, avec une image pour chaque clic à faire.\n\nQuel navigateur utilises-tu ?";
             intro.Location = new Point(24, 60); intro.Size = new Size(532, 80);
             f.Controls.Add(intro);
             radios = new RadioButton[labels.Length];
@@ -233,7 +233,7 @@ namespace EspritDonghuaInstaller
                 BuildBrowserForm(out r, out br),
                 BuildPage("Étape 1/3 - Installer Tampermonkey", "Tampermonkey est l'extension qui fait tourner le script.\nSur la page qui vient de s'ouvrir, clique sur le bouton d'ajout, puis confirme.", "store.png", "Rouvrir la page", () => { }, "C'est fait"),
                 BuildPage("Étape 2/3 - Autoriser les scripts", "Dans la page des extensions (Tampermonkey), active \"Autoriser les scripts utilisateur\".\nSans ça, Tampermonkey n'exécute aucun script.", "userscripts.png", "Rouvrir la page", () => { }, "C'est fait"),
-                BuildPage("Étape 3/3 - Installer Vidéo_Continuum", "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n\nMises à jour automatiques. Un souci ? \"Signaler un problème\" dans le panneau.", "install.png", "Rouvrir la page", () => { }, "Terminer"),
+                BuildPage("Étape 3/3 - Installer Vidéo Continuum", "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n\nMises à jour automatiques. Un souci ? \"Signaler un problème\" dans le panneau.", "install.png", "Rouvrir la page", () => { }, "Terminer"),
             };
             for (int i = 0; i < forms.Length; i++)
             {

@@ -1,5 +1,5 @@
 /**
- * Vidéo_Continuum - collecteur d'incidents (bouton "Signaler un probleme"
+ * Vidéo Continuum - collecteur d'incidents (bouton "Signaler un probleme"
  * du userscript). Meme principe que l'assistant Diablo IV
  * (E:\DiabloIV-Assistant\google-apps-script\feedback-collector.gs), mais
  * un deploiement SEPARE : on ne touche pas a celui de Diablo, qui marche.
@@ -64,7 +64,7 @@ function doPost(e) {
 }
 
 function doGet() {
-  return ContentService.createTextOutput("Vidéo_Continuum - endpoint incidents OK");
+  return ContentService.createTextOutput("Vidéo Continuum - endpoint incidents OK");
 }
 
 function checkAndConsumeQuota() {

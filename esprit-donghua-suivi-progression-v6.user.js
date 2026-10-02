@@ -1399,9 +1399,9 @@
                 JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>';
             return '<!doctype html><html><head><meta charset="utf-8">' +
                 '<meta name="viewport" content="width=device-width, initial-scale=1">' +
-                '<title>Ma progression - Vidéo_Continuum</title>' +
+                '<title>Ma progression - Vidéo Continuum</title>' +
                 '<style>body{font-family:Arial,sans-serif;background:#0d0d12;color:#eee;padding:20px;} a{color:#03d0fc;} li{margin-bottom:12px;font-size:15px;} h2{color:#03d0fc;font-size:16px;border-bottom:1px solid #333;padding-bottom:4px;}</style>' +
-                '</head><body><h1>Ma progression - Vidéo_Continuum</h1>' + items + dataBlock + '</body></html>';
+                '</head><body><h1>Ma progression - Vidéo Continuum</h1>' + items + dataBlock + '</body></html>';
         }
 
         function downloadHtml(filename) {

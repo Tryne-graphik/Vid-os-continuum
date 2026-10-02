@@ -11,7 +11,7 @@ reste dans `git log -p -- HISTORIQUE.md`.
 
 ## Fichiers actuels
 
-- `esprit-donghua-suivi-progression-v6.user.js` (v6.14, affiché "Vidéo_Continuum",
+- `esprit-donghua-suivi-progression-v6.user.js` (v6.14, affiché "Vidéo Continuum",
   `@name` inchangé) — script réellement utilisé au quotidien. Couvre
   esprit-donghua.xyz/Odysee, animoflix.to (sibnet), anime-sama.to (ansembed, sibnet
   en secours). Mise à jour auto via `@updateURL` (dépôt GitHub public).
@@ -530,3 +530,16 @@ Titre centré "Vidéo Continuum" (sans le _), 13 → 15 px ; version sur la mêm
 en jaune `#ffd400`, 10 → 12 px. Appliqué au panneau de page et au calque plein
 écran. Le titre de l'export HTML garde "Vidéo_Continuum". Vérifié par capture
 d'écran (Playwright).
+
+### 2026-10-02 (suite 3) — nom affiché "Vidéo Continuum" partout (sans _)
+
+Demande de l'utilisateur : plus de "_" nulle part. Remplacé dans le script (titre
+de l'export HTML), README, `installateur/Program.cs` (titres, fiche d'identité),
+`incidents-collector.gs` + copie Bureau (commentaire + texte de réponse GET — **pas
+besoin de redéployer**, rien de fonctionnel). `@name`/fichier/dépôt toujours
+inchangés (même raison qu'en v6.11).
+Installateur recompilé (version 6.17.0.0) → **`Vidéo-Continuum-Installateur.exe`**,
+sha256 `b0677633…4462`. Lancé une fois pour vérifier : fenêtre "Installateur Vidéo
+Continuum", pas de blocage Bitdefender. Copie sur le Bureau ; l'ancien exe du Bureau
+(6.11) a été supprimé. Toujours pas commité dans `installateur/` (l'ancien exe
+verrouillé y est encore) — à faire avec le nouveau nom.
