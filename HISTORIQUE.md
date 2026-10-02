@@ -11,15 +11,16 @@ reste dans `git log -p -- HISTORIQUE.md`.
 
 ## Fichiers actuels
 
-- `esprit-donghua-suivi-progression-v6.user.js` (v6.5, "Anime Tracker Continuum") —
-  script réellement utilisé au quotidien. Couvre esprit-donghua.xyz/Odysee,
-  animoflix.to, anime-sama.to (hébergeur vidéo : sibnet uniquement pour l'instant).
+- `esprit-donghua-suivi-progression-v6.user.js` (v6.14, affiché "Vidéo_Continuum",
+  `@name` inchangé) — script réellement utilisé au quotidien. Couvre
+  esprit-donghua.xyz/Odysee, animoflix.to (sibnet), anime-sama.to (ansembed, sibnet
+  en secours). Mise à jour auto via `@updateURL` (dépôt GitHub public).
 - `anime-tracker-generique.user.js` (v1.0) — chantier parallèle : tracker générique
   par reconnaissance AniList, sans dépendance à la structure d'un site précis. Créé
   le 25/09, **jamais testé dans un vrai navigateur**.
-- `installateur/EspritDonghuaInstaller.exe` + `Program.cs` — installeur console C#
-  (ouvre la page Tampermonkey du navigateur choisi puis le `.user.js` local). Cible
-  en dur v6 ; à repointer vers la version générique une fois celle-ci validée.
+- `installateur/Program.cs` + `guide/` — installateur WinForms illustré (v6.11),
+  ouvre la page Tampermonkey du navigateur choisi puis l'URL raw GitHub du script.
+  Exe propre (6.11.0.0) sur le Bureau, pas encore commité (voir "à reprendre").
 - Anciens fichiers gardés intacts sur le disque comme filets de sécurité, désactivés
   dans Tampermonkey : `esprit-donghua-suivi-progression.user.js` (v2.6),
   `esprit-donghua-suivi-progression-v3.user.js`, `...-v4.user.js`.
@@ -32,11 +33,12 @@ reste dans `git log -p -- HISTORIQUE.md`.
 
 ## Points non testés / non résolus à ce jour (priorité à la reprise)
 
-- **v6.2 à v6.5** (bouton "Ouvrir sur Odysee", titre "Video Continuum" au topbar,
-  lecteur YouTube de secours manuel par épisode, playlist YouTube automatique par
-  chaîne associée) : RIEN testé dans un vrai navigateur depuis leur écriture le
-  26/09 — ni le lien manuel, ni l'association de chaîne, ni la résolution de
-  playlist, ni la configuration de la clé API YouTube via le menu Tampermonkey.
+- **Secours YouTube (v6.4/v6.5)** : la v6.5 a été utilisée en profondeur le 01/10,
+  mais le lien YouTube manuel, l'association de chaîne/playlist et la clé API n'ont
+  pas été explicitement validés — jugés "situationnels" par l'utilisateur, basse
+  priorité.
+- **Reprise de position (v6.14)** : vérifiée dans Chrome (Playwright) seulement, pas
+  encore en usage réel dans Tampermonkey.
 - **Installateur C#** : l'ajout d'Opera a été testé avec succès ; le flux complet
   avec les autres navigateurs (Chrome/Firefox/Edge) n'a pas été revérifié
   récemment.
@@ -433,3 +435,43 @@ passées en 6.12.
 - Plus tard : version générique (`anime-tracker-generique.user.js`, v1.0 non
   testée) avant toute présentation publique ; vitrine GitHub Pages ; double
   authentification GitHub avant partage public.
+
+### 2026-10-01 (suite 7) — v6.13 : plus de lecture en double sur anime-sama (`f45c55c`)
+
+Rattrapé le 02/10 depuis `git log` (non journalisé sur le moment).
+- anime-sama charge désormais lui-même ansembed dans `#playerDF` → notre clic auto
+  y lançait une **2e lecture en arrière-plan**. Le script injecté ne s'active plus
+  que si `window.name === 'continuum-player'` (notre iframe) ; `#playerDF` vidé au
+  lancement comme les autres lecteurs natifs.
+- Signalement d'incident : requête `anonymous: true` (sans cookies Google), erreur
+  détaillée affichée + log console. **Vraie cause du "réponse serveur inattendue"** :
+  l'Apps Script redéployé contenait `SHEET_ID = "PASTE_YOUR_GOOGLE_SHEET_ID_HERE"`
+  (copie avec le marqueur collée). Une erreur Apps Script = page HTML en HTTP 200 →
+  diagnostiquer par un vrai POST (bon secret) et chercher "Exception:" dans le HTML.
+  Les copies `.gs` du dépôt/Bureau gardent le marqueur exprès (dépôt public) :
+  **toujours rappeler de remettre l'ID à chaque redéploiement.**
+
+### 2026-10-01 (suite 8) — v6.14 : reprise à la position où on s'était arrêté (`21f8fb9`)
+
+Rattrapé le 02/10 depuis `git log` (non journalisé sur le moment).
+- Le lecteur injecté envoie sa position (`position`, t + durée) toutes les 5 s.
+- Stockage `resumePositions` : `{ [site::série]: { ep, t } }`, **une seule position
+  par série** (écrasée d'un épisode à l'autre, ne grossit pas). Ignorée sous 30 s ;
+  effacée dans les 2 dernières minutes, à l'outro et à `ended`.
+- `resumeAt` transmis dans la config du lecteur si l'épisode correspond ; appliqué
+  **une seule fois par chargement** (la config est renvoyée à chaque réaffichage du
+  calque et ne doit pas faire reculer la lecture).
+- `positionArmed` : faux entre le changement de `src` et le `ready` du nouveau
+  lecteur, sinon l'ancien lecteur pouvait encore envoyer sa position, attribuée à
+  tort au nouvel épisode (même `contentWindow`).
+- **Testé** dans Chrome (Playwright) sur Dragon Ball Z Kai format films (1h28) :
+  sauvegarde à 3005 s, rechargement → reprise à ~3005 s. Pas encore en usage réel.
+- Détail : les commentaires du code disent "(v6.13)" pour cette fonction alors
+  qu'elle est arrivée en v6.14.
+
+### 2026-10-02 — reprise
+
+État : v6.14 poussée (`master` = `origin/master`). L'ancien exe signalé par
+Bitdefender (0.0.0.0, sha `b48621a8…`) est **toujours** dans `installateur/`, non
+suivi. Liste "à reprendre" du 01/10 toujours valable (retours de l'ami, exe propre
+à committer, ancien déploiement Apps Script à archiver, lignes `[TEST]`).
