@@ -690,3 +690,25 @@ sites. Sites de test fournis : **french-anime.com** et **myfluneo.eu**.
   l'appui souris (`pointerdown`) → le 1er clic sur nos boutons est perdu, le 2e
   passe. Contournement possible : petit écouteur placé avant les scripts du site
   (`@run-at document-start`) — proposé, pas fait.
+
+### 2026-10-02 (suite 9) — tentative "bloquer les pop-ups de pub" : abandonnée (rien publié)
+
+Objectif : que la pub de french-anime (onglet ouvert dès l'appui souris) ne vole
+plus le 1er clic sur nos boutons. Essayé (v6.23 locale, **annulée**, v6.22 reste
+en ligne) : `@run-at document-start` + `whenDomReady()` pour le reste ;
+neutralisation dans le contexte de la page de `window.open` (d'abord `null`, puis
+fausse fenêtre), de `HTMLAnchorElement.prototype.click` (liens `_blank` étrangers)
+et de `contentWindow.open` des iframes vides.
+Résultat mesuré (vrais clics Playwright) : **identique avec ou sans blocage** — les
+2 premiers clics sont avalés, le 3e passe, des onglets s'ouvrent quand même et
+aucun appel bloqué n'est journalisé : la régie (`kr.sayyidvanglo.com/…`, script
+"popunder") passe par un autre chemin et intercepte les clics (même un `.click()`
+JS n'atteint pas le bouton). Avec `window.open → null`, c'était pire (elle avalait
+tout pour réessayer). Conclusion : pas de gain, du risque (démarrage anticipé)
+→ tout retiré.
+Domaines : seul `finisheddaysflamboyant.com` est dans EasyList ;
+`sayyidvanglo.com`/`mudeeepigne.cyou` ne sont dans aucune des listes vérifiées
+(uAssets filters/badware, EasyList, AdGuard French) — domaines tournants.
+Piste restante si besoin un jour : mettre nos commandes dans une iframe
+(about:blank) pour que les écouteurs de la page ne voient plus nos clics — gros
+remaniement. En pratique : uBlock Origin Lite en mode "Complet" pour ce site seul.
