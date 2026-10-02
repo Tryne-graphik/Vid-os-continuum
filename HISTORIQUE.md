@@ -543,3 +543,37 @@ sha256 `b0677633…4462`. Lancé une fois pour vérifier : fenêtre "Installateu
 Continuum", pas de blocage Bitdefender. Copie sur le Bureau ; l'ancien exe du Bureau
 (6.11) a été supprimé. Toujours pas commité dans `installateur/` (l'ancien exe
 verrouillé y est encore) — à faire avec le nouveau nom.
+
+### 2026-10-02 (suite 4) — v6.18 : bouton Fiche, AniSkip, encart Nouveautés
+
+- **Test AniSkip préalable** (api.aniskip.com, id MAL via AniList) : Bleach (MAL
+  269) opening trouvé sur 8/8 épisodes testés, ending 5/8, résumé sur 3 ; temps qui
+  varient d'un épisode à l'autre (ép. 366 : opening à 6:34) ; Clevatess S1 (59205)
+  1/4, S2 (62513) 2/3. Le paramètre `episodeLength` filtre côté serveur à ~±20 s et
+  choisit le relevé le plus proche → on passe la **vraie durée** de la vidéo.
+- **"ℹ Fiche" sur les vignettes anime-sama** (`.card-base` avec lien
+  `/catalogue/<slug>/...`) → page de l'anime `/catalogue/<slug>/` (synopsis,
+  genres). Le clic normal reprend toujours l'épisode. Cause du "ça ouvre direct
+  l'épisode" : les vignettes du site mènent à la page de saison, où notre "Lecteur
+  auto" lance l'épisode. Cartes générées en JS par le site → MutationObserver.
+- **AniSkip** : association auto série → AniList (1er résultat de recherche ; nom
+  + " N" pour `saisonN` > 1), stockée dans `aniLinks` ; "Changer" dans la ligne
+  AniSkip du lecteur (recherche + choix numéroté, 0 = désactiver pour cet anime).
+  Requête au 1er message `position` du lecteur (durée réelle connue). Opening +
+  résumé collé (< 30 s) = plage intro ; ending = outro, avec fin si > 10 s de contenu
+  après. **Réglages manuels prioritaires par paire** (intro / outro) : il faut les
+  vider dans Configuration pour laisser AniSkip faire.
+- **Encart "🆕 Nouveautés"** (panneau + lecteur) : changelog 6.14→6.18, ouvert
+  d'office avec "(nouveau !)" tant que la version n'a pas été vue (clic sur le
+  titre → `lastSeenVersion`). Piège évité : l'événement `toggle` part aussi à
+  l'affichage d'un `<details open>`, ce qui marquait "vu" sans clic.
+- `@connect` ajoutés : `graphql.anilist.co`, `api.aniskip.com`.
+- **Testé** (Playwright, shims GM) : 194 boutons Fiche sur l'accueil, clic → bonne
+  page ; Bleach ép. 2 et 121 reconnus (MAL 269), ép. 121 : "intro 1:30-3:33 (opening
+  + résumé fusionnés), outro 22:00", saut d'intro et toast "épisode suivant" OK.
+  Le lecteur ansembed a été remplacé par une fausse `<video>` pour le test.
+- **Piège du banc de test** (pas un bug du script) : le navigateur Playwright
+  plantait (onglet fermé, navigateur déconnecté) à chaque **sauvegarde automatique
+  du jour** (téléchargement) → pré-remplir `lastAutoExport` = date du jour dans
+  les shims. Aussi : ne pas appeler `addInitScript` deux fois sur le même onglet
+  (script injecté en double = deux calques).

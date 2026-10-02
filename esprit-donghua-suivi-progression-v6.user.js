@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.17
+// @version      6.18
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -20,6 +20,8 @@
 // @connect      www.googleapis.com
 // @connect      script.google.com
 // @connect      script.googleusercontent.com
+// @connect      graphql.anilist.co
+// @connect      api.aniskip.com
 // @updateURL    https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // ==/UserScript==
@@ -1662,6 +1664,33 @@
                 '<span id="' + prefix + '-fb-note" style="font-size:11px;color:' + incidentNote.color + ';">' + incidentNote.text + '</span>', open);
         }
 
+        // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
+        // que la version installee n'a pas ete "vue" (ouverture de l'encart).
+        const CHANGELOG = [
+            ['6.18', ['Bouton \u2139 Fiche sur les vignettes d\'Anime-Sama : ouvre la page de l\'anime (synopsis, genres) au lieu de l\'episode.',
+                'AniSkip : intro, resume et generique de fin sautes automatiquement quand la communaute AniSkip a les temps de l\'episode (ligne "AniSkip" dans le lecteur, "Changer" si le mauvais anime est reconnu). Tes reglages manuels restent prioritaires : vide-les dans Configuration pour laisser AniSkip faire.',
+                'Cet encart Nouveautes.']],
+            ['6.17', ['Titre "Video Continuum" centre, version en jaune.']],
+            ['6.16', ['Bouton "\u2713 Tout vu" dans la fenetre de suivi d\'un site.']],
+            ['6.15', ['Intro et outro avec debut ET fin (resume avant le generique, episode qui continue apres le generique de fin).',
+                'Croix \u2715 pour abandonner le suivi d\'un anime.',
+                'Encadre "Deja vu jusqu\'a l\'ep. N sur un autre site".',
+                'Panneau descendu pour laisser voir le haut du site.']],
+            ['6.14', ['Reprise de la lecture la ou tu t\'etais arrete.']]
+        ];
+        function currentScriptVersion() { return (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?'; }
+        function newsSectionHtml(prevOpen) {
+            const unseen = GM_getValue('lastSeenVersion', '') !== currentScriptVersion();
+            const body = CHANGELOG.map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
+                items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('');
+            return collapsibleSection('nouveautes', '&#127381; Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(nouveau !)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen);
+        }
+        function bindNewsSection(container) {
+            const d = container.querySelector('details[data-sec="nouveautes"]');
+            // clic sur le titre seulement : 'toggle' part aussi a l'affichage d'un encart deja ouvert.
+            if (d) d.querySelector('summary').addEventListener('click', () => GM_setValue('lastSeenVersion', currentScriptVersion()));
+        }
+
         function bindIncidentSection(container, prefix) {
             const body = container.querySelector('#' + prefix + '-fb-body');
             const sendBtn = container.querySelector('#' + prefix + '-fb-send');
@@ -1741,6 +1770,7 @@
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
                 '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
+                '<div id="ed-aniskip" style="display:none;font-size:10px;color:#aaa;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
@@ -1781,6 +1811,7 @@
                     '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser l\'acces au fichier</button>' +
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
                 incidentSectionHtml('ed', false) +
+                newsSectionHtml(false) +
                 '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>';
             overlay.appendChild(topbar);
 
@@ -1818,6 +1849,7 @@
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
             bindIncidentSection(topbar, 'ed');
+            bindNewsSection(topbar);
 
             const gotoInput = topbar.querySelector('#ed-goto-input');
             const gotoBtn = topbar.querySelector('#ed-goto-btn');
@@ -1980,6 +2012,7 @@
             if (type === 'ready') { positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed) {
                 const t = Number(event.data.t), d = Number(event.data.d);
+                if (isFinite(d) && d > 0) requestAniSkip(d);
                 // < 30s : rien a reprendre ; dernieres 2 min : considere fini.
                 if (t >= 30 && (!isFinite(d) || d - t > 120)) setResumePosition(currentEpisode, t);
                 else if (isFinite(d) && d - t <= 120) setResumePosition(currentEpisode, null);
@@ -2009,8 +2042,127 @@
             }
         });
 
+        // ---- AniSkip (v6.18) ----
+        // Temps d'opening/resume/ending communautaires (api.aniskip.com), par
+        // episode. Anime associe automatiquement via AniList (1er resultat de
+        // recherche, "Changer" pour corriger). Demande faite au 1er message
+        // 'position' du lecteur pour passer la VRAIE duree : AniSkip ne garde
+        // alors que les releves a ~20s pres, ce qui ecarte un mauvais anime ou
+        // une autre version de la video. Reglages manuels prioritaires (par
+        // paire intro / outro).
+        let aniSkip = null; // { key, ep, requested, link, cfg, note }
+        function loadAniLinks() { return GM_getValue('aniLinks', {}); }
+        function setAniLink(key, link) { const all = loadAniLinks(); all[key] = link; GM_setValue('aniLinks', all); }
+        function aniSearchQuery(info) {
+            const season = ((info.seriesUrl || '').match(/\/saison(\d+)/i) || [])[1];
+            const name = displayName(info.seriesName) || '';
+            return season && season !== '1' ? name + ' ' + season : name;
+        }
+        function anilistSearch(q) {
+            const query = 'query($q:String){Page(perPage:6){media(search:$q,type:ANIME){idMal seasonYear title{romaji english}}}}';
+            return gmRequest({ method: 'POST', url: 'https://graphql.anilist.co', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.stringify({ query: query, variables: { q: q } }), anonymous: true, timeout: 15000 })
+                .then((res) => (JSON.parse(res.responseText).data.Page.media || []).filter((m) => m.idMal)
+                    .map((m) => ({ idMal: m.idMal, title: m.title.romaji || m.title.english, year: m.seasonYear })));
+        }
+        function resolveAniLink(key, info) {
+            const known = loadAniLinks()[key];
+            if (known) return Promise.resolve(known);
+            return anilistSearch(aniSearchQuery(info)).then((list) => {
+                const link = list[0] ? { idMal: list[0].idMal, title: list[0].title } : { idMal: null };
+                setAniLink(key, link);
+                return link;
+            });
+        }
+        // Resultats AniSkip -> paires intro/outro du lecteur. Le resume
+        // colle a l'opening (ecart < 30s) est saute avec lui.
+        function aniSkipToConfig(results) {
+            const iv = (types) => results.filter((r) => types.indexOf(r.skipType) !== -1).map((r) => ({ s: r.interval.startTime, e: r.interval.endTime, len: r.episodeLength }));
+            const cfg = {};
+            const op = iv(['op', 'mixed-op'])[0];
+            if (op) {
+                let s = op.s, e = op.e;
+                iv(['recap']).forEach((r) => { if (r.s <= e + 30 && r.e >= s - 30) { s = Math.min(s, r.s); e = Math.max(e, r.e); } });
+                cfg.introStart = s < 5 ? null : Math.round(s);
+                cfg.introEnd = Math.round(e);
+            }
+            const ed = iv(['ed', 'mixed-ed'])[0];
+            if (ed) {
+                cfg.outroStart = Math.round(ed.s);
+                // Contenu apres le generique (> 10s) : on le saute et on garde la suite.
+                cfg.outroEnd = ed.len - ed.e > 10 ? Math.round(ed.e) : null;
+            }
+            return cfg;
+        }
+        function describeAniSkip(cfg) {
+            const parts = [];
+            if (cfg.introEnd) parts.push('intro ' + formatTimecode(cfg.introStart || 0) + '-' + formatTimecode(cfg.introEnd));
+            if (cfg.outroStart) parts.push('outro ' + formatTimecode(cfg.outroStart) + (cfg.outroEnd ? '-' + formatTimecode(cfg.outroEnd) : ''));
+            return parts.join(', ');
+        }
+        function renderAniSkipStatus() {
+            const el = overlayEls && overlayEls.overlay.querySelector('#ed-aniskip');
+            if (!el) return;
+            if (!aniSkip || !currentEpisode || aniSkip.key !== storageKey(currentEpisode)) { el.style.display = 'none'; return; }
+            const io = getIntroOutroForKey(aniSkip.key);
+            const manual = io.introEnd || io.outroStart ? ' <span style="color:#888;">(tes reglages manuels passent avant)</span>' : '';
+            el.innerHTML = 'AniSkip : ' + escapeHtml(aniSkip.note || 'en attente du lecteur...') + manual +
+                ' <a href="#" id="ed-aniskip-change" style="color:#03d0fc;">Changer</a>';
+            el.style.display = 'block';
+            el.querySelector('#ed-aniskip-change').addEventListener('click', (ev) => { ev.preventDefault(); changeAniLink(); });
+        }
+        function requestAniSkip(duration) {
+            const st = aniSkip;
+            if (!st || st.requested || !currentEpisode) return;
+            st.requested = true;
+            st.duration = duration;
+            const ep = Number(st.ep);
+            if (!ep) { st.note = 'numero d\'episode inconnu'; renderAniSkipStatus(); return; }
+            resolveAniLink(st.key, currentEpisode).then((link) => {
+                st.link = link;
+                if (!link.idMal) { st.note = link.off ? 'desactive pour cet anime' : 'anime introuvable sur AniList'; return null; }
+                st.note = link.title + ' - recherche...';
+                renderAniSkipStatus();
+                const url = 'https://api.aniskip.com/v2/skip-times/' + link.idMal + '/' + ep + '?types=op&types=ed&types=recap&types=mixed-op&types=mixed-ed&episodeLength=' + Math.round(duration || 0);
+                return gmRequest({ method: 'GET', url: url, anonymous: true, timeout: 15000 }).then((res) => {
+                    const data = JSON.parse(res.responseText);
+                    st.cfg = aniSkipToConfig(data.found ? data.results : []);
+                    const desc = describeAniSkip(st.cfg);
+                    st.note = link.title + ' - ' + (desc || 'pas de donnees pour cet episode');
+                });
+            }).catch((e) => { st.note = 'erreur reseau'; console.log('[AnimeTracker v6] AniSkip', e); })
+                .then(() => {
+                    if (aniSkip !== st) return;
+                    renderAniSkipStatus();
+                    if (st.cfg) applyUpdatedConfigIfCurrent(st.key);
+                });
+        }
+        function changeAniLink() {
+            if (!currentEpisode || !aniSkip) return;
+            const key = aniSkip.key;
+            const q = prompt('Rechercher l\'anime sur AniList (pour AniSkip) :', aniSearchQuery(currentEpisode));
+            if (q === null) return;
+            anilistSearch(q).then((list) => {
+                const menu = list.map((m, i) => (i + 1) + '. ' + m.title + (m.year ? ' (' + m.year + ')' : '')).join('\n');
+                const pick = prompt((menu || 'Aucun resultat.') + '\n\n0 = desactiver AniSkip pour cet anime\nNumero :', list.length ? '1' : '0');
+                if (pick === null) return;
+                const n = parseInt(pick, 10);
+                if (n === 0) setAniLink(key, { idMal: null, off: true });
+                else if (list[n - 1]) setAniLink(key, { idMal: list[n - 1].idMal, title: list[n - 1].title });
+                else return;
+                const duration = aniSkip.duration;
+                aniSkip = { key: key, ep: aniSkip.ep };
+                applyUpdatedConfigIfCurrent(key);
+                requestAniSkip(duration);
+            }).catch(() => alert('Recherche AniList impossible (reseau).'));
+        }
+
         function applyRuntimeConfig(key) {
-            const introOutro = getIntroOutroForKey(key);
+            const manualIo = getIntroOutroForKey(key);
+            const auto = aniSkip && aniSkip.key === key && aniSkip.cfg ? aniSkip.cfg : {};
+            // Par paire : une intro (ou outro) reglee a la main remplace celle d'AniSkip.
+            const introOutro = Object.assign({},
+                manualIo.introEnd ? { introStart: manualIo.introStart, introEnd: manualIo.introEnd } : { introStart: auto.introStart, introEnd: auto.introEnd },
+                manualIo.outroStart ? { outroStart: manualIo.outroStart, outroEnd: manualIo.outroEnd } : { outroStart: auto.outroStart, outroEnd: auto.outroEnd });
             currentConfig = {
                 introStart: introOutro.introStart || null,
                 introEnd: introOutro.introEnd || null,
@@ -2097,6 +2249,8 @@
             currentEpisode = info;
             recordEpisodeProgress(info);
             renderCrossSiteHint(info);
+            aniSkip = { key: storageKey(info), ep: info.episodeNumber };
+            renderAniSkipStatus();
             applyRuntimeConfig(storageKey(info));
             outroSignalSent = false;
             positionArmed = false;
@@ -2811,6 +2965,7 @@
                 '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
                 prevOpen.sauvegarde);
             html += incidentSectionHtml('ep', prevOpen.incident);
+            html += newsSectionHtml(prevOpen.nouveautes);
             html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
 
             panel.innerHTML = html;
@@ -2833,6 +2988,7 @@
 
             bindTrackingSummary(panel);
             bindIncidentSection(panel, 'ep');
+            bindNewsSection(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
                 checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';
@@ -2939,6 +3095,34 @@
             const key = prompt('Cle API YouTube Data v3 (console.cloud.google.com > API et services > Identifiants) :', current);
             if (key !== null) setYoutubeApiKey(key.trim());
         });
+
+        // Vignettes anime-sama (v6.18) : elles menent a la page de saison, ou
+        // "Lecteur auto" lance l'episode. Petit bouton "Fiche" vers la page
+        // de l'anime (/catalogue/<slug>/ : synopsis, genres). Cartes
+        // generees en JS par le site -> observateur.
+        if (site.id === 'anime-sama') {
+            const addFicheButtons = () => {
+                document.querySelectorAll('.card-base a[href*="/catalogue/"]').forEach((a) => {
+                    const card = a.closest('.card-base');
+                    if (!card || card.querySelector('.ep-fiche-btn')) return;
+                    const m = a.href.match(/^(https?:\/\/[^/]+\/catalogue\/[^/]+\/)[^/]+/);
+                    if (!m) return;
+                    const btn = document.createElement('span');
+                    btn.className = 'ep-fiche-btn';
+                    btn.title = 'Page de l\'anime (synopsis, genres)';
+                    btn.textContent = '\u2139 Fiche';
+                    btn.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:5;background:rgba(3,208,252,.9);color:#000;font:bold 11px Arial,sans-serif;padding:3px 7px;border-radius:4px;cursor:pointer;';
+                    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); location.href = m[1]; });
+                    const host = card.querySelector('.card-image-container') || card;
+                    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                    host.appendChild(btn);
+                });
+            };
+            addFicheButtons();
+            let ficheTimer = null;
+            new MutationObserver(() => { clearTimeout(ficheTimer); ficheTimer = setTimeout(addFicheButtons, 300); })
+                .observe(document.body, { childList: true, subtree: true });
+        }
 
         const liveInfoPromise = getLiveEpisodeInfo();
         liveInfoPromise.then((liveInfo) => {
