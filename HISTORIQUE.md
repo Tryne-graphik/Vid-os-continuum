@@ -827,3 +827,18 @@ anglais de la chaîne (traduisibles).
   sous-titres FR ("Dois-je lui dire ?") ; page rouverte → directement YouTube ;
   aller-à 210 → "EP 201 - EP 250" à 3812 s (9 × 424) ; passage de limite → suivi
   ép. 211.
+
+### 2026-10-02 (suite 15) — v6.28 : "Revenir à la source du site" réparé
+
+Signalé : après le retour au site, "Suivant" → alerte "Aucun épisode suivant
+détecté". Cause : on rechargeait l'épisode tel qu'il était en mode YouTube (copie
+sans liens suivant/précédent ni lecteur du site — esprit-donghua numérote ses pages
+"S3 E93" ≠ n° d'épisode). Corrigé :
+- sites "une page par épisode" : **la page est re-téléchargée et relue** (la page
+  affichée a son lecteur neutralisé en about:blank par notre script) → vrai
+  lecteur + vrais liens suivant/précédent ;
+- **tous les liens YouTube mémorisés de la série sont oubliés** (sinon l'épisode de
+  la page repartait sur YouTube).
+**Testé** (Playwright) : YouTube → aller à 380 → retour au site → épisode de la
+page (373) sur Odysee → Suivant → 374, sans alerte. Note : on revient à l'épisode
+de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur YouTube.

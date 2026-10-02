@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.27
+// @version      6.28
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1619,7 +1619,25 @@
         function leaveYoutubeMode() {
             if (!currentEpisode) return;
             setYoutubeMode(currentEpisode, false);
-            clearYoutubeOverride(currentEpisode);
+            // Oublie tous les liens YouTube memorises de la serie (sinon l'episode
+            // de la page relue repartait sur YouTube).
+            const prefix = storageKey(currentEpisode) + '::';
+            const overrides = loadYoutubeOverrides();
+            Object.keys(overrides).forEach((k) => { if (k.indexOf(prefix) === 0) delete overrides[k]; });
+            saveYoutubeOverrides(overrides);
+            ytActive = false;
+            // Sites "une page par episode" : l'episode suivi sur YouTube n'a ni
+            // lecteur ni liens suivant/precedent du site -> on relit la vraie
+            // page (sinon "Aucun episode suivant detecte", signale v6.27).
+            if (currentEpisode.navStyle === 'page') {
+                setStatus('Retour a la source du site...');
+                // Page re-telechargee : dans la page affichee, notre script a deja
+                // neutralise le lecteur du site (about:blank).
+                fetchPageHtml(location.href).then((html) => site.extract(new DOMParser().parseFromString(html, 'text/html'), location.href))
+                    .then((info) => { if (info) applyLoadedEpisode(info, false, true); else setStatus('Page de l\'episode illisible, recharge la page (F5).'); })
+                    .catch(() => setStatus('Page de l\'episode illisible, recharge la page (F5).'));
+                return;
+            }
             applyLoadedEpisode(currentEpisode, false, true);
         }
 
@@ -2001,6 +2019,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.28', ['"Revenir a la source du site" relit la page de l\'episode : Suivant / Precedent remarchent (avant : "Aucun episode suivant detecte").']],
             ['6.27', ['YouTube sans cle API : "Lire sur YouTube" (ou bouton "Trouver sur YouTube") demande une seule fois le lien d\'une video de la serie, puis trouve l\'episode, meme dans une compilation de 10 ou 20 episodes, avec les sous-titres traduits en francais.',
                 'Quand la video cale chez l\'hebergeur, bascule automatique sur YouTube si une chaine est associee ; la serie reste sur YouTube ensuite ("Revenir a la source du site" pour annuler). Le suivi avance tout seul pendant une compilation.']],
             ['6.26', ['Si la video cale chez l\'hebergeur (fichier trop lourd ou mal prepare, cas de certaines chaines Odysee pour Wan Jie Du Zun), un encadre l\'explique et propose : Reessayer, Chercher sur YouTube, Rechercher sur Google, Episode suivant.']],
