@@ -598,3 +598,16 @@ verrouillé y est encore) — à faire avec le nouveau nom.
   "Reprendre" → nouvel onglet en gardant la page, mode "Nouvelle fenêtre"
   enregistré puis lien Odysee ouvert en fenêtre. Sur anime-sama : section Sites
   dans le panneau, pas de bouton ▶ (le panneau suffit).
+
+### 2026-10-02 (suite 6) — v6.20 : animoflix de nouveau lisible (ansembed)
+
+Signalé : "le lecteur ne fonctionne pas sur animoflix". Cause : Sibnet a fermé
+(bandeau "SIBNET HS" sur anime-sama) et animoflix ne propose plus que des lecteurs
+**ansembed** (`#epLecteurSelect`, `data-host="ansembed.net"` ×2). Notre extracteur
+animoflix ne prenait que `video.sibnet.ru` → `embedSrc` null → "aucun lecteur
+compatible". Corrigé : ansembed en priorité, sibnet en secours (même ordre
+qu'anime-sama). Le pilote ansembed et les origines `postMessage` étaient déjà
+génériques, rien d'autre à toucher. Sélecteurs de page (nom de série, numéro,
+navigation) vérifiés inchangés.
+**Testé** (Playwright, vrai lecteur ansembed cette fois) : Thunder 3 ép. 11,
+vidéo qui avance (durée 23:33), ligne AniSkip affichée ("pas de données").

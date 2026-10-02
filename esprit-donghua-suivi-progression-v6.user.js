@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.19
+// @version      6.20
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -702,12 +702,12 @@
         extract(doc, pageUrl) {
             const lecteurSelect = doc.getElementById('epLecteurSelect');
             if (!lecteurSelect) return Promise.resolve(null);
-            // v1 : uniquement l'hebergeur sibnet (demande explicite) - si cet
-            // episode n'y est pas disponible (seulement ansembed/sendvid),
-            // embedSrc reste null et l'appelant renonce a prendre le controle
-            // (le lecteur natif du site continue de fonctionner normalement).
-            const sibnetOption = Array.from(lecteurSelect.querySelectorAll('option')).find((o) => o.getAttribute('data-host') === 'video.sibnet.ru');
-            const embedSrc = sibnetOption ? sibnetOption.getAttribute('value') : null;
+            // ansembed d'abord (v6.20 : sibnet ferme, animoflix n'a plus que
+            // ansembed), sibnet en secours. Aucun des deux (ex. sendvid seul) :
+            // embedSrc reste null et le lecteur natif du site reste utilisable.
+            const options = Array.from(lecteurSelect.querySelectorAll('option'));
+            const hostOption = ['ansembed.net', 'video.sibnet.ru'].map((h) => options.find((o) => o.getAttribute('data-host') === h)).find(Boolean);
+            const embedSrc = hostOption ? hostOption.getAttribute('value') : null;
 
             const seriesLink = doc.querySelector('a.ep-anime-link');
             const seriesUrl = seriesLink && seriesLink.getAttribute('href') ? resolveUrl(seriesLink.getAttribute('href'), pageUrl) : null;
@@ -1782,6 +1782,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.20', ['Animoflix : le lecteur fonctionne de nouveau (le site est passe de Sibnet, ferme, a ansembed).']],
             ['6.19', ['Section "Sites" : un bouton par site gere (Esprit Donghua, Animoflix, Anime-Sama, Odysee) + choix "Ouvrir dans" : nouvel onglet, nouvelle fenetre ou cet onglet.',
                 '"Mes animes" disponible sur TOUS les sites : petit bouton \u25B6 en bas a gauche (ou menu Tampermonkey) qui liste tes animes suivis avec "Reprendre", sans quitter ta page. Le bouton se masque via le menu Tampermonkey.']],
             ['6.18', ['Bouton \u2139 Fiche sur les vignettes d\'Anime-Sama : ouvre la page de l\'anime (synopsis, genres) au lieu de l\'episode.',
