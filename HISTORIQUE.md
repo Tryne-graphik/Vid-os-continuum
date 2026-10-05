@@ -842,3 +842,12 @@ sans liens suivant/précédent ni lecteur du site — esprit-donghua numérote s
 **Testé** (Playwright) : YouTube → aller à 380 → retour au site → épisode de la
 page (373) sur Odysee → Suivant → 374, sans alerte. Note : on revient à l'épisode
 de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur YouTube.
+
+## 2026-10-06 - v6.29 : panneaux alleges, historique, "Aller" corrige
+
+- Panneaux : boutons principaux en haut, filtre + resume par site + "Sites" tout en bas ; titres de menus sur fond gris ; Reglages = Fin intro / Debut outro (reste dans "Plus") ; "Autres sources" = Odysee + YouTube ; AniSkip en 12 px.
+- "Suivre cet anime" = gros bouton (vert "Suivi"), decoche par defaut pour un nouvel anime ; reste suivi si le meme nom est deja suivi sur ce site (saisons anime-sama, variantes Odysee).
+- Historique (GM `watchHistory`, 50 series max, une ligne par serie) : Reprendre / Suivre / croix, doublons entre sites en rouge ; inclus dans l'export/import (bloc `ed-history-backup`).
+- Filtre par defaut "Sites a rattraper" (cle GM `panelSiteFilter2`) ; ligne "doublons" (meme nom normalise sur 2 sites) avec croix (= ne plus suivre).
+- "Aller" : vraie cause = Esprit Donghua numerote l'URL par saison (s5-e17 = Eps 193) -> table numero->URL lue dans `.episodelist` ; zero devant (-e06) ; plus de blocage sur "dernier connu" ; repli sur la page de la serie.
+- Teste en Playwright sur esprit-donghua (Aller 113 et 5, Suivre, Historique, doublons). Pas teste : anime-sama/animoflix/sites ajoutes avec la nouvelle mise en page.

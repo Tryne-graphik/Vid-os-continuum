@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.28
+// @version      6.29
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -718,6 +718,14 @@
                 const match = span ? span.textContent.match(/Eps\s*(\d+)/i) : null;
                 if (link && match) { latestEpisodeNumber = match[1]; latestEpisodeUrl = resolveUrl(link.getAttribute('href'), pageUrl); }
             }
+            // Numero affiche ("Eps 193") -> adresse (s5-e17) : la numerotation de
+            // l'URL repart a chaque saison, "Aller" ne peut pas la deviner (v6.29).
+            const episodeUrlsByNumber = {};
+            doc.querySelectorAll('#singlepisode .episodelist li').forEach((li) => {
+                const a = li.querySelector('a[href]');
+                const m = (li.textContent || '').match(/Eps\s*(\d+)/i);
+                if (a && m) episodeUrlsByNumber[Number(m[1])] = resolveUrl(a.getAttribute('href'), pageUrl);
+            });
 
             if (!seriesUrl) return Promise.resolve(null);
             return Promise.resolve({
@@ -726,14 +734,15 @@
                 seriesUrl: seriesUrl, seriesName: seriesName,
                 episodeLabel: titleEl ? titleEl.textContent.trim() : null,
                 episodeNumber: episodeMeta ? episodeMeta.getAttribute('content') : null,
-                latestEpisodeNumber: latestEpisodeNumber, latestEpisodeUrl: latestEpisodeUrl,
+                latestEpisodeNumber: latestEpisodeNumber, latestEpisodeUrl: latestEpisodeUrl, episodeUrlsByNumber: episodeUrlsByNumber,
                 nextPageUrl: nextLink ? resolveUrl(nextLink, pageUrl) : null,
                 prevPageUrl: prevLink ? resolveUrl(prevLink, pageUrl) : null
             });
         },
         buildEpisodeUrl(currentPageUrl, targetNumber) {
+            // Le site ecrit au moins 2 chiffres : -e06 existe, -e6 = 404.
             const m = currentPageUrl.match(/^(.*-e)(\d+)(\/?)$/i);
-            return m ? m[1] + targetNumber + m[3] : null;
+            return m ? m[1] + String(targetNumber).padStart(2, '0') + m[3] : null;
         }
     };
 
@@ -1652,18 +1661,46 @@
         // colonne du lecteur (un seul reglage, applique partout) - demande
         // par l'utilisateur pour naviguer les animes suivis site par site
         // maintenant que la liste est unifiee. 'all' = pas de filtre.
-        function getSiteFilter() { return GM_getValue('panelSiteFilter', 'all'); }
-        function setSiteFilter(v) { GM_setValue('panelSiteFilter', v); }
-        function matchesSiteFilter(siteId) { const f = getSiteFilter(); return f === 'all' || f === siteId; }
+        // 'behind' (defaut v6.29) : resume limite aux sites avec des animes a rattraper ;
+        // les listes de series restent completes.
+        function getSiteFilter() { return GM_getValue('panelSiteFilter2', 'behind'); }
+        function setSiteFilter(v) { GM_setValue('panelSiteFilter2', v); }
+        function matchesSiteFilter(siteId) { const f = getSiteFilter(); return f === 'all' || f === 'behind' || f === siteId; }
         function buildSiteFilterOptionsHtml() {
             const current = getSiteFilter();
             const opt = (value, label) => '<option value="' + value + '"' + (current === value ? ' selected' : '') + '>' + label + '</option>';
-            return opt('all', 'Tous les sites') + SITES.map((s) => opt(s.id, s.label)).join('');
+            return opt('behind', 'Sites à rattraper') + opt('all', 'Tous les sites') + SITES.map((s) => opt(s.id, s.label)).join('');
         }
 
-        function recordEpisodeProgress(info) {
+        // Historique (v6.29) : une ligne par serie regardee (suivie ou non), 50 max.
+        const HISTORY_MAX = 50;
+        function loadHistory() { return GM_getValue('watchHistory', {}); }
+        function saveHistory(h) {
+            const keys = Object.keys(h).sort((a, b) => String(h[b].watchedAt).localeCompare(String(h[a].watchedAt)));
+            keys.slice(HISTORY_MAX).forEach((k) => delete h[k]);
+            GM_setValue('watchHistory', h);
+        }
+        // Suivie = entree de progression non exclue. Depuis v6.29 un nouvel anime n'est
+        // plus suivi d'office : seulement par le bouton, ou si le meme anime est deja
+        // suivi sur ce site (saison suivante anime-sama, variante de titre Odysee).
+        function isSeriesTracked(key) { return !!loadProgress()[key] && !isSeriesExcluded(key); }
+        function hasTrackedSibling(info, progress) {
+            const norm = normalizeSeriesName(info.seriesName);
+            const excluded = loadExcludedSeries();
+            return Object.keys(progress).some((k) => !excluded[k] && progress[k].site === info.site && normalizeSeriesName(progress[k].seriesName) === norm);
+        }
+
+        function recordEpisodeProgress(info, force) {
             if (!info || !info.seriesUrl || !info.episodeNumber) return;
             const key = storageKey(info);
+            const history = loadHistory();
+            history[key] = {
+                site: info.site, siteLabel: info.siteLabel, siteTag: info.siteTag,
+                seriesName: info.seriesName, seriesUrl: info.seriesUrl,
+                episodeLabel: info.episodeLabel, episodeNumber: info.episodeNumber,
+                episodeUrl: info.resumeUrl, watchedAt: new Date().toISOString()
+            };
+            saveHistory(history);
             if (info.latestEpisodeNumber) latestKnownEpisode[key] = info.latestEpisodeNumber;
             if (info.navStyle === 'page' && info.nextPageUrl) newEpisodes[key] = { seriesName: info.seriesName, site: info.site, url: info.nextPageUrl };
             else if (info.navStyle === 'index' && info.totalEpisodes && info.episodeIndex < info.totalEpisodes - 1) {
@@ -1674,6 +1711,7 @@
             } else delete newEpisodes[key];
             if (isSeriesExcluded(key)) return;
             const progress = loadProgress();
+            if (!progress[key] && !force && !hasTrackedSibling(info, progress)) return;
             progress[key] = {
                 site: info.site, siteLabel: info.siteLabel, siteTag: info.siteTag,
                 seriesName: info.seriesName, seriesUrl: info.seriesUrl,
@@ -1750,7 +1788,9 @@
                 items += '</ul>';
             }
             const dataBlock = '<script type="application/json" id="ed-progress-backup">' +
-                JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>';
+                JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>' +
+                '<script type="application/json" id="ed-history-backup">' +
+                JSON.stringify(Object.keys(loadHistory()).map((k) => loadHistory()[k])).replace(/</g, '\\u003c') + '</' + 'script>';
             return '<!doctype html><html><head><meta charset="utf-8">' +
                 '<meta name="viewport" content="width=device-width, initial-scale=1">' +
                 '<title>Ma progression - Vidéo Continuum</title>' +
@@ -1894,6 +1934,20 @@
                 };
             }).filter(Boolean);
         }
+        function mergeImportedHistory(html) {
+            const el = new DOMParser().parseFromString(html, 'text/html').getElementById('ed-history-backup');
+            let list = [];
+            try { list = el ? JSON.parse(el.textContent) : []; } catch (e) { list = []; }
+            if (!Array.isArray(list) || !list.length) return;
+            const h = loadHistory();
+            list.forEach((raw) => {
+                const e = sanitizeImportedEntry(raw);
+                if (!e) return;
+                const key = e.site + '::' + e.seriesUrl;
+                if (!h[key] || String(e.watchedAt) > String(h[key].watchedAt)) h[key] = e;
+            });
+            saveHistory(h);
+        }
         function mergeImportedEntries(entries) {
             const progress = loadProgress();
             let added = 0, updated = 0, skipped = 0;
@@ -1923,6 +1977,7 @@
                     const entries = parseProgressBackup(String(reader.result));
                     if (entries.length === 0) { alert('Aucune entree de progression trouvee dans ce fichier.'); return; }
                     const result = mergeImportedEntries(entries);
+                    mergeImportedHistory(String(reader.result));
                     alert('Import termine : ' + result.added + ' ajoutee(s), ' + result.updated + ' mise(s) a jour, ' + result.skipped + ' ignoree(s).');
                     buildPersistentPanel();
                 } catch (e) { alert('Import impossible : ' + e.message); }
@@ -1980,9 +2035,24 @@
         const BTN_STYLE = 'background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;';
 
         function collapsibleSection(key, title, innerHtml, open) {
-            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="border-top:1px solid #2a2a35;padding-top:6px;">' +
-                '<summary style="cursor:pointer;font-size:12px;font-weight:bold;color:#ccc;">' + title + '</summary>' +
+            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;">' +
+                '<summary style="cursor:pointer;font-size:12px;font-weight:bold;color:#eee;background:#3a3a46;padding:5px 8px;border-radius:4px;">' + title + '</summary>' +
                 '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' + innerHtml + '</div></details>';
+        }
+
+        // Gros bouton "Suivre" (v6.29) : case cachee dans un label, couleur par :has(:checked).
+        function ensureVcStyles() {
+            if (document.getElementById('vc-styles')) return;
+            const st = document.createElement('style');
+            st.id = 'vc-styles';
+            st.textContent = '.vc-track{display:block;text-align:center;padding:8px;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
+                '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
+                '.vc-track input{display:none;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}';
+            (document.head || document.documentElement).appendChild(st);
+        }
+        function trackButtonHtml(id, checked) {
+            ensureVcStyles();
+            return '<label class="vc-track"><input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '><span class="off">&#9734; Suivre cet anime</span><span class="on">&#9733; Suivi</span></label>';
         }
 
         // Endpoint Apps Script (google-apps-script/incidents-collector.gs).
@@ -2019,6 +2089,10 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.29', ['Panneaux allégés : boutons principaux en haut, liste par site tout en bas, titres de menus sur fond gris, Réglages réduits à Fin intro / Début outro (le reste dans "Plus"), Odysee et YouTube regroupés dans "Autres sources".',
+                '"Suivre cet anime" devient un gros bouton, décoché par défaut pour un nouvel anime (la saison suivante d\'un anime suivi reste suivie). Nouveau "Historique" : une ligne par série regardée, suivie ou non, avec Reprendre / Suivre / croix ; doublons entre sites en rouge.',
+                'Par défaut, seuls les sites avec des animes à rattraper sont affichés ; ligne "doublons" quand un anime est suivi sur deux sites.',
+                '"Aller" à l\'épisode : corrigé pour les épisodes 1 à 9 d\'Esprit Donghua (zéro devant), ne bloque plus sur un "dernier connu" périmé, et cherche dans la liste de la série si l\'adresse devinée n\'existe pas.']],
             ['6.28', ['"Revenir a la source du site" relit la page de l\'episode : Suivant / Precedent remarchent (avant : "Aucun episode suivant detecte").']],
             ['6.27', ['YouTube sans cle API : "Lire sur YouTube" (ou bouton "Trouver sur YouTube") demande une seule fois le lien d\'une video de la serie, puis trouve l\'episode, meme dans une compilation de 10 ou 20 episodes, avec les sous-titres traduits en francais.',
                 'Quand la video cale chez l\'hebergeur, bascule automatique sur YouTube si une chaine est associee ; la serie reste sur YouTube ensuite ("Revenir a la source du site" pour annuler). Le suivi avance tout seul pendant une compilation.']],
@@ -2135,16 +2209,13 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
-                collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), false) +
                 '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
                 '<button id="ed-info-btn" title="Synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">&#8505; Fiche de l\'anime</button>' +
                 '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
-                '<div id="ed-aniskip" style="display:none;font-size:10px;color:#aaa;text-align:center;"></div>' +
+                '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
-                '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
-                '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 '<button id="ed-fullscreen-btn" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;">Plein ecran</button>' +
                 '<button id="ed-close-btn" style="' + B + '">Fermer</button>' +
                 '<div style="display:flex;gap:4px;">' +
@@ -2155,20 +2226,22 @@
                 '<input type="number" id="ed-goto-input" min="1" placeholder="N&#176; episode" style="width:0;flex:1;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:12px;">' +
                 '<button id="ed-goto-btn" style="' + B + '">Aller</button>' +
                 '</div>' +
-                (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
+                trackButtonHtml('ed-track-cb', false) +
                 '<select id="ed-series-select" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
                 '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
+                '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>' +
                 '<label style="' + CHECK + '"><input type="checkbox" id="ed-autonext-cb"> Lecture continue</label>' +
                 '<label style="' + CHECK + '"><input type="checkbox" id="ed-autoopen-cb"> Lecteur auto</label>' +
                 '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
-                '<label style="' + CHECK + '"><input type="checkbox" id="ed-track-cb"> Suivre cet anime</label>' +
                 collapsibleSection('reglages', 'Reglages',
-                    '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button></div>' +
-                    '<div style="display:flex;gap:4px;"><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
-                    '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
-                    '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
-                    '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>') +
-                collapsibleSection('youtube', 'Lien YouTube de secours',
+                    '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
+                    collapsibleSection('plus', 'Plus',
+                        '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
+                        '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
+                        '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>')) +
+                collapsibleSection('youtube', 'Autres sources',
+                    (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
                     '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
                     '<button id="ed-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + B + '">Utiliser ce lien YouTube</button>' +
                     '<button id="ed-youtube-clear-btn" style="' + B + '">Retirer le lien YouTube</button>' +
@@ -2183,7 +2256,10 @@
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
                 incidentSectionHtml('ed', false) +
                 newsSectionHtml(false) +
-                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>';
+                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>' +
+                '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
+                '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
+                collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), false);
             overlay.appendChild(topbar);
 
             toggleBtn.addEventListener('click', () => {
@@ -2225,6 +2301,7 @@
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
+            topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
             bindIncidentSection(topbar, 'ed');
             bindNewsSection(topbar);
 
@@ -2267,7 +2344,7 @@
                 if (!currentEpisode) return;
                 const key = storageKey(currentEpisode);
                 setSeriesExcluded(key, !trackCb.checked);
-                if (trackCb.checked) recordEpisodeProgress(currentEpisode);
+                if (trackCb.checked) recordEpisodeProgress(currentEpisode, true);
                 buildPersistentPanel();
             });
 
@@ -2959,23 +3036,40 @@
                 }), true);
                 return;
             }
+            // v6.29 : plus de blocage sur latestKnownEpisode (perime entre deux
+            // verifications -> "Aller 113" refuse alors que l'episode existait).
             const site = SITES.find((s) => s.id === currentEpisode.site);
-            const latest = latestKnownEpisode[storageKey(currentEpisode)];
-            if (latest && targetNumber > Number(latest)) { setStatus('Pas d\'episode ' + targetNumber + ' (dernier connu : ' + latest + ').'); return; }
-            const targetUrl = site.buildEpisodeUrl ? site.buildEpisodeUrl(currentEpisode.pageUrl, targetNumber) : null;
-            if (!targetUrl) { setStatus('Impossible de deviner l\'URL de cet episode.'); return; }
-            if (currentEpisode.navigate) { navigateToEpisodePage(targetUrl); return; }
+            const ep = currentEpisode;
+            const guessed = (ep.episodeUrlsByNumber && ep.episodeUrlsByNumber[targetNumber]) ||
+                (site.buildEpisodeUrl ? site.buildEpisodeUrl(ep.pageUrl, targetNumber) : null);
+            if (guessed && ep.navigate) { navigateToEpisodePage(guessed); return; }
+            const load = (url) => fetchPageHtml(url).then((html) => site.extract(new DOMParser().parseFromString(html, 'text/html'), url));
             setStatus('Recherche de l\'episode ' + targetNumber + '...');
-            fetchPageHtml(targetUrl).then((html) => {
-                const doc = new DOMParser().parseFromString(html, 'text/html');
-                return site.extract(doc, targetUrl);
+            (guessed ? load(guessed) : Promise.reject(new Error('url'))).catch((e) => {
+                if (/statut 5\d\d/.test((e && e.message) || '')) throw e;
+                // Repli : l'adresse devinee n'existe pas (le site change parfois le
+                // nom de l'episode) -> lien "-eN" de la page de la serie, le plus proche
+                // de l'adresse actuelle (la page liste aussi les autres saisons).
+                return findEpisodeLinkOnSeriesPage(ep, targetNumber).then((url) => url ? (ep.navigate ? (navigateToEpisodePage(url), 'nav') : load(url)) : null);
             }).then((info) => {
+                if (info === 'nav') return;
                 if (!info) { setStatus('Episode ' + targetNumber + ' introuvable.'); return; }
                 applyLoadedEpisode(info, true);
             }).catch((e) => {
                 const serverError = /statut 5\d\d/.test((e && e.message) || '');
                 setStatus(serverError ? 'Erreur serveur, reessaie dans un instant.' : 'Erreur : episode ' + targetNumber + ' introuvable.');
             });
+        }
+
+        function findEpisodeLinkOnSeriesPage(ep, n) {
+            if (!ep.seriesUrl || !/^https:/i.test(ep.seriesUrl)) return Promise.resolve(null);
+            const re = new RegExp('[-_/](?:e|ep|episode)[-_]?0*' + n + '(?:[-_/][^/]*)?/?$', 'i');
+            return fetchPageHtml(ep.seriesUrl).then((html) => {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const links = Array.from(doc.querySelectorAll('a[href]')).map((a) => resolveUrl(a.getAttribute('href'), ep.seriesUrl)).filter((u) => u && re.test(u.replace(/[?#].*$/, '')));
+                const common = (u) => { let i = 0; while (i < u.length && u[i] === ep.pageUrl[i]) i++; return i; };
+                return links.sort((a, b) => common(b) - common(a))[0] || null;
+            }).catch(() => null);
         }
 
         function disableLiveVideoOnPage() {
@@ -3294,9 +3388,26 @@
             return bySite;
         }
 
+        // Meme anime suivi sur plusieurs sites (nom normalise identique, sites differents).
+        function crossSiteDuplicates(entries) {
+            const groups = {};
+            entries.forEach((e) => { const n = normalizeSeriesName(e.seriesName); (groups[n] = groups[n] || []).push(e); });
+            return Object.values(groups).filter((g) => new Set(g.map((e) => e.site)).size > 1);
+        }
+        function renderDuplicatesHtml() {
+            const all = [].concat(...Object.values(getTrackedEntriesBySite()));
+            const dups = crossSiteDuplicates(all);
+            if (!dups.length) return '';
+            return collapsibleSection('doublons', '&#9888; ' + dups.length + ' doublon' + (dups.length > 1 ? 's' : ''), dups.map((g) => g.map((e) =>
+                '<div style="display:flex;align-items:center;gap:4px;background:rgba(255,80,80,.15);border:1px solid #f66;border-radius:4px;padding:4px 6px;font-size:11px;">' +
+                '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(e.seriesName) + '">[' + escapeHtml(e.siteTag || '') + '] ' + escapeHtml(displayName(e.seriesName)) + ' &middot; ep. ' + escapeHtml(String(e.episodeNumber || '?')) + '</span>' +
+                '<button class="vc-dup-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName) + ' [' + (e.siteTag || '') + ']') + '" title="Ne plus suivre sur ce site" style="background:none;border:none;color:#f66;cursor:pointer;font-size:13px;">&#10005;</button></div>').join('')).join(''), false);
+        }
+
         function renderTrackingSummary() {
             const bySite = getTrackedEntriesBySite();
-            return SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id)).map((s) => {
+            const onlyBehind = getSiteFilter() === 'behind' && lastNewEpisodesCheckAt;
+            const lines = SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id) && (!onlyBehind || bySite[s.id].some((e) => newEpisodes[e.key]))).map((s) => {
                 const entries = bySite[s.id];
                 // Nombre d'ANIMES a rattraper, pas d'episodes : une seule serie
                 // tres en retard (ex. 139 ep.) noyait le total. Detail par
@@ -3308,12 +3419,18 @@
                     '<div style="font-weight:bold;color:#03d0fc;">' + s.label + ' &#9656;</div>' +
                     '<div style="color:' + color + ';">' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div></div>';
             }).join('');
+            return (lines || (onlyBehind ? '<div style="font-size:12px;color:#4caf50;text-align:center;">Tout est à jour</div>' : '')) + renderDuplicatesHtml();
         }
 
         function bindTrackingSummary(container) {
             container.querySelectorAll('.ep-summary-line').forEach((el) => {
                 el.addEventListener('click', () => openTrackingPopup(el.getAttribute('data-site')));
             });
+            container.querySelectorAll('.vc-dup-drop').forEach((btn) => btn.addEventListener('click', () => {
+                if (!confirm('Ne plus suivre "' + btn.getAttribute('data-name') + '" ? (sa progression sur ce site sera oubliee)')) return;
+                setSeriesExcluded(btn.getAttribute('data-key'), true);
+                buildPersistentPanel();
+            }));
         }
 
         let trackingPopupSite = null;
@@ -3339,6 +3456,74 @@
             progress[key] = Object.assign({}, e, { episodeNumber: latest, episodeLabel: 'Episode ' + latest, episodeUrl: url, watchedAt: new Date().toISOString() });
             saveProgress(progress);
             delete newEpisodes[key];
+        }
+
+        // anime-sama : meme page, seule l'ancre #ep=N change - sans
+        // rechargement le navigateur ne fait rien, on force donc.
+        function bindSamePageLinks(pop) {
+            pop.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', (ev) => {
+                if (a.href.replace(/#.*$/, '') !== location.href.replace(/#.*$/, '')) return;
+                ev.preventDefault();
+                location.href = a.href;
+                location.reload();
+            }));
+        }
+
+        function openHistoryPopup() {
+            const old = document.getElementById('vc-history-overlay');
+            if (old) old.remove();
+            const history = loadHistory();
+            const rows = Object.keys(history).map((k) => Object.assign({ key: k }, history[k]))
+                .sort((a, b) => String(b.watchedAt).localeCompare(String(a.watchedAt)));
+            const dupKeys = new Set([].concat(...crossSiteDuplicates(rows)).map((e) => e.key));
+            const pop = document.createElement('div');
+            pop.id = 'vc-history-overlay';
+            pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
+            let html = '<div style="background:#15151f;color:#eee;max-width:720px;width:92%;max-height:80vh;overflow:auto;border-radius:8px;padding:20px;">' +
+                '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">&#128338; Historique</h2>' +
+                '<div style="font-size:11px;color:#888;margin-bottom:12px;">Dernier episode regarde de chaque serie (' + HISTORY_MAX + ' max). &#9733; = suivie. En rouge : le meme anime sur deux sites.</div>';
+            if (!rows.length) html += '<div style="color:#aaa;font-size:12px;">Rien pour l\'instant.</div>';
+            else {
+                html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+                rows.forEach((e) => {
+                    const tracked = isSeriesTracked(e.key);
+                    html += '<tr style="border-bottom:1px solid #222;' + (dupKeys.has(e.key) ? 'background:rgba(255,80,80,.18);color:#ff8a8a;' : '') + '">' +
+                        '<td style="padding:6px 4px;color:#ffd400;">' + (tracked ? '&#9733;' : '') + '</td>' +
+                        '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + '</td>' +
+                        '<td style="padding:6px 4px;">ep. ' + escapeHtml(String(e.episodeNumber || '?')) + '</td>' +
+                        '<td style="padding:6px 4px;color:#aaa;">' + escapeHtml(e.siteTag || '') + '</td>' +
+                        '<td style="padding:6px 4px;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
+                        '<td style="padding:6px 2px;text-align:right;"><a href="' + escapeHtml(e.episodeUrl || '#') + '" style="color:#fff;background:#333;text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">&#9654; Reprendre</a></td>' +
+                        '<td style="padding:6px 2px;">' + (tracked ? '' : '<button class="vc-hist-track" data-key="' + escapeHtml(e.key) + '" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#9734; Suivre</button>') + '</td>' +
+                        '<td style="padding:6px 2px;"><button class="vc-hist-del" data-key="' + escapeHtml(e.key) + '" title="Retirer de l\'historique" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
+                });
+                html += '</table>';
+            }
+            html += '<div style="margin-top:16px;text-align:right;"><button id="vc-history-close" style="background:#03d0fc;color:#000;border:none;padding:8px 14px;border-radius:4px;cursor:pointer;font-weight:bold;">Fermer</button></div></div>';
+            pop.innerHTML = html;
+            const host = overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body;
+            host.appendChild(pop);
+            pop.addEventListener('click', (ev) => { if (ev.target === pop) pop.remove(); });
+            pop.querySelector('#vc-history-close').addEventListener('click', () => pop.remove());
+            bindSamePageLinks(pop);
+            pop.querySelectorAll('.vc-hist-track').forEach((btn) => btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-key');
+                const h = loadHistory()[key];
+                if (!h) return;
+                const progress = loadProgress();
+                progress[key] = Object.assign({}, h);
+                saveProgress(progress);
+                setSeriesExcluded(key, false);
+                buildPersistentPanel();
+                if (overlayEls) syncOverlayControls();
+                openHistoryPopup();
+            }));
+            pop.querySelectorAll('.vc-hist-del').forEach((btn) => btn.addEventListener('click', () => {
+                const h = loadHistory();
+                delete h[btn.getAttribute('data-key')];
+                GM_setValue('watchHistory', h);
+                openHistoryPopup();
+            }));
         }
 
         function openTrackingPopup(siteId) {
@@ -3385,14 +3570,7 @@
             host.appendChild(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop) pop.remove(); });
             pop.querySelector('#ep-tracking-close').addEventListener('click', () => pop.remove());
-            // anime-sama : meme page, seule l'ancre #ep=N change - sans
-            // rechargement le navigateur ne fait rien, on force donc.
-            pop.querySelectorAll('a[href]').forEach((a) => a.addEventListener('click', (ev) => {
-                if (a.href.replace(/#.*$/, '') !== location.href.replace(/#.*$/, '')) return;
-                ev.preventDefault();
-                location.href = a.href;
-                location.reload();
-            }));
+            bindSamePageLinks(pop);
             // Meme effet que decocher "Suivre cet anime" : reactivable via
             // Configuration (case "Suivi").
             pop.querySelectorAll('.ep-tracking-info').forEach((btn) => btn.addEventListener('click', () => {
@@ -3429,7 +3607,7 @@
             overlayEls.autoNextCb.checked = isAutoNextEnabled();
             overlayEls.autoOpenCb.checked = isAutoOpenEnabled();
             overlayEls.lowQualityCb.checked = isLowQualityEnabled();
-            overlayEls.trackCb.checked = !!(currentEpisode && !isSeriesExcluded(storageKey(currentEpisode)));
+            overlayEls.trackCb.checked = !!(currentEpisode && isSeriesTracked(storageKey(currentEpisode)));
 
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
@@ -3539,10 +3717,6 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
 
             let html = '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>';
-            html += collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), prevOpen.sites);
-            html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
-                buildSiteFilterOptionsHtml() + '</select>';
-            html += renderTrackingSummary();
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
@@ -3551,11 +3725,7 @@
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<button id="ep-info-btn" style="' + BTN_STYLE + '">&#8505; Fiche de l\'anime</button>';
                 html += '<span id="ep-player-status" style="font-size:11px;color:#ccc;"></span>';
-                if (currentEpisode.site === 'esprit-donghua') {
-                    html += '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>';
-                }
-                const trackedChecked = isSeriesExcluded(storageKey(currentEpisode)) ? '' : 'checked';
-                html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-track-series" ' + trackedChecked + '> Suivre cet anime</label>';
+                html += trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode)));
             }
 
             if (entries.length === 0) {
@@ -3575,18 +3745,22 @@
             }
 
             html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
+            html += '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>';
             html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autonext" ' + (isAutoNextEnabled() ? 'checked' : '') + '> Lecture continue</label>';
             html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autoopen" ' + (isAutoOpenEnabled() ? 'checked' : '') + '> Lecteur auto</label>';
             html += '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>';
 
             html += collapsibleSection('reglages', 'Reglages',
-                '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button></div>' +
-                '<div style="display:flex;gap:4px;"><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
-                '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
-                (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
+                '<div style="display:flex;gap:4px;"><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button></div>' +
+                collapsibleSection('plus', 'Plus',
+                    '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
+                    '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
+                    (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
+                    prevOpen.plus),
                 prevOpen.reglages);
             if (currentEpisode && currentEpisode.seriesName) {
-                html += collapsibleSection('youtube', 'Lien YouTube de secours',
+                html += collapsibleSection('youtube', 'Autres sources',
+                    (currentEpisode.site === 'esprit-donghua' ? '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>' : '') +
                     '<input type="text" id="ep-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
                     '<button id="ep-youtube-apply-btn" title="Utilise ce lien YouTube pour CET episode uniquement, si l\'hebergeur habituel est casse - pas de saut intro/outro ni d\'enchainement auto sur cette source." style="' + BTN_STYLE + '">Utiliser ce lien YouTube</button>' +
                     '<button id="ep-youtube-clear-btn" style="' + BTN_STYLE + '">Retirer le lien YouTube</button>' +
@@ -3605,8 +3779,13 @@
             html += incidentSectionHtml('ep', prevOpen.incident);
             html += newsSectionHtml(prevOpen.nouveautes);
             html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
+            html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                buildSiteFilterOptionsHtml() + '</select>';
+            html += renderTrackingSummary();
+            html += collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), prevOpen.sites);
 
             panel.innerHTML = html;
+            panel.querySelector('#ep-history-btn').addEventListener('click', openHistoryPopup);
 
             const select = panel.querySelector('#ep-select');
             if (select) select.addEventListener('change', () => { if (select.value) location.href = select.value; });
@@ -3708,7 +3887,7 @@
                 trackCheckbox.addEventListener('change', () => {
                     const key = storageKey(currentEpisode);
                     setSeriesExcluded(key, !trackCheckbox.checked);
-                    if (trackCheckbox.checked) recordEpisodeProgress(currentEpisode);
+                    if (trackCheckbox.checked) recordEpisodeProgress(currentEpisode, true);
                     buildPersistentPanel();
                 });
             }
