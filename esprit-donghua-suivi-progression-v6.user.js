@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.33
+// @version      6.34
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1540,9 +1540,69 @@
                 return assoc;
             });
         }
+        // Titre YouTube -> nom compare sans accents/espaces/ponctuation.
+        function ytNorm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); }
+        // "EP 364", "Episode 364", "EP 365-384", "EP 201 - EP 250" -> {first,last}
+        // contenant n, sinon null (v6.34 : "Episode N" n'etait pas reconnu).
+        function episodeRangeInTitle(title, n) {
+            const re = /\b(?:ep(?:isode|isodio)?s?|[eé]pisode)\.?\s*(\d+)(?:\s*(?:-|~|à|a|to)\s*(?:ep(?:isode)?\.?\s*)?(\d+))?/gi;
+            let m;
+            while ((m = re.exec(title))) {
+                const a = Number(m[1]), b = Number(m[2] || m[1]);
+                if (n >= a && n <= b && b - a < 200) return { first: a, last: b };
+            }
+            return null;
+        }
+        // Recherche YouTube generale (v6.34, sans cle d'API) quand la video
+        // cale ou est morte : resultats dont le titre contient un des noms de
+        // la serie (avant / entre parentheses) ET le numero d'episode.
+        function searchYoutubeForEpisode(info) {
+            const n = Number(info.episodeNumber);
+            const full = info.seriesName || '';
+            const names = [full.replace(/\([^)]*\)/g, ' ').trim(), (full.match(/\(([^)]+)\)/) || [])[1], full]
+                .filter((v) => v && ytNorm(v).length >= 4);
+            if (!n || !names.length) return Promise.resolve([]);
+            const q = names[0] + ' episode ' + n + ' vostfr';
+            return fetchPageHtml('https://www.youtube.com/results?hl=fr&search_query=' + encodeURIComponent(q)).then((html) => {
+                const seen = {}, out = [];
+                (function walk(o) {
+                    if (Array.isArray(o)) { o.forEach(walk); return; }
+                    if (!o || typeof o !== 'object') return;
+                    if (o.videoId && o.title && o.lengthText && o.ownerText && !seen[o.videoId]) {
+                        seen[o.videoId] = true;
+                        const title = o.title.simpleText || (o.title.runs || []).map((r) => r.text).join('');
+                        const owner = (o.ownerText.runs || [])[0] || {};
+                        const be = owner.navigationEndpoint && owner.navigationEndpoint.browseEndpoint;
+                        const name = names.find((v) => ytNorm(title).indexOf(ytNorm(v)) !== -1);
+                        const range = episodeRangeInTitle(title, n);
+                        // Extraits / bandes-annonces : pas l'episode entier.
+                        const teaser = /highlight|trailer|preview|teaser|bande[- ]annonce|apercu|aperçu|clip|shorts?/i.test(title);
+                        if (name && range && be && be.browseId && !teaser) {
+                            const vf = /vostfr|\bfr\b|fran[cç]ais/i.test(title);
+                            out.push({ id: o.videoId, title: title, len: ytTimeToSec(o.lengthText.simpleText), channelId: be.browseId, channelName: owner.text || '',
+                                keyword: name, first: range.first, last: range.last, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
+                        }
+                    }
+                    Object.keys(o).forEach((k) => walk(o[k]));
+                })(ytInitialJson(html, 'var ytInitialData'));
+                return out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
+            });
+        }
+        // Resultat choisi : chaine retenue pour la serie (bascule auto ensuite)
+        // + cet episode lu tout de suite sur cette video.
+        function useYoutubeSearchResult(info, r) {
+            setYoutubeChannelAssociation(info, { channelId: r.channelId, channelHandle: null, channelName: r.channelName, titleKeyword: r.keyword });
+            const hit = { id: r.id, title: r.title, first: r.first, last: r.last, len: r.len };
+            hit.perEp = hit.len / (hit.last - hit.first + 1);
+            hit.start = Math.floor((Number(info.episodeNumber) - hit.first) * hit.perEp);
+            storeYoutubeHit(info, hit);
+            setYoutubeMode(info, true);
+            console.log('[AnimeTracker v6] YouTube (resultat choisi) : ' + r.title + ' - chaine ' + r.channelName + ' retenue pour la serie');
+            applyLoadedEpisode(info, false, true);
+        }
         function findYoutubeEpisode(assoc, n) {
             const path = assoc.channelId ? 'channel/' + assoc.channelId : assoc.channelHandle;
-            const kw = normalizeSeriesName(assoc.titleKeyword);
+            const kw = ytNorm(assoc.titleKeyword);
             const search = (q) => fetchPageHtml('https://www.youtube.com/' + path + '/search?query=' + encodeURIComponent(q)).then((html) => {
                 const vids = [];
                 (function walk(o) {
@@ -1553,11 +1613,10 @@
                 })(ytInitialJson(html, 'var ytInitialData'));
                 let best = null;
                 vids.forEach((v) => {
-                    if (!v.len || normalizeSeriesName(v.title).indexOf(kw) === -1) return;
-                    const m = v.title.match(/\bEP\.?\s*(\d+)(?:\s*-\s*(?:EP\.?\s*)?(\d+))?/i);
-                    if (!m) return;
-                    const a = Number(m[1]), b = Number(m[2] || m[1]);
-                    if (n < a || n > b) return;
+                    if (!v.len || ytNorm(v.title).indexOf(kw) === -1) return;
+                    const r = episodeRangeInTitle(v.title, n);
+                    if (!r) return;
+                    const a = r.first, b = r.last;
                     if (!best || (b - a) < (best.last - best.first)) best = { id: v.id, title: v.title, first: a, last: b, len: v.len };
                 });
                 if (best) {
@@ -2077,6 +2136,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.34', ['Video qui cale ou episode indisponible : l\'encadre cherche tout seul l\'episode sur YouTube et affiche les resultats (nom de la serie + numero, VOSTFR en premier). Un clic lance la video et retient la chaine : les prochains episodes qui calent y basculent automatiquement.',
+                'Titres YouTube "Episode 243" reconnus (avant : seulement "EP 243").']],
             ['6.33', ['Video qui cale au changement d\'episode : un nouvel essai est fait automatiquement avant d\'afficher l\'encadre "Reessayer".',
                 'Choix automatique de la qualite Odysee et case 720p supprimes (Odysee le refuse sans compte : petite fenetre rouge). Avec un compte, regler la qualite sur odysee.com/$/settings.']],
             ['6.32', ['Esprit Donghua a change ses adresses d\'episodes (numerotation par saison) : les series suivies dont l\'adresse ne marchait plus sont retrouvees et corrigees toutes seules, la detection des nouveaux episodes remarche.',
@@ -2266,7 +2327,7 @@
 
             const siteErrorBox = document.createElement('div');
             siteErrorBox.id = 'ed-site-error';
-            siteErrorBox.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:12;max-width:440px;background:#2a1a05;color:#ffd27a;border:2px solid #ffb020;border-radius:10px;padding:18px 22px;font-family:Arial,sans-serif;font-size:14px;line-height:1.45;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.7);display:none;';
+            siteErrorBox.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:12;max-width:440px;max-height:90%;overflow-y:auto;background:#2a1a05;color:#ffd27a;border:2px solid #ffb020;border-radius:10px;padding:18px 22px;font-family:Arial,sans-serif;font-size:14px;line-height:1.45;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.7);display:none;';
             overlay.appendChild(siteErrorBox);
 
             const toast = document.createElement('div');
@@ -2482,11 +2543,12 @@
             box.innerHTML = (stall
                 ? '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; La video cale chez l\'hebergeur (' + escapeHtml(host || siteLabel) + ')</div>' +
                   'Le fichier publie pour cet episode est trop lourd ou mal prepare (cas de certaines chaines Odysee) : le navigateur n\'arrive pas a le lire d\'une traite.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>' +
-                  '<span style="font-size:12px;color:#d9b77a;">"Lire sur YouTube" : la 1re fois, colle le lien d\'une video YouTube de la serie ; ensuite la bascule est automatique.</span>'
+                  '<span style="font-size:12px;color:#d9b77a;">Clique un resultat YouTube ci-dessous : sa chaine est retenue et les prochains episodes qui calent y basculent tout seuls.</span>'
                 : '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">&#9888; Episode indisponible sur ' + escapeHtml(siteLabel) + '</div>' +
                   (nbPlayers > 1 ? 'Les ' + nbPlayers + ' lecteurs proposes par le site ont ete essayes : ' : 'Le lecteur propose par le site ') +
                   'la video a ete supprimee ou l\'hebergeur est en panne.<br><b>Ce n\'est pas un probleme de Video Continuum.</b><br>') +
                 '<div id="ed-site-alt" style="margin-top:10px;font-size:12px;color:#d9b77a;">Recherche de cet episode sur les autres sites...</div>' +
+                '<div id="ed-yt-results" style="margin-top:10px;font-size:12px;color:#d9b77a;text-align:left;">Recherche de cet episode sur YouTube...</div>' +
                 '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
                 (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
                 '<button type="button" data-act="youtube" style="' + BTN + '">Lire sur YouTube</button>' +
@@ -2508,6 +2570,20 @@
                 // Recharge le lecteur : la position est reprise (sauvegardee toutes les 5 s).
                 if (act === 'retry') { positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src; }
             }));
+            searchYoutubeForEpisode(info).then((results) => {
+                const zone = box.querySelector('#ed-yt-results');
+                if (!zone || currentEpisode !== info) return;
+                if (!results.length) { zone.textContent = 'Rien de sur trouve sur YouTube (nom + episode ' + info.episodeNumber + ').'; return; }
+                zone.innerHTML = '<div style="margin-bottom:4px;">Sur YouTube (clique pour regarder) :</div>' + results.map((r, i) =>
+                    '<div data-yt="' + i + '" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
+                    '<img src="https://i.ytimg.com/vi/' + escapeHtml(r.id) + '/mqdefault.jpg" style="width:96px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;">' +
+                    '<div style="min-width:0;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
+                    '<div style="font-size:11px;opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</div></div></div>').join('');
+                zone.querySelectorAll('[data-yt]').forEach((el) => el.addEventListener('click', () => {
+                    box.style.display = 'none';
+                    useYoutubeSearchResult(info, results[Number(el.getAttribute('data-yt'))]);
+                }));
+            }).catch((e) => { const zone = box.querySelector('#ed-yt-results'); if (zone) zone.textContent = 'Recherche YouTube impossible : ' + e.message; });
             findEpisodeElsewhere(info, playerCandidates.slice()).then((found) => {
                 const alt = box.querySelector('#ed-site-alt');
                 if (!alt || currentEpisode !== info) return;
