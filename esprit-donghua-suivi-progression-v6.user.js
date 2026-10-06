@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.32
+// @version      6.33
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -68,10 +68,7 @@
 //    pas demarre. Corrige en arretant la boucle sur l'evenement `play` de
 //    la video (playbackStarted) plutot que sur sa simple existence dans le
 //    DOM - voir runInsidePlayerFrameGeneric().
-//  - Pas de menu de qualite reperable sur Video.js/sibnet (une seule
-//    source video fournie, contrairement au menu Reglages d'Odysee) - la
-//    case "720p" reste dans l'interface mais n'a d'effet que pour les
-//    episodes lus via Odysee (voir supportsQualityLock).
+//  - (v6.33 : choix auto de la qualite Odysee supprime - refuse sans compte.)
 //
 // RIEN DE TOUT CA N'A ENCORE ETE TESTE DANS UN VRAI NAVIGATEUR - attendu
 // vu l'ampleur du changement (cf. historique de v4 : chaque nouvelle
@@ -229,36 +226,6 @@
             }
         }
 
-        // Uniquement Odysee (cf. cfg.supportsQualityLock) - voir v4 pour le
-        // detail de la demarche (menu Reglages du lecteur natif).
-        function tryLockQuality(attempt) {
-            if (!cfg.supportsQualityLock) return;
-            attempt = attempt || 1;
-            const settingsBtn = document.querySelector('button.media-button--settings[aria-label="Réglages"]');
-            if (!settingsBtn) {
-                if (attempt < 10) { setTimeout(() => tryLockQuality(attempt + 1), 500); return; }
-                console.log('[AnimeTracker v6] (' + cfg.label + ') bouton reglages introuvable, qualite non verrouillee');
-                return;
-            }
-            settingsBtn.click();
-            setTimeout(() => {
-                const items = Array.from(document.querySelectorAll('.media-settings-menu__item'));
-                const qualityItem = items.find((el) => {
-                    const label = el.querySelector('.media-settings-menu__label');
-                    return label && label.textContent.trim() === 'Qualité';
-                });
-                if (!qualityItem) { settingsBtn.click(); return; }
-                qualityItem.click();
-                setTimeout(() => {
-                    const targetQuality = (config && config.preferredQuality) || '1080p';
-                    const options = Array.from(document.querySelectorAll('.media-settings-menu__option'));
-                    const target = options.find((el) => el.textContent.trim() === targetQuality);
-                    if (target) target.click();
-                    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-                }, 200);
-            }, 200);
-        }
-
         let autoUnmuteAttempted = false;
         function tryAutoUnmute(video, force) {
             if (autoUnmuteAttempted && !force) return;
@@ -308,7 +275,6 @@
 
             if (config) applyIntroSkipIfNeeded(video);
             tryAutoUnmute(video);
-            tryLockQuality();
 
             function reportMuteState() {
                 window.parent.postMessage({ type: MSG_PREFIX + 'mute-state', muted: video.muted }, '*');
@@ -430,7 +396,6 @@
         runInsidePlayerFrameGeneric({
             label: 'Odysee',
             playSelectors: ['button.button--play', '.button--play', 'button[aria-label="Jouer "]', 'button[aria-label="Jouer"]', 'button[aria-label="Play"]'],
-            supportsQualityLock: true
         });
     }
 
@@ -438,7 +403,6 @@
         runInsidePlayerFrameGeneric({
             label: 'Sibnet',
             playSelectors: ['.vjs-big-play-button', 'button.vjs-big-play-button'],
-            supportsQualityLock: false,
             // Cadence plus lente/plus longue qu'Odysee (defauts 500ms/20
             // tentatives) - sibnet passe par un plugin de pub VAST avant la
             // video (adCancelTimeout 10s, responseTimeout 20s cote site),
@@ -482,8 +446,7 @@
     function runInsidePlayerFrame_ansembed() {
         runInsidePlayerFrameGeneric({
             label: 'Ansembed',
-            playSelectors: ['.jw-icon-display', '.jw-display-icon-display'],
-            supportsQualityLock: false
+            playSelectors: ['.jw-icon-display', '.jw-display-icon-display']
         });
     }
 
@@ -1665,8 +1628,6 @@
         function setAutoNextEnabled(v) { GM_setValue('autoNextEnabled', v); }
         function isAutoOpenEnabled() { return GM_getValue('popupAutoOpen', true); }
         function setAutoOpenEnabled(v) { GM_setValue('popupAutoOpen', v); }
-        function isLowQualityEnabled() { return GM_getValue('preferLowQuality720p', false); }
-        function setLowQualityEnabled(v) { GM_setValue('preferLowQuality720p', v); }
 
         // Filtre "voir seulement ce site" partage entre le panneau et la
         // colonne du lecteur (un seul reglage, applique partout) - demande
@@ -2000,7 +1961,7 @@
         // ---- Calque plein ecran ----
 
         let currentEpisode = null;
-        let currentConfig = { introStart: null, introEnd: null, outroStart: null, outroEnd: null, autoNext: true, preferredQuality: '1080p' };
+        let currentConfig = { introStart: null, introEnd: null, outroStart: null, outroEnd: null, autoNext: true };
         let outroSignalSent = false;
         let advancingToNext = false;
         let cancelCountdown = null;
@@ -2116,6 +2077,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.33', ['Video qui cale au changement d\'episode : un nouvel essai est fait automatiquement avant d\'afficher l\'encadre "Reessayer".',
+                'Choix automatique de la qualite Odysee et case 720p supprimes (Odysee le refuse sans compte : petite fenetre rouge). Avec un compte, regler la qualite sur odysee.com/$/settings.']],
             ['6.32', ['Esprit Donghua a change ses adresses d\'episodes (numerotation par saison) : les series suivies dont l\'adresse ne marchait plus sont retrouvees et corrigees toutes seules, la detection des nouveaux episodes remarche.',
                 'Plus d\'encadre jaune "elements tiers suspects" : le detail reste dans la console (F12).']],
             ['6.31', ['Episode suivant : le decompte commence 4 s avant le debut de l\'outro et enchaine 2 s apres (la derniere replique n\'est plus coupee). Sans outro reglee : decompte sur les 4 dernieres secondes, enchainement a la fin.',
@@ -2272,7 +2235,6 @@
                         '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
                         '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
                         '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
-                        '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
                         '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>', false, true)) +
                 collapsibleSection('youtube', 'Autres sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
@@ -2323,7 +2285,6 @@
             const siteFilterSelectEl = topbar.querySelector('#ed-site-filter');
             const autoNextCb = topbar.querySelector('#ed-autonext-cb');
             const autoOpenCb = topbar.querySelector('#ed-autoopen-cb');
-            const lowQualityCb = topbar.querySelector('#ed-lowquality-cb');
             const trackCb = topbar.querySelector('#ed-track-cb');
             const backupStatusEl = topbar.querySelector('#ed-backup-status');
 
@@ -2369,11 +2330,6 @@
                 buildPersistentPanel();
             });
             autoOpenCb.addEventListener('change', () => { setAutoOpenEnabled(autoOpenCb.checked); buildPersistentPanel(); });
-            lowQualityCb.addEventListener('change', () => {
-                setLowQualityEnabled(lowQualityCb.checked);
-                if (currentEpisode) applyUpdatedConfigIfCurrent(storageKey(currentEpisode));
-                buildPersistentPanel();
-            });
             trackCb.addEventListener('change', () => {
                 if (!currentEpisode) return;
                 const key = storageKey(currentEpisode);
@@ -2436,7 +2392,7 @@
 
             overlayEls = {
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
-                seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, lowQualityCb: lowQualityCb, trackCb: trackCb,
+                seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, trackCb: trackCb,
                 backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl, siteErrorBox: siteErrorBox
             };
             return overlayEls;
@@ -2493,6 +2449,7 @@
         // passe au lecteur suivant de la page.
         let playerCandidates = [], playerCandidateIndex = 0, playerReadyTimer = null;
         let ytActive = false, ytSegment = null; // lecture YouTube en cours (v6.27)
+        let stallRetriedSrc = null; // un seul essai auto par lecteur (v6.33)
         function armPlayerReadyTimer() {
             clearTimeout(playerReadyTimer);
             playerReadyTimer = setTimeout(tryNextPlayer, 25000);
@@ -2587,8 +2544,8 @@
         }
 
         function sendConfigToPlayerFrame() {
-            if (ytActive) { postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: null, introEnd: null, outroStart: null, outroEnd: null, preferredQuality: currentConfig.preferredQuality, resumeAt: null }); return; }
-            postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: currentConfig.introStart, introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, outroEnd: currentConfig.outroEnd, preferredQuality: currentConfig.preferredQuality, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
+            if (ytActive) { postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: null, introEnd: null, outroStart: null, outroEnd: null, resumeAt: null }); return; }
+            postToPlayerFrame({ type: MSG_PREFIX + 'config', introStart: currentConfig.introStart, introEnd: currentConfig.introEnd, outroStart: currentConfig.outroStart, outroEnd: currentConfig.outroEnd, resumeAt: currentEpisode ? getResumeAt(currentEpisode) : null });
         }
 
         // Origines autorisees pour les messages ENTRANTS du lecteur - le
@@ -2637,6 +2594,15 @@
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
                 else if (event.data.stage === 'stall') {
+                    // "Reessayer" suffisait presque toujours au changement
+                    // d'episode (signale 2026-10-06) : on le fait une fois tout
+                    // seul avant d'afficher l'encadre.
+                    if (stallRetriedSrc !== overlayEls.playerFrame.src) {
+                        stallRetriedSrc = overlayEls.playerFrame.src;
+                        setStatus('La video cale, nouvel essai...');
+                        positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src;
+                        return;
+                    }
                     if (!ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode)) {
                         setStatus('La video cale chez l\'hebergeur : bascule automatique sur YouTube...');
                         switchToYoutube(currentEpisode, 'auto, video bloquee');
@@ -2852,8 +2818,7 @@
                 introEnd: introOutro.introEnd || null,
                 outroStart: introOutro.outroStart || null,
                 outroEnd: introOutro.outroEnd || null,
-                autoNext: isAutoNextEnabled(),
-                preferredQuality: isLowQualityEnabled() ? '720p' : '1080p'
+                autoNext: isAutoNextEnabled()
             };
             refreshIntroOutroButtons();
         }
@@ -3687,7 +3652,6 @@
             }
             overlayEls.autoNextCb.checked = isAutoNextEnabled();
             overlayEls.autoOpenCb.checked = isAutoOpenEnabled();
-            overlayEls.lowQualityCb.checked = isLowQualityEnabled();
             overlayEls.trackCb.checked = !!(currentEpisode && isSeriesTracked(storageKey(currentEpisode)));
 
             const progress = loadProgress();
@@ -3834,7 +3798,6 @@
                 collapsibleSection('plus', 'Plus',
                     '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
-                    '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>' +
                     (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
                     prevOpen.plus, true),
                 prevOpen.reglages);
@@ -3948,11 +3911,6 @@
             });
             const autoOpenCheckbox = panel.querySelector('#ep-autoopen');
             if (autoOpenCheckbox) autoOpenCheckbox.addEventListener('change', () => setAutoOpenEnabled(autoOpenCheckbox.checked));
-            const lowQualityCheckbox = panel.querySelector('#ep-lowquality');
-            if (lowQualityCheckbox) lowQualityCheckbox.addEventListener('change', () => {
-                setLowQualityEnabled(lowQualityCheckbox.checked);
-                if (currentEpisode) applyUpdatedConfigIfCurrent(storageKey(currentEpisode));
-            });
 
             [['#ep-set-introstart', 'introStart'], ['#ep-set-intro', 'introEnd'], ['#ep-set-outro', 'outroStart'], ['#ep-set-outroend', 'outroEnd']].forEach(([sel, field]) => {
                 const btn = panel.querySelector(sel);
