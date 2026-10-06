@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.34
+// @version      6.35
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1577,8 +1577,11 @@
                         const range = episodeRangeInTitle(title, n);
                         // Extraits / bandes-annonces : pas l'episode entier.
                         const teaser = /highlight|trailer|preview|teaser|bande[- ]annonce|apercu|aperçu|clip|shorts?/i.test(title);
-                        if (name && range && be && be.browseId && !teaser) {
-                            const vf = /vostfr|\bfr\b|fran[cç]ais/i.test(title);
+                        const vf = /vostfr|\bfr\b|fran[cç]ais/i.test(title);
+                        // Badge "Sous-titres" = vraie piste traduisible en FR. Sans
+                        // badge ni FR : sous-titres anglais incrustes, ecartee (v6.35).
+                        const cc = /"label":"(?:Sous-titres|CC|Subtitles)"/.test(JSON.stringify(o.badges || []));
+                        if (name && range && be && be.browseId && !teaser && (vf || cc)) {
                             out.push({ id: o.videoId, title: title, len: ytTimeToSec(o.lengthText.simpleText), channelId: be.browseId, channelName: owner.text || '',
                                 keyword: name, first: range.first, last: range.last, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
                         }
@@ -2136,6 +2139,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.35', ['Recherche YouTube : les videos aux sous-titres anglais incrustes dans l\'image (pas traduisibles en francais) ne sont plus proposees.']],
             ['6.34', ['Video qui cale ou episode indisponible : l\'encadre cherche tout seul l\'episode sur YouTube et affiche les resultats (nom de la serie + numero, VOSTFR en premier). Un clic lance la video et retient la chaine : les prochains episodes qui calent y basculent automatiquement.',
                 'Titres YouTube "Episode 243" reconnus (avant : seulement "EP 243").']],
             ['6.33', ['Video qui cale au changement d\'episode : un nouvel essai est fait automatiquement avant d\'afficher l\'encadre "Reessayer".',
