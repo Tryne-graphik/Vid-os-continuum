@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.30
+// @version      6.31
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -357,11 +357,20 @@
                     console.log('[AnimeTracker v6] (' + cfg.label + ') outro sautee ' + config.outroStart + 's -> ' + config.outroEnd + 's');
                 }
             });
+            // v6.31 : decompte affiche AVANT la coupure. Outro reglee (debut seul) :
+            // signal 4 s avant, enchainement 2 s apres son debut (remaining = 6 s).
+            // Sinon (pas d'outro, ou outro sautee en plage) : 4 dernieres secondes.
             video.addEventListener('timeupdate', () => {
-                if (!config || !config.outroStart || config.outroEnd > config.outroStart || outroSignalSent) return;
-                if (video.currentTime >= config.outroStart) {
+                if (!config || outroSignalSent) return;
+                const t = video.currentTime;
+                if (config.outroStart && !(config.outroEnd > config.outroStart)) {
+                    if (t >= config.outroStart - 4) {
+                        outroSignalSent = true;
+                        window.parent.postMessage({ type: MSG_PREFIX + 'outro-reached', remaining: config.outroStart + 2 - t }, '*');
+                    }
+                } else if (isFinite(video.duration) && video.duration > 30 && t >= video.duration - 4) {
                     outroSignalSent = true;
-                    window.parent.postMessage({ type: MSG_PREFIX + 'outro-reached' }, '*');
+                    window.parent.postMessage({ type: MSG_PREFIX + 'near-end', remaining: video.duration - t }, '*');
                 }
             });
             // Lecture qui cale (v6.26) : position figee ET donnees insuffisantes
@@ -1993,6 +2002,7 @@
         let outroSignalSent = false;
         let advancingToNext = false;
         let cancelCountdown = null;
+        let nextNowCountdown = null;
         let overlayEls = null;
         let outroSkipSuspended = false;
         let newEpisodes = {};
@@ -2104,6 +2114,9 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.31', ['Episode suivant : le decompte commence 4 s avant le debut de l\'outro et enchaine 2 s apres (la derniere replique n\'est plus coupee). Sans outro reglee : decompte sur les 4 dernieres secondes, enchainement a la fin.',
+                'Decompte en bas a droite (ne cache plus les sous-titres) avec "Suivant maintenant" a cote d\'"Annuler".',
+                'Boutons "Fin intro" / "Debut outro" verts quand c\'est regle pour la serie (a la main ou par AniSkip), gris sinon.']],
             ['6.30', ['Numero d\'episode plus gros, chargement en fine barre (les messages d\'erreur restent en texte).',
                 '"Lecture continue" et "Lecteur auto" deviennent des boutons comme "Suivi" ; 720p rangee dans Reglages > Plus (sous-menu decale).',
                 'Sites tout en bas en petits boutons toujours visibles, avec le choix du mode d\'ouverture juste dessous.']],
@@ -2292,8 +2305,8 @@
 
             const toast = document.createElement('div');
             toast.id = 'ed-toast';
-            toast.style.cssText = 'position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:10;background:#15151f;color:#eee;padding:14px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.6);font-family:Arial,sans-serif;display:none;align-items:center;gap:12px;';
-            toast.innerHTML = '<span id="ed-toast-text">Episode suivant dans 3s...</span><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
+            toast.style.cssText = 'position:absolute;bottom:30px;right:30px;z-index:10;background:#15151f;color:#eee;padding:14px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.6);font-family:Arial,sans-serif;display:none;align-items:center;gap:12px;';
+            toast.innerHTML = '<span id="ed-toast-text">Episode suivant dans 3s...</span><button id="ed-toast-now" style="background:#03d0fc;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">Suivant maintenant</button><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
             overlay.appendChild(toast);
 
             document.body.appendChild(overlay);
@@ -2415,6 +2428,7 @@
             topbar.querySelector('#ed-youtube-auto-btn').addEventListener('click', useYoutubeAutoForCurrentEpisode);
             topbar.querySelector('#ed-youtube-off-btn').addEventListener('click', leaveYoutubeMode);
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
+            toast.querySelector('#ed-toast-now').addEventListener('click', () => { if (cancelCountdown && nextNowCountdown) nextNowCountdown(); });
 
             overlayEls = {
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
@@ -2599,11 +2613,16 @@
                 if (t >= 30 && (!isFinite(d) || d - t > 120)) setResumePosition(currentEpisode, t);
                 else if (isFinite(d) && d - t <= 120) setResumePosition(currentEpisode, null);
             }
-            if (type === 'outro-reached' || type === 'ended') { if (currentEpisode) setResumePosition(currentEpisode, null); }
+            if (type === 'outro-reached' || type === 'ended' || type === 'near-end') { if (currentEpisode) setResumePosition(currentEpisode, null); }
             if (type === 'outro-reached') {
                 if (outroSkipSuspended || outroSignalSent) return;
                 outroSignalSent = true;
-                triggerNextEpisode('debut outro configure');
+                triggerNextEpisode('debut outro configure', event.data.remaining);
+            }
+            if (type === 'near-end') {
+                if (outroSignalSent) return;
+                outroSignalSent = true;
+                triggerNextEpisode('fin de la video', event.data.remaining);
             }
             if (type === 'ended') {
                 if (outroSignalSent) return;
@@ -2832,17 +2851,28 @@
                 autoNext: isAutoNextEnabled(),
                 preferredQuality: isLowQualityEnabled() ? '720p' : '1080p'
             };
+            refreshIntroOutroButtons();
         }
 
-        function triggerNextEpisode(reason) {
+        // Vert = reglage present pour la serie (manuel ou AniSkip), gris = a faire.
+        function refreshIntroOutroButtons() {
+            const manual = currentEpisode ? getIntroOutroForKey(storageKey(currentEpisode)) : {};
+            const intro = currentConfig.introEnd || manual.introEnd, outro = currentConfig.outroStart || manual.outroStart;
+            [['ed-set-intro-btn', intro], ['ep-set-intro', intro], ['ed-set-outro-btn', outro], ['ep-set-outro', outro]].forEach(([id, on]) => {
+                const b = document.getElementById(id);
+                if (b) b.style.background = on ? '#2e7d32' : '#333';
+            });
+        }
+
+        function triggerNextEpisode(reason, remaining) {
             if (!currentConfig.autoNext) return;
             if (!currentEpisode || !(ytActive || hasNextEpisode(currentEpisode))) { setStatus('Episode termine - pas de suivant detecte'); return; }
-            showNextToast();
+            showNextToast(isFinite(remaining) ? Math.max(1, Math.round(remaining)) : 3);
         }
 
-        function showNextToast() {
+        function showNextToast(start) {
             const { toast } = overlayEls;
-            let seconds = 3, cancelled = false;
+            let seconds = start || 3, cancelled = false;
             const textEl = toast.querySelector('#ed-toast-text');
             toast.style.display = 'flex';
             textEl.textContent = 'Episode suivant dans ' + seconds + 's...';
@@ -2853,6 +2883,7 @@
                 textEl.textContent = 'Episode suivant dans ' + seconds + 's...';
             }, 1000);
             cancelCountdown = () => { cancelled = true; clearInterval(interval); toast.style.display = 'none'; cancelCountdown = null; };
+            nextNowCountdown = () => { cancelled = true; clearInterval(interval); toast.style.display = 'none'; cancelCountdown = null; advanceToNextEpisode(); };
         }
 
         // Construit l'InfoUnifie de l'episode suivant SANS toucher au
@@ -3804,6 +3835,7 @@
 
             panel.innerHTML = html;
             panel.querySelector('#ep-history-btn').addEventListener('click', openHistoryPopup);
+            refreshIntroOutroButtons();
 
             const select = panel.querySelector('#ep-select');
             if (select) select.addEventListener('change', () => { if (select.value) location.href = select.value; });

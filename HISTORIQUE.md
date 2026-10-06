@@ -859,3 +859,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Sites en bas : petits boutons toujours visibles + "Ouvrir dans" juste dessous (plus de menu Sites).
 - Corrige : nom de la serie ecrase a 0 px dans le calque (overflow:hidden dans une colonne flex qui deborde) -> flex-shrink:0.
 - Teste en Playwright sur esprit-donghua (barre, bascules, rendu complet).
+
+## 2026-10-06 - v6.31 : decompte avant la coupure
+
+- Iframe : debut d'outro regle (sans fin) -> signal 'outro-reached' 4 s avant avec remaining = outroStart + 2 - t (decompte ~6 s, enchainement 2 s apres le debut du generique) ; sinon (pas d'outro ou outro en plage) -> nouveau signal 'near-end' 4 s avant la fin (enchainement a la fin). 'ended' reste le repli.
+- Encadre du decompte en bas a droite (ne cache plus les sous-titres) + "Suivant maintenant".
+- Boutons Fin intro / Debut outro verts si regles (manuel ou AniSkip), gris sinon (refreshIntroOutroButtons, appele par applyRuntimeConfig et le panneau).
+- Teste en Playwright (Odysee reel, ep. 192) : near-end -> decompte 4 s puis ep. 193 ; outro 5:10 -> signal a 306 s, remaining 5,9 s, enchainement ; boutons gris/vert.
