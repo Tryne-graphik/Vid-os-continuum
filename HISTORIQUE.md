@@ -851,3 +851,11 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Filtre par defaut "Sites a rattraper" (cle GM `panelSiteFilter2`) ; ligne "doublons" (meme nom normalise sur 2 sites) avec croix (= ne plus suivre).
 - "Aller" : vraie cause = Esprit Donghua numerote l'URL par saison (s5-e17 = Eps 193) -> table numero->URL lue dans `.episodelist` ; zero devant (-e06) ; plus de blocage sur "dernier connu" ; repli sur la page de la serie.
 - Teste en Playwright sur esprit-donghua (Aller 113 et 5, Suivre, Historique, doublons). Pas teste : anime-sama/animoflix/sites ajoutes avec la nouvelle mise en page.
+
+## 2026-10-06 - v6.30 : finitions du panneau
+
+- Numero d'episode 18 px ; "Chargement... N%" affiche en fine barre (statusHtml), autres messages inchanges ; `lastStatusText` (var, pas let : TDZ) pour resynchroniser le panneau et le rapport d'incident.
+- "Lecture continue" / "Lecteur auto" = boutons bascule cote a cote ; 720p dans Reglages > Plus ; "Plus" = sous-menu decale (collapsibleSection(..., sub)).
+- Sites en bas : petits boutons toujours visibles + "Ouvrir dans" juste dessous (plus de menu Sites).
+- Corrige : nom de la serie ecrase a 0 px dans le calque (overflow:hidden dans une colonne flex qui deborde) -> flex-shrink:0.
+- Teste en Playwright sur esprit-donghua (barre, bascules, rendu complet).

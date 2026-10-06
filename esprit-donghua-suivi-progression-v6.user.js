@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.29
+// @version      6.30
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1290,7 +1290,7 @@
     function siteLinksHtml() {
         const links = SITE_LINKS.concat(Object.keys(loadCustomSites()).map((h) => [h, 'https://' + h + '/']));
         return '<div style="display:flex;flex-wrap:wrap;gap:4px;">' + links.map(([label, url]) =>
-            '<a href="' + url + '" class="vc-open-link" style="flex:1 1 45%;text-align:center;background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;border-radius:4px;padding:5px 4px;font:bold 11px Arial,sans-serif;text-decoration:none;white-space:nowrap;">' + label + '</a>').join('') + '</div>';
+            '<a href="' + url + '" class="vc-open-link" style="flex:1 1 auto;text-align:center;background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;border-radius:4px;padding:3px 3px;font:bold 10px Arial,sans-serif;text-decoration:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</a>').join('') + '</div>';
     }
     function openModeSelectHtml() {
         const cur = getOpenMode();
@@ -2034,9 +2034,10 @@
         // ---- Sections repliables + signalement d'incident (v6.8) ----
         const BTN_STYLE = 'background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;';
 
-        function collapsibleSection(key, title, innerHtml, open) {
-            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;">' +
-                '<summary style="cursor:pointer;font-size:12px;font-weight:bold;color:#eee;background:#3a3a46;padding:5px 8px;border-radius:4px;">' + title + '</summary>' +
+        function collapsibleSection(key, title, innerHtml, open, sub) {
+            // sub : sous-menu (decale et plus clair, ex. Reglages > Plus).
+            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;' + (sub ? 'margin-left:10px;' : '') + '">' +
+                '<summary style="cursor:pointer;font-size:' + (sub ? 11 : 12) + 'px;font-weight:bold;color:#eee;background:' + (sub ? '#4a4a58' : '#3a3a46') + ';padding:' + (sub ? '4px 8px' : '5px 8px') + ';border-radius:4px;">' + title + '</summary>' +
                 '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' + innerHtml + '</div></details>';
         }
 
@@ -2046,9 +2047,23 @@
             const st = document.createElement('style');
             st.id = 'vc-styles';
             st.textContent = '.vc-track{display:block;text-align:center;padding:8px;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
+                '.vc-track.vc-small{flex:1;padding:6px 4px;font-size:11px;}' +
                 '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
                 '.vc-track input{display:none;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}';
             (document.head || document.documentElement).appendChild(st);
+        }
+        function toggleButtonsHtml(prefix, autoNext, autoOpen) {
+            ensureVcStyles();
+            const t = (id, on, label) => '<label class="vc-track vc-small"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span class="off">' + label + '</span><span class="on">&#10003; ' + label + '</span></label>';
+            return '<div style="display:flex;gap:4px;">' + t(prefix + 'autonext' + (prefix === 'ed-' ? '-cb' : ''), autoNext, 'Lecture continue') +
+                t(prefix + 'autoopen' + (prefix === 'ed-' ? '-cb' : ''), autoOpen, 'Lecteur auto') + '</div>';
+        }
+        // "Chargement... 42%" -> fine barre ; tout autre message reste en texte.
+        function statusHtml(text) {
+            const m = /^Chargement\.\.\.(?: (\d+)%)?$/.exec(text || '');
+            if (!m) return escapeHtml(text || '');
+            const pct = m[1] ? Number(m[1]) : 0;
+            return '<div style="display:flex;align-items:center;gap:6px;" title="Chargement de la video"><div style="flex:1;height:4px;background:#333;border-radius:2px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:#03d0fc;"></div></div><span style="font-size:10px;color:#aaa;">' + pct + '%</span></div>';
         }
         function trackButtonHtml(id, checked) {
             ensureVcStyles();
@@ -2089,6 +2104,9 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.30', ['Numero d\'episode plus gros, chargement en fine barre (les messages d\'erreur restent en texte).',
+                '"Lecture continue" et "Lecteur auto" deviennent des boutons comme "Suivi" ; 720p rangee dans Reglages > Plus (sous-menu decale).',
+                'Sites tout en bas en petits boutons toujours visibles, avec le choix du mode d\'ouverture juste dessous.']],
             ['6.29', ['Panneaux allégés : boutons principaux en haut, liste par site tout en bas, titres de menus sur fond gris, Réglages réduits à Fin intro / Début outro (le reste dans "Plus"), Odysee et YouTube regroupés dans "Autres sources".',
                 '"Suivre cet anime" devient un gros bouton, décoché par défaut pour un nouvel anime (la saison suivante d\'un anime suivi reste suivie). Nouveau "Historique" : une ligne par série regardée, suivie ou non, avec Reprendre / Suivre / croix ; doublons entre sites en rouge.',
                 'Par défaut, seuls les sites avec des animes à rattraper sont affichés ; ligne "doublons" quand un anime est suivi sur deux sites.',
@@ -2152,7 +2170,7 @@
                     version: (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?',
                     browser: navigator.userAgent,
                     page: location.href,
-                    playerStatus: statusEl ? statusEl.textContent : ''
+                    playerStatus: lastStatusText
                 };
                 if (INCIDENTS_ENDPOINT_URL.indexOf('PASTE_') === 0) {
                     const ctx = '\n\n---\nType : ' + report.type + '\nSite : ' + report.site + '\nAnime : ' + report.anime + ' (ep ' + report.episode + ')\nVersion : ' + report.version + '\nNavigateur : ' + report.browser + '\nPage : ' + report.page;
@@ -2209,10 +2227,10 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
-                '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
-                '<div id="ed-current-ep" style="font-size:12px;font-weight:bold;text-align:center;"></div>' +
+                '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;"></div>' +
+                '<div id="ed-current-ep" style="font-size:18px;font-weight:bold;text-align:center;"></div>' +
                 '<button id="ed-info-btn" title="Synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">&#8505; Fiche de l\'anime</button>' +
-                '<span id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</span>' +
+                '<div id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
                 '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
@@ -2230,16 +2248,15 @@
                 '<select id="ed-series-select" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
                 '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
                 '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>' +
-                '<label style="' + CHECK + '"><input type="checkbox" id="ed-autonext-cb"> Lecture continue</label>' +
-                '<label style="' + CHECK + '"><input type="checkbox" id="ed-autoopen-cb"> Lecteur auto</label>' +
-                '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
+                toggleButtonsHtml('ed-', false, false) +
                 collapsibleSection('reglages', 'Reglages',
                     '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
                     collapsibleSection('plus', 'Plus',
                         '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
                         '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
                         '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>')) +
+                        '<label style="' + CHECK + '" title="Uniquement pour les episodes lus via Odysee (Esprit Donghua) pour l\'instant - un seul niveau de qualite disponible sur sibnet."><input type="checkbox" id="ed-lowquality-cb"> 720p (Esprit Donghua uniquement)</label>' +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>', false, true)) +
                 collapsibleSection('youtube', 'Autres sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
                     '<input type="text" id="ed-youtube-input" placeholder="Lien YouTube de secours" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;box-sizing:border-box;">' +
@@ -2259,7 +2276,7 @@
                 '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
-                collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), false);
+                siteLinksHtml() + openModeSelectHtml();
             overlay.appendChild(topbar);
 
             toggleBtn.addEventListener('click', () => {
@@ -2416,9 +2433,11 @@
             return info.episodeIndex > 0;
         }
 
+        var lastStatusText = ''; // var : setStatus peut etre appele avant cette ligne (TDZ)
         function setStatus(text, warning) {
+            lastStatusText = text;
             if (overlayEls) {
-                overlayEls.statusEl.textContent = text;
+                overlayEls.statusEl.innerHTML = statusHtml(text);
                 overlayEls.statusEl.style.color = warning ? '#ffb020' : '#ccc';
             }
             updatePanelStatus(text);
@@ -3246,7 +3265,7 @@
 
         function updatePanelStatus(text) {
             const el = document.getElementById('ep-player-status');
-            if (el) el.textContent = text;
+            if (el) el.innerHTML = statusHtml(text);
         }
 
         function checkForNewEpisodes() {
@@ -3720,11 +3739,11 @@
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
-                html += '<div style="font-size:13px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
+                html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
+                html += '<div style="font-size:18px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<button id="ep-info-btn" style="' + BTN_STYLE + '">&#8505; Fiche de l\'anime</button>';
-                html += '<span id="ep-player-status" style="font-size:11px;color:#ccc;"></span>';
+                html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div>';
                 html += trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode)));
             }
 
@@ -3746,17 +3765,16 @@
 
             html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
             html += '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>';
-            html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autonext" ' + (isAutoNextEnabled() ? 'checked' : '') + '> Lecture continue</label>';
-            html += '<label style="' + CHECK + '"><input type="checkbox" id="ep-autoopen" ' + (isAutoOpenEnabled() ? 'checked' : '') + '> Lecteur auto</label>';
-            html += '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>';
+            html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
 
             html += collapsibleSection('reglages', 'Reglages',
                 '<div style="display:flex;gap:4px;"><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button></div>' +
                 collapsibleSection('plus', 'Plus',
                     '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
+                    '<label style="' + CHECK + '" title="Uniquement pour Esprit Donghua/Odysee."><input type="checkbox" id="ep-lowquality" ' + (isLowQualityEnabled() ? 'checked' : '') + '> 720p (Esprit Donghua uniquement)</label>' +
                     (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
-                    prevOpen.plus),
+                    prevOpen.plus, true),
                 prevOpen.reglages);
             if (currentEpisode && currentEpisode.seriesName) {
                 html += collapsibleSection('youtube', 'Autres sources',
@@ -3782,7 +3800,7 @@
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';
             html += renderTrackingSummary();
-            html += collapsibleSection('sites', 'Sites', siteLinksHtml() + openModeSelectHtml(), prevOpen.sites);
+            html += siteLinksHtml() + openModeSelectHtml();
 
             panel.innerHTML = html;
             panel.querySelector('#ep-history-btn').addEventListener('click', openHistoryPopup);
@@ -3892,7 +3910,7 @@
                 });
             }
 
-            if (overlayEls) updatePanelStatus(overlayEls.statusEl.textContent);
+            if (overlayEls) updatePanelStatus(lastStatusText);
             syncOverlayControls();
         }
 
