@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.31
+// @version      6.32
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -632,6 +632,8 @@
         console.warn('[AnimeTracker v6] Pollution tierce detectee (' + findings.length + ') :');
         findings.forEach((f) => console.warn('  [' + f.severity + '] ' + f.category + ' - ' + f.detail + (f.rule ? ' | regle : ' + f.rule : '')));
 
+        // ponytail: encadre jaune retire (v6.32, bruit sans action possible) - console seule.
+        return;
         if (document.getElementById('ed-pollution-banner')) return;
         const banner = document.createElement('div');
         banner.id = 'ed-pollution-banner';
@@ -2114,6 +2116,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.32', ['Esprit Donghua a change ses adresses d\'episodes (numerotation par saison) : les series suivies dont l\'adresse ne marchait plus sont retrouvees et corrigees toutes seules, la detection des nouveaux episodes remarche.',
+                'Plus d\'encadre jaune "elements tiers suspects" : le detail reste dans la console (F12).']],
             ['6.31', ['Episode suivant : le decompte commence 4 s avant le debut de l\'outro et enchaine 2 s apres (la derniere replique n\'est plus coupee). Sans outro reglee : decompte sur les 4 dernieres secondes, enchainement a la fin.',
                 'Decompte en bas a droite (ne cache plus les sous-titres) avec "Suivant maintenant" a cote d\'"Annuler".',
                 'Boutons "Fin intro" / "Debut outro" verts quand c\'est regle pour la serie (a la main ou par AniSkip), gris sinon.']],
@@ -3342,7 +3346,13 @@
                         if (didChange) changed = true;
                     }).catch(() => {});
                 }
-                return fetchPageHtml(e.episodeUrl).then((html) => {
+                return fetchPageHtml(e.episodeUrl).catch((err) => {
+                    // ED a renumerote ses adresses par saison (s4-e243 -> s4-e113,
+                    // 404 vu 2026-10-06) : retrouver l'episode dans la liste de la
+                    // page serie et corriger l'adresse enregistree.
+                    if (e.site !== 'esprit-donghua' || !/statut 404/.test(err.message)) throw err;
+                    return relocateEdEpisodeUrl(e).then((url) => fetchPageHtml(url));
+                }).then((html) => {
                     const doc = new DOMParser().parseFromString(html, 'text/html');
                     return site.extract(doc, e.episodeUrl);
                 }).then((info) => { if (info) applyResultFor(e, info, (c) => { if (c) changed = true; }); }).catch(() => {});
@@ -3353,6 +3363,27 @@
                 if (changed || firstCheck) buildPersistentPanel();
                 refreshTrackingPopup();
             });
+
+            function relocateEdEpisodeUrl(entry) {
+                return fetchPageHtml(entry.seriesUrl).then((html) => {
+                    const doc = new DOMParser().parseFromString(html, 'text/html');
+                    const li = Array.from(doc.querySelectorAll('.eplister li')).find((el) => {
+                        const num = el.querySelector('.epl-num');
+                        return num && Number(num.textContent.trim()) === Number(entry.episodeNumber);
+                    });
+                    const a = li && li.querySelector('a[href]');
+                    if (!a) throw new Error('episode ' + entry.episodeNumber + ' introuvable sur la page serie');
+                    const url = resolveUrl(a.getAttribute('href'), entry.seriesUrl);
+                    const oldUrl = entry.episodeUrl;
+                    const progress = loadProgress();
+                    if (progress[entry.key]) { progress[entry.key].episodeUrl = url; saveProgress(progress); }
+                    const history = loadHistory();
+                    if (history[entry.key] && history[entry.key].episodeUrl === oldUrl) { history[entry.key].episodeUrl = url; saveHistory(history); }
+                    entry.episodeUrl = url;
+                    console.log('[AnimeTracker v6] adresse corrigee pour ' + entry.seriesName + ' : ' + oldUrl + ' -> ' + url);
+                    return url;
+                });
+            }
 
             function applyResultFor(entry, info, cb) {
                 let didChange = false;
