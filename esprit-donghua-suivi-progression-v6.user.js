@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.36
+// @version      6.37
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -424,6 +424,10 @@
     function runInsidePlayerFrame_youtube() {
         runInsidePlayerFrameGeneric({ label: 'YouTube', playSelectors: ['.ytp-large-play-button'] });
         const doc = (typeof unsafeWindow !== 'undefined' && unsafeWindow.document) || document;
+        // "Plus de videos" (bas du lecteur) masquait le bouton des reglages (v6.37).
+        const hideCss = doc.createElement('style');
+        hideCss.textContent = '.fullscreen-watch-next-entrypoint-wrapper,.ytp-pause-overlay{display:none!important}';
+        (doc.head || doc.documentElement).appendChild(hideCss);
         let tries = 0;
         const timer = setInterval(() => {
             if (++tries > 40) { clearInterval(timer); return; }
@@ -1492,6 +1496,8 @@
             if (on) all[storageKey(info)] = true; else delete all[storageKey(info)];
             GM_setValue('youtubeMode', all);
         }
+        // ucbcb=1 dans les adresses YouTube : evite la page de consentement aux
+        // cookies (Europe) qui renvoie une page sans resultats (v6.37).
         function ytInitialJson(html, varName) {
             const m = html.match(new RegExp(varName + '\\s*=\\s*(\\{.+?\\});(?:var |<\\/script>)', 's'));
             return m ? JSON.parse(m[1]) : null;
@@ -1513,16 +1519,19 @@
         // Recherche YouTube generale (v6.34, sans cle d'API) quand la video
         // cale ou est morte : resultats dont le titre contient un des noms de
         // la serie (avant / entre parentheses) ET le numero d'episode.
+        // v6.37 : chaque nom x ("episode N vostfr", "EP N") - les compilations
+        // sont souvent titrees avec le nom anglais ("Ten Thousand Worlds EP 181 - EP 200").
         function searchYoutubeForEpisode(info) {
             const n = Number(info.episodeNumber);
             const full = info.seriesName || '';
             const names = [full.replace(/\([^)]*\)/g, ' ').trim(), (full.match(/\(([^)]+)\)/) || [])[1], full]
                 .filter((v) => v && ytNorm(v).length >= 4);
             if (!n || !names.length) return Promise.resolve([]);
-            const q = names[0] + ' episode ' + n + ' vostfr';
-            return fetchPageHtml('https://www.youtube.com/results?hl=fr&search_query=' + encodeURIComponent(q)).then((html) => {
-                const seen = {}, out = [];
-                (function walk(o) {
+            const queries = [];
+            names.slice(0, 2).forEach((v) => queries.push(v + ' episode ' + n + ' vostfr', v + ' EP ' + n));
+            const seen = {}, out = [];
+            return Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => ''))).then((pages) => {
+                pages.forEach((html) => (function walk(o) {
                     if (Array.isArray(o)) { o.forEach(walk); return; }
                     if (!o || typeof o !== 'object') return;
                     if (o.videoId && o.title && o.lengthText && o.ownerText && !seen[o.videoId]) {
@@ -1544,7 +1553,7 @@
                         }
                     }
                     Object.keys(o).forEach((k) => walk(o[k]));
-                })(ytInitialJson(html, 'var ytInitialData'));
+                })(html && ytInitialJson(html, 'var ytInitialData')));
                 return out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
             });
         }
@@ -1574,7 +1583,7 @@
             hit.perEp = hit.len / (hit.last - hit.first + 1);
             hit.start = Math.floor((n - hit.first) * hit.perEp);
             if (hit.first === hit.last) return Promise.resolve(hit);
-            return fetchPageHtml('https://www.youtube.com/watch?v=' + hit.id).then((html) => {
+            return fetchPageHtml('https://www.youtube.com/watch?ucbcb=1&v=' + hit.id).then((html) => {
                 const starts = chapterStarts(html, hit.first, hit.last);
                 if (starts) { hit.starts = starts; hit.start = starts[n - hit.first]; }
                 return hit;
@@ -1625,7 +1634,7 @@
         function findYoutubeEpisode(assoc, n) {
             const path = assoc.channelId ? 'channel/' + assoc.channelId : assoc.channelHandle;
             const kw = ytNorm(assoc.titleKeyword);
-            const search = (q) => fetchPageHtml('https://www.youtube.com/' + path + '/search?query=' + encodeURIComponent(q)).then((html) => {
+            const search = (q) => fetchPageHtml('https://www.youtube.com/' + path + '/search?ucbcb=1&query=' + encodeURIComponent(q)).then((html) => {
                 const vids = [];
                 (function walk(o) {
                     if (Array.isArray(o)) { o.forEach(walk); return; }
@@ -2154,6 +2163,9 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.37', ['Recherche YouTube : essaie aussi le nom anglais de la serie et "EP N" - trouve les compilations (ex. "EP 181 - EP 200") qui ne citent pas le numero cherche.',
+                'Lecteur YouTube : le bouton "Plus de videos" est masque (il cachait les reglages).',
+                'Episode suivant sur YouTube : ne retombe plus sur le site quand YouTube affiche sa page de consentement aux cookies.']],
             ['6.36', ['"Trouver sur YouTube" cherche tout seul et propose les videos en vignettes (plus de lien a coller) ; la chaine choisie est retenue pour les episodes suivants.', 'Compilations YouTube : le debut de chaque episode est lu dans les chapitres de la video quand elle en a (sinon estime).']],
             ['6.35', ['Recherche YouTube : les videos aux sous-titres anglais incrustes dans l\'image (pas traduisibles en francais) ne sont plus proposees.']],
             ['6.34', ['Video qui cale ou episode indisponible : l\'encadre cherche tout seul l\'episode sur YouTube et affiche les resultats (nom de la serie + numero, VOSTFR en premier). Un clic lance la video et retient la chaine : les prochains episodes qui calent y basculent automatiquement.',
@@ -2969,8 +2981,8 @@
             if (!skipYoutubeLookup && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
                 setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube...');
                 findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber))
-                    .then((hit) => { if (hit) storeYoutubeHit(info, hit); })
-                    .catch(() => {})
+                    .then((hit) => { if (hit) storeYoutubeHit(info, hit); else console.log('[AnimeTracker v6] YouTube : episode ' + info.episodeNumber + ' introuvable sur la chaine, source du site'); })
+                    .catch((e) => console.log('[AnimeTracker v6] YouTube : recherche impossible (' + e.message + '), source du site'))
                     .then(() => applyLoadedEpisode(info, pushHistory, true));
                 return;
             }

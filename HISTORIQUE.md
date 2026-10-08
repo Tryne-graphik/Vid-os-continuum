@@ -873,3 +873,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - "Trouver sur YouTube" = recherche generale (`searchYoutubeForEpisode`) affichee en vignettes dans l'encadre du calque (`showYoutubeChooser`, rendu partage avec l'encadre "video cale" via `renderYoutubeChoices`). Clic = chaine retenue pour la serie. Chaine associee sans resultat -> vignettes au lieu d'un message.
 - Compilations : `positionHit` lit les chapitres de la video (`chapterRenderer` de la page watch) ; titres "EP N" ou, si aucun chapitre numerote, autant de chapitres que d'episodes ; sinon estimation duree / nb. Debuts transmis dans `#vcseg=first-last-perEp-s1.s2...` -> le suivi avance au vrai changement de chapitre.
 - Teste : `chapterStarts` (page reelle a 11 chapitres + cas synthetique "Intro + EP"), recherche reelle (Ten Thousand Worlds 200 -> compilation 181-200 a 8049 s, estime ; aucune compilation trouvee n'a de chapitres), Playwright esprit-donghua : anciens champs absents, bouton ouvre l'encadre. Pas teste : clic sur une vignette dans le calque (meme chemin qu'avant, v6.34).
+
+## 2026-10-08 - v6.37 : recherche YouTube elargie, consentement cookies, "Plus de videos"
+
+- Recherche generale : chaque nom de la serie (2 premiers) x "episode N vostfr" / "EP N" en parallele. Avant : seul "Wan Jie Du Zun episode 199 vostfr" -> rien ; les compilations sont titrees en anglais ("Ten Thousand Worlds EP 181 - EP 200") et ne citent pas 199.
+- `ucbcb=1` sur les 3 adresses YouTube (results, channel search, watch) : sans cookie de consentement (Europe), YouTube renvoie consent.youtube.com sans ytInitialData -> "Suivant" retombait sur Odysee en silence. Echec de recherche auto desormais logue (plus de catch muet).
+- Iframe YouTube : CSS masque `.fullscreen-watch-next-entrypoint-wrapper` ("Plus de videos", cachait les reglages) et `.ytp-pause-overlay`.
+- Teste Playwright (Ten Thousand Worlds ep. 199 sur esprit-donghua) : vignette compilation 181-200 -> clic -> YouTube a 2:07 (7625 s, estime), chaine Anime Zone retenue, sous-titres FR ; Suivant -> ep. 200 meme video a 8049 s ; "Plus de videos" display:none, reglages visibles.
