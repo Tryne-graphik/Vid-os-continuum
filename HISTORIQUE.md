@@ -866,3 +866,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Encadre du decompte en bas a droite (ne cache plus les sous-titres) + "Suivant maintenant".
 - Boutons Fin intro / Debut outro verts si regles (manuel ou AniSkip), gris sinon (refreshIntroOutroButtons, appele par applyRuntimeConfig et le panneau).
 - Teste en Playwright (Odysee reel, ep. 192) : near-end -> decompte 4 s puis ep. 193 ; outro 5:10 -> signal a 306 s, remaining 5,9 s, enchainement ; boutons gris/vert.
+
+## 2026-10-08 - v6.36 : YouTube en vignettes, plus de lien a coller
+
+- Supprimes : champ "Lien YouTube de secours", "Utiliser ce lien", "Retirer le lien" (2 panneaux) + `setYoutubeOverride`/`clearYoutubeOverride`/`askYoutubeAssociation` (prompt de lien). "Revenir a la source du site" efface toujours les liens memorises.
+- "Trouver sur YouTube" = recherche generale (`searchYoutubeForEpisode`) affichee en vignettes dans l'encadre du calque (`showYoutubeChooser`, rendu partage avec l'encadre "video cale" via `renderYoutubeChoices`). Clic = chaine retenue pour la serie. Chaine associee sans resultat -> vignettes au lieu d'un message.
+- Compilations : `positionHit` lit les chapitres de la video (`chapterRenderer` de la page watch) ; titres "EP N" ou, si aucun chapitre numerote, autant de chapitres que d'episodes ; sinon estimation duree / nb. Debuts transmis dans `#vcseg=first-last-perEp-s1.s2...` -> le suivi avance au vrai changement de chapitre.
+- Teste : `chapterStarts` (page reelle a 11 chapitres + cas synthetique "Intro + EP"), recherche reelle (Ten Thousand Worlds 200 -> compilation 181-200 a 8049 s, estime ; aucune compilation trouvee n'a de chapitres), Playwright esprit-donghua : anciens champs absents, bouton ouvre l'encadre. Pas teste : clic sur une vignette dans le calque (meme chemin qu'avant, v6.34).
