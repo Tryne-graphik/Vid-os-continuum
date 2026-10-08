@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.37
+// @version      6.38
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -147,6 +147,17 @@
         let playbackStarted = false; // evenement 'play' reel, PAS juste "la balise <video> existe" (faux sur sibnet, ou elle existe des le depart)
 
         function findVideo() { return document.querySelector('video'); }
+
+        // Souris dans le lecteur : la page affiche ses boutons Prec./Suiv. (v6.38).
+        let lastActivityPost = 0;
+        const postActivity = () => {
+            const now = Date.now();
+            if (now - lastActivityPost < 400) return;
+            lastActivityPost = now;
+            window.parent.postMessage({ type: MSG_PREFIX + 'activity' }, '*');
+        };
+        document.addEventListener('mousemove', postActivity, true);
+        document.addEventListener('touchstart', postActivity, true);
 
         function waitForVideo(callback) {
             const existing = findVideo();
@@ -1549,7 +1560,7 @@
                         const cc = /"label":"(?:Sous-titres|CC|Subtitles)"/.test(JSON.stringify(o.badges || []));
                         if (name && range && be && be.browseId && !teaser && (vf || cc)) {
                             out.push({ id: o.videoId, title: title, len: ytTimeToSec(o.lengthText.simpleText), channelId: be.browseId, channelName: owner.text || '',
-                                keyword: name, first: range.first, last: range.last, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
+                                keyword: name, first: range.first, last: range.last, vf: vf, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
                         }
                     }
                     Object.keys(o).forEach((k) => walk(o[k]));
@@ -1612,7 +1623,12 @@
                     '<div data-yt="' + i + '" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
                     '<img src="https://i.ytimg.com/vi/' + escapeHtml(r.id) + '/mqdefault.jpg" style="width:96px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;">' +
                     '<div style="min-width:0;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
-                    '<div style="font-size:11px;opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</div></div></div>').join('');
+                    '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</span> ' +
+                    // VOSTFR = annonce dans le titre ; sinon piste de sous-titres
+                    // traduite automatiquement en francais par YouTube.
+                    (r.vf ? '<span style="background:#2e7d32;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;">VOSTFR</span>'
+                        : '<span style="background:#b26a00;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Sous-titres traduits automatiquement en francais par YouTube">ST auto FR</span>') +
+                    '</div></div></div>').join('');
                 zone.querySelectorAll('[data-yt]').forEach((el) => el.addEventListener('click', () => {
                     if (onPick) onPick();
                     useYoutubeSearchResult(info, results[Number(el.getAttribute('data-yt'))]);
@@ -2163,6 +2179,9 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.38', ['Boutons Episode precedent / suivant sur la video, a gauche et a droite du centre : ils apparaissent quand la souris bouge et disparaissent apres 3 s.',
+                'Vignettes YouTube : badge VOSTFR (annonce dans le titre) ou ST auto FR (sous-titres traduits automatiquement par YouTube).',
+                'Lecture sur YouTube : "Prec." revient a l\'episode precedent au lieu d\'afficher "Aucun episode precedent".']],
             ['6.37', ['Recherche YouTube : essaie aussi le nom anglais de la serie et "EP N" - trouve les compilations (ex. "EP 181 - EP 200") qui ne citent pas le numero cherche.',
                 'Lecteur YouTube : le bouton "Plus de videos" est masque (il cachait les reglages).',
                 'Episode suivant sur YouTube : ne retombe plus sur le site quand YouTube affiche sa page de consentement aux cookies.']],
@@ -2365,6 +2384,21 @@
             toast.innerHTML = '<span id="ed-toast-text">Episode suivant dans 3s...</span><button id="ed-toast-now" style="background:#03d0fc;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">Suivant maintenant</button><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
             overlay.appendChild(toast);
 
+            // Prec./Suiv. sur la video (v6.38) : apparaissent quand la souris
+            // bouge, disparaissent apres 3 s, comme lecture/pause.
+            const NAV = 'position:absolute;top:50%;z-index:9;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:26px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
+            const navPrev = document.createElement('button');
+            navPrev.type = 'button'; navPrev.title = 'Episode precedent'; navPrev.textContent = '⏮';
+            navPrev.style.cssText = NAV + 'left:calc(50% - 130px);';
+            const navNext = document.createElement('button');
+            navNext.type = 'button'; navNext.title = 'Episode suivant'; navNext.textContent = '⏭';
+            navNext.style.cssText = NAV + 'left:calc(50% + 130px);';
+            overlay.appendChild(navPrev);
+            overlay.appendChild(navNext);
+            navPrev.addEventListener('click', () => topbar.querySelector('#ed-prev-btn').click());
+            navNext.addEventListener('click', () => topbar.querySelector('#ed-next-btn').click());
+            overlay.addEventListener('mousemove', showNavButtons);
+
             document.body.appendChild(overlay);
 
             const currentNameEl = topbar.querySelector('#ed-current-name');
@@ -2469,9 +2503,20 @@
             overlayEls = {
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
                 seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, trackCb: trackCb,
-                backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl, siteErrorBox: siteErrorBox
+                backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl, siteErrorBox: siteErrorBox,
+                navPrev: navPrev, navNext: navNext
             };
             return overlayEls;
+        }
+
+        let navHideTimer = null;
+        function showNavButtons() {
+            if (!overlayEls || !currentEpisode) return;
+            const show = (el, on) => { el.style.opacity = on ? '1' : '0'; el.style.pointerEvents = on ? 'auto' : 'none'; };
+            show(overlayEls.navPrev, ytActive || hasPrevEpisode(currentEpisode));
+            show(overlayEls.navNext, ytActive || hasNextEpisode(currentEpisode));
+            clearTimeout(navHideTimer);
+            navHideTimer = setTimeout(() => { show(overlayEls.navPrev, false); show(overlayEls.navNext, false); }, 3000);
         }
 
         function hasNextEpisode(info) {
@@ -2670,6 +2715,7 @@
                 outroSignalSent = true;
                 triggerNextEpisode('fin reelle de la video');
             }
+            if (type === 'activity') showNavButtons();
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
@@ -3108,6 +3154,10 @@
         }
 
         function goToPreviousEpisode() {
+            if (ytActive && currentEpisode) {
+                const prev = episodeInfoForNumber(currentEpisode, Number(currentEpisode.episodeNumber) - 1);
+                if (prev && Number(prev.episodeNumber) >= 1) { outroSkipSuspended = true; applyLoadedEpisode(prev, true); return; }
+            }
             if (!currentEpisode || !hasPrevEpisode(currentEpisode)) { alert('Aucun episode precedent detecte.'); return; }
             outroSkipSuspended = true;
             setStatus('Chargement de l\'episode precedent...');

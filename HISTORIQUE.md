@@ -880,3 +880,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - `ucbcb=1` sur les 3 adresses YouTube (results, channel search, watch) : sans cookie de consentement (Europe), YouTube renvoie consent.youtube.com sans ytInitialData -> "Suivant" retombait sur Odysee en silence. Echec de recherche auto desormais logue (plus de catch muet).
 - Iframe YouTube : CSS masque `.fullscreen-watch-next-entrypoint-wrapper` ("Plus de videos", cachait les reglages) et `.ytp-pause-overlay`.
 - Teste Playwright (Ten Thousand Worlds ep. 199 sur esprit-donghua) : vignette compilation 181-200 -> clic -> YouTube a 2:07 (7625 s, estime), chaine Anime Zone retenue, sous-titres FR ; Suivant -> ep. 200 meme video a 8049 s ; "Plus de videos" display:none, reglages visibles.
+
+## 2026-10-08 - v6.38 : boutons Prec./Suiv. sur la video, badges VOSTFR
+
+- Iframe (runInsidePlayerFrameGeneric) : mousemove/touchstart -> message 'activity' (max 1 / 400 ms). Calque : 2 boutons ronds a 130 px de part et d'autre du centre, visibles 3 s apres le dernier mouvement (showNavButtons), caches s'il n'y a pas d'episode avant/apres ; clic = clic sur #ed-prev-btn / #ed-next-btn.
+- goToPreviousEpisode en mode YouTube : episodeInfoForNumber(n - 1) comme Suivant (avant : "Aucun episode precedent detecte" sur les sites une page par episode).
+- Vignettes : badge vert VOSTFR (titre) ou orange "ST auto FR" (piste traduite par YouTube).
+- Teste Playwright (Ten Thousand Worlds ep. 149) : Odysee -> boutons invisibles au repos, visibles quand la souris bouge, caches apres 3,5 s, ⏭ -> 150, ⏮ -> 149 ; vignette compilation 141-160 badge ST auto FR ; YouTube -> ⏮ -> 148 dans la meme video (3389 s -> 2965 s).
