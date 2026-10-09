@@ -903,3 +903,5 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.42 (2026-10-09)
 - ⏮/⏭ : 64px -> 42px (police 26 -> 17), bottom 90 -> 64px (barre de progression Odysee a ~54px du bas sur la capture utilisateur), ecart ±130 -> ±90px. Non teste en navigateur.
+- Session 2026-10-09 : v6.39 a v6.42 publiees (dernier commit 4b457ce).
+- Suite : retours utilisateur attendus sur (1) les icones des vignettes sur anime-sama/animoflix et la turquoise, (2) la bascule YouTube directe sur les videos sans choix de qualite (si un rechargement a encore lieu, le test `direct` = pas d'adresse blob: est faux), (3) le test acceleration materielle Chrome desactivee sur le grand ecran, (4) taille/position de ⏮/⏭ v6.42.
