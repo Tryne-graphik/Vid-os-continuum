@@ -900,3 +900,6 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 ## v6.41 (2026-10-09)
 - Pastille ronde -> icone SVG inline reprise de l'icone Flaticon "lister" choisie par l'utilisateur (3 cases a la couleur de l'etat + 3 traits pilule blancs, 1re case cochee, croix si exclu) dans un carre sombre 36px, couleur = etat, coche tracee par <animate> SMIL (pas de CSS injecte). Icones Flaticon proposees par l'utilisateur ecartees (GIF non recolorable, attribution, chargement externe ; site bloque Playwright). Redessin seulement si l'etat change (data-state).
 - Teste : Playwright accueil ED (capture vert/jaune/rouge OK).
+
+## v6.42 (2026-10-09)
+- ⏮/⏭ : 64px -> 42px (police 26 -> 17), bottom 90 -> 64px (barre de progression Odysee a ~54px du bas sur la capture utilisateur), ecart ±130 -> ±90px. Non teste en navigateur.
