@@ -1897,7 +1897,9 @@
             const dataBlock = '<script type="application/json" id="ed-progress-backup">' +
                 JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>' +
                 '<script type="application/json" id="ed-history-backup">' +
-                JSON.stringify(Object.keys(loadHistory()).map((k) => loadHistory()[k])).replace(/</g, '\\u003c') + '</' + 'script>';
+                JSON.stringify(Object.keys(loadHistory()).map((k) => loadHistory()[k])).replace(/</g, '\\u003c') + '</' + 'script>' +
+                '<script type="application/json" id="ed-settings-backup">' +
+                JSON.stringify(collectBackupSettings()).replace(/</g, '\\u003c') + '</' + 'script>';
             return '<!doctype html><html><head><meta charset="utf-8">' +
                 '<meta name="viewport" content="width=device-width, initial-scale=1">' +
                 '<title>Ma progression - Vidéo Continuum</title>' +
@@ -2041,6 +2043,53 @@
                 };
             }).filter(Boolean);
         }
+        // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
+        // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
+        const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
+            'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2'];
+        function collectBackupSettings() {
+            const out = {};
+            BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
+            return out;
+        }
+        // Fichier de sauvegarde = donnee non fiable : types simples seulement,
+        // tailles bornees, pas d'adresse autre que https (iframe, liens).
+        function cleanBackupValue(v, depth) {
+            if (typeof v === 'boolean' || (typeof v === 'number' && isFinite(v))) return v;
+            if (typeof v === 'string') return v.length > 2000 || /^\s*[a-z][a-z0-9+.-]*:/i.test(v) && !/^https:\/\//i.test(v) ? undefined : v;
+            if (!v || typeof v !== 'object' || depth > 3) return undefined;
+            const out = Array.isArray(v) ? [] : {};
+            Object.keys(v).slice(0, 5000).forEach((k) => {
+                if (k.length > 1000 || k === '__proto__' || k === 'constructor' || k === 'prototype') return;
+                const c = cleanBackupValue(v[k], depth + 1);
+                if (c !== undefined) { if (Array.isArray(out)) out.push(c); else out[k] = c; }
+            });
+            return out;
+        }
+        function mergeImportedSettings(html) {
+            const el = new DOMParser().parseFromString(html, 'text/html').getElementById('ed-settings-backup');
+            let data = null;
+            try { data = el ? JSON.parse(el.textContent) : null; } catch (e) { data = null; }
+            if (!data || typeof data !== 'object' || Array.isArray(data)) return 0;
+            let restored = 0;
+            BACKUP_SETTINGS.forEach((k) => {
+                let v = cleanBackupValue(data[k], 0);
+                if (!v || typeof v !== 'object' || Array.isArray(v)) return;
+                if (k === 'customSites') v = Object.fromEntries(Object.entries(v).filter(([h]) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h)));
+                if (k === 'youtubeOverrides') v = Object.fromEntries(Object.entries(v).filter(([, u]) => /^https:\/\/(www\.)?youtube(-nocookie)?\.com\//i.test(u)));
+                // Fusion : les reglages deja presents ici gagnent.
+                GM_setValue(k, Object.assign({}, v, GM_getValue(k, {})));
+                restored++;
+            });
+            BACKUP_PREFS.forEach((k) => {
+                const v = data[k];
+                if (GM_getValue(k, undefined) === undefined && (typeof v === 'boolean' || (typeof v === 'string' && v.length <= 50))) { GM_setValue(k, v); restored++; }
+            });
+            // Sites ajoutes restaures : connus tout de suite (sinon leurs animes seraient ignores ci-apres).
+            Object.keys(loadCustomSites()).forEach((h) => { if (!SITES.some((x) => x.id === 'custom:' + h)) SITES.push(makeGenericSite(h)); });
+            return restored;
+        }
         function mergeImportedHistory(html) {
             const el = new DOMParser().parseFromString(html, 'text/html').getElementById('ed-history-backup');
             let list = [];
@@ -2083,9 +2132,11 @@
                 try {
                     const entries = parseProgressBackup(String(reader.result));
                     if (entries.length === 0) { alert('Aucune entree de progression trouvee dans ce fichier.'); return; }
+                    const nbSettings = mergeImportedSettings(String(reader.result));
                     const result = mergeImportedEntries(entries);
                     mergeImportedHistory(String(reader.result));
-                    alert('Import termine : ' + result.added + ' ajoutee(s), ' + result.updated + ' mise(s) a jour, ' + result.skipped + ' ignoree(s).');
+                    alert('Import termine : ' + result.added + ' ajoutee(s), ' + result.updated + ' mise(s) a jour, ' + result.skipped + ' ignoree(s).' +
+                        (nbSettings ? '\nReglages restaures (etats de suivi, intro/outro, YouTube, sites ajoutes...) : ' + nbSettings + ' groupe(s).' : ''));
                     buildPersistentPanel();
                 } catch (e) { alert('Import impossible : ' + e.message); }
             };
@@ -2212,7 +2263,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
-            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).']],
+            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).', 'Sauvegarde complete : en plus de la progression et de l\'historique, le fichier garde les series abandonnees / en attente, les reglages intro/outro, les chaines YouTube, les sites ajoutes, les reprises et les preferences (restaures a l\'import, sans ecraser ceux deja presents).']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],

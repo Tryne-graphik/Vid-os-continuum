@@ -9,7 +9,9 @@ Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7
 
 ## Fichiers cles
 - `esprit-donghua-suivi-progression-v6.user.js` : version ACTIVE (les v3/v4/sans suffixe sont anciennes).
-- `anime-tracker-generique.user.js` : variante generique (v1.0, jamais testee).
+- (`anime-tracker-generique.user.js` v1.0 supprime en v6.50 : la version generique partira de la v6 ; recuperable via git.)
+- Sauvegarde : blocs JSON `ed-progress-backup`, `ed-history-backup`, `ed-settings-backup` (BACKUP_SETTINGS / BACKUP_PREFS,
+  `cleanBackupValue` a l'import : fichier non fiable). Toute nouvelle donnee utilisateur en GM -> l'ajouter a BACKUP_SETTINGS.
 - `installateur/Program.cs` : installateur (ouvre seulement des pages ; SHA-256 de l'exe dans README a mettre a jour si rebuild).
 - `google-apps-script/`, `odysee-referer-extension/`, `save/` (exemple de sauvegarde).
 

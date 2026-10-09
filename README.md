@@ -4,6 +4,28 @@ Script Tampermonkey qui retient où tu en es dans tes animes, saute les
 génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
 épisodes.
 
+## Ce qu'il fait
+
+- **Sites gérés** : Esprit Donghua, Anime-Sama, Animoflix, Odysee, plus les
+  sites que tu ajoutes toi-même (menu Tampermonkey → **« ➕ Ajouter ce
+  site »**, depuis la page d'un épisode, lecteur affiché).
+- **Lecteur plein écran** : saut de l'intro et de la fin (réglages par série,
+  ou automatique via AniSkip), épisode suivant enchaîné, reprise à l'endroit
+  où tu t'étais arrêté, boutons ⏮ / ⏭ sous la barre de lecture.
+- **Suivi** : un panneau par site avec les animes « à rattraper », une
+  fenêtre de suivi détaillée et un historique.
+- **Icônes sur les vignettes des sites** (légende dans le panneau) : vert =
+  suivi et à jour, turquoise = nouvel épisode, violet = saison finie en
+  attente de la suite, jaune = suivi sur un autre site, rouge = abandonné.
+- **Saison finie (⏸)** dans la fenêtre de suivi : la série ne compte plus
+  « à rattraper » ; Vidéo Continuum détecte la saison suivante (Anime-Sama,
+  Animoflix, myfluneo) ou le prochain épisode et te la signale.
+- **Repli YouTube** quand la vidéo du site cale ou manque : recherche de
+  l'épisode (compilations comprises) et sous-titres traduits en français.
+- **Sauvegarde** : export / import d'un fichier qui contient ta progression,
+  ton historique et tes réglages (séries abandonnées ou en attente,
+  intro/outro, chaînes YouTube, sites ajoutés, reprises).
+
 ## Installation
 
 **Le plus simple** : lance `installateur/Vidéo-Continuum-Installateur.exe` et
@@ -46,8 +68,10 @@ administrateur.
   type, le site, l'anime, l'épisode, la version du script, ton navigateur
   (user-agent), l'adresse de la page et l'état du lecteur. Rien n'est
   envoyé sans clic sur « Envoyer ».
-- La clé API YouTube éventuelle reste dans ton navigateur et n'est jamais
-  exportée.
+- Pour fonctionner, le script lit des pages publiques : celles des sites
+  d'anime (nouveaux épisodes, saisons), la recherche YouTube (repli) et
+  AniList (fiche de l'anime, saut automatique AniSkip). Aucune donnée
+  personnelle n'y est envoyée.
 - **N'importe que des sauvegardes de confiance.** L'import filtre les
   contenus dangereux (liens hors des sites gérés, code injecté), mais une
   sauvegarde reste une liste de liens choisie par quelqu'un d'autre.
