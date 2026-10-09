@@ -1481,6 +1481,12 @@
             }
         }
         function loadNewSeasons() { return GM_getValue('newSeasons', {}); }
+        function forgetSeasonState(key) {
+            ['seasonDone', 'newSeasons', 'seasonDismissed'].forEach((name) => {
+                const all = GM_getValue(name, {});
+                if (key in all) { delete all[key]; GM_setValue(name, all); }
+            });
+        }
         function isBehind(key) { return (!!newEpisodes[key] || !!loadNewSeasons()[key]) && !loadSeasonDone()[key]; }
 
         // Nouvelles saisons (v6.49) : anime-sama (saisonN/langue), animoflix
@@ -1506,7 +1512,13 @@
                     const list = Array.from(html.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/panneauAnime\("[^"]*",\s*"(saison(\d+)(?:-(\d+))?\/([^"/]+))\/?"\)/g))
                         .map((m) => ({ path: m[1], n: Number(m[2]) + (Number(m[3]) || 0) / 100, lang: m[4] }))
                         .filter((x) => x.lang === cur.lang && x.n > cur.n).sort((a, b) => a.n - b.n);
-                    return list.length ? { url: base + list[0].path + '/#ep=1', n: list[0].n } : null;
+                    if (!list.length) return null;
+                    // Saison listee avant ses episodes : episodes.js doit en contenir au moins un.
+                    const seasonUrl = base + list[0].path + '/';
+                    return fetchPageHtml(seasonUrl).then((h2) => {
+                        const js = h2.match(/<script[^>]+src=["']([^"']*episodes\.js[^"']*)["']/i);
+                        return js ? fetchPageHtml(resolveUrl(js[1], seasonUrl)) : '';
+                    }).then((jsText) => (jsText && buildEmbedByIndex(parseEpsArrays(jsText)).length ? { url: seasonUrl + '#ep=1', n: list[0].n } : null));
                 });
             }
             if (cur.fam.indexOf('af:') === 0) {
@@ -1869,8 +1881,8 @@
                 const o = seasonOf(progress[k].seriesUrl);
                 return o && o.fam === cur.fam && o.n < cur.n;
             }) : [];
-            olderSeasons.forEach((k) => { delete newSeasons[k]; setSeasonDone(k, false); });
             if (Object.keys(newSeasons).length !== nsCount) GM_setValue('newSeasons', newSeasons);
+            olderSeasons.forEach(forgetSeasonState);
             if (!progress[key] && !force && !hasTrackedSibling(info, progress) && !olderSeasons.length) return;
             olderSeasons.forEach((k) => { console.log('[AnimeTracker v6] saison precedente retiree du suivi : ' + k); delete progress[k]; });
             progress[key] = {
@@ -1922,6 +1934,7 @@
             delete progress[key];
             saveProgress(progress);
             delete newEpisodes[key];
+            forgetSeasonState(key);
             return true;
         }
 
@@ -3662,8 +3675,8 @@
         // nouveaux episodes en tete, puis alphabetique au sein du groupe.
         function seriesSortCompare(a, b) {
             if (a.siteTag !== b.siteTag) return (a.siteTag || '').localeCompare(b.siteTag || '');
-            const aNew = newEpisodes[a.key] ? 1 : 0;
-            const bNew = newEpisodes[b.key] ? 1 : 0;
+            const aNew = isBehind(a.key) ? 1 : 0;
+            const bNew = isBehind(b.key) ? 1 : 0;
             if (aNew !== bNew) return bNew - aNew;
             return a.seriesName.localeCompare(b.seriesName);
         }
@@ -3679,7 +3692,7 @@
             const key = storageKey(currentEpisode);
             const epNum = currentEpisode.episodeNumber || '?';
             const latest = latestKnownEpisode[key];
-            const isNew = !!newEpisodes[key];
+            const isNew = isBehind(key);
             return {
                 name: '[' + currentEpisode.siteTag + '] ' + displayName(currentEpisode.seriesName),
                 fullName: currentEpisode.seriesName + ' (' + currentEpisode.siteLabel + ')',
@@ -3871,22 +3884,24 @@
                 '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th><th></th><th></th></tr>';
             const seasonDone = loadSeasonDone();
             const newSeasons = loadNewSeasons();
+            const seasonDismissed = GM_getValue('seasonDismissed', {});
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const waiting = !!seasonDone[e.key];
+                const ignored = waiting && seasonDismissed[e.key];
                 const season = !newEpisodes[e.key] && newSeasons[e.key];
                 const latest = latestKnownEpisode[e.key];
                 const link = nb ? (season ? season.url : newEpisodes[e.key].url) : e.episodeUrl;
                 const action = nb ? (season ? 'Regarder (' + season.label + ')' : 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')') : 'Reprendre';
                 html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : waiting ? 'color:#b07cff;' : '') + '">' +
-                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (waiting ? ' <span style="font-size:10px;">(saison finie, en attente)</span>' : '') + '</td>' +
+                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (waiting ? ' <span style="font-size:10px;">(' + (ignored ? escapeHtml(seasonLabel(ignored)) + ' ignoree' : 'saison finie, en attente') + ')</span>' : '') + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
                     '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-info" data-key="' + escapeHtml(e.key) + '" title="Fiche : synopsis, genres" style="background:none;border:1px solid #03d0fc;border-radius:4px;color:#03d0fc;cursor:pointer;font-size:12px;padding:2px 6px;">&#8505;</button></td>' +
                     '<td style="padding:6px 2px;">' + (nb && !season && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
-                    '<td style="padding:6px 2px;"><button class="ep-tracking-wait" data-key="' + escapeHtml(e.key) + '" data-on="' + (waiting ? '0' : '1') + '" title="' + (waiting ? 'Reprendre le suivi normal' : 'Saison finie : en attente de la suite (repasse en nouvel episode tout seul)') + '" style="background:' + (waiting ? '#b07cff;color:#000' : 'none;color:#b07cff') + ';border:1px solid #b07cff;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;">&#9208;</button></td>' +
+                    '<td style="padding:6px 2px;"><button class="ep-tracking-wait" data-key="' + escapeHtml(e.key) + '" data-on="' + (waiting ? '0' : '1') + '" title="' + (ignored ? escapeHtml(seasonLabel(ignored)) + ' ignoree : cliquer pour la reproposer' : waiting ? 'Reprendre le suivi normal' : 'Saison finie : en attente de la suite (repasse en nouvel episode tout seul)') + '" style="background:' + (waiting ? '#b07cff;color:#000' : 'none;color:#b07cff') + ';border:1px solid #b07cff;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;">&#9208;</button></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
             html += '</table><div style="margin-top:16px;text-align:right;">' +
@@ -3913,7 +3928,15 @@
                 refreshTrackingPopup();
             }));
             pop.querySelectorAll('.ep-tracking-wait').forEach((btn) => btn.addEventListener('click', () => {
-                setSeasonDone(btn.getAttribute('data-key'), btn.getAttribute('data-on') === '1');
+                const k = btn.getAttribute('data-key');
+                const dismissed = GM_getValue('seasonDismissed', {});
+                // Saison suivante ignoree : le clic la repropose (reste en attente,
+                // la verification la retrouve et la signale).
+                if (btn.getAttribute('data-on') === '0' && dismissed[k]) {
+                    delete dismissed[k];
+                    GM_setValue('seasonDismissed', dismissed);
+                    checkForNewEpisodes();
+                } else setSeasonDone(k, btn.getAttribute('data-on') === '1');
                 buildPersistentPanel();
                 refreshTrackingPopup();
                 refreshThumbnailBadges();
@@ -3954,7 +3977,7 @@
                 opt.value = e.episodeUrl;
                 opt.textContent = buildSeriesOptionLabel(e);
                 if (currentEpisode && e.key === storageKey(currentEpisode)) opt.selected = true;
-                if (newEpisodes[e.key]) { opt.style.color = '#ffb300'; opt.style.fontWeight = 'bold'; }
+                if (isBehind(e.key)) { opt.style.color = '#ffb300'; opt.style.fontWeight = 'bold'; }
                 const since = formatRelativeDays(e.watchedAt);
                 if (since) opt.title = since;
                 select.appendChild(opt);
@@ -4070,7 +4093,7 @@
                 entries.forEach((e) => {
                     const label = buildSeriesOptionLabel(e);
                     const selected = currentEpisode && e.key === storageKey(currentEpisode) ? ' selected' : '';
-                    const style = newEpisodes[e.key] ? ' style="color:#ffb300;font-weight:bold;"' : '';
+                    const style = isBehind(e.key) ? ' style="color:#ffb300;font-weight:bold;"' : '';
                     const since = formatRelativeDays(e.watchedAt);
                     const titleAttr = since ? ` title="${since}"` : '';
                     html += `<option value="${escapeHtml(e.episodeUrl)}"${selected}${style}${titleAttr}>${escapeHtml(label)}</option>`;
