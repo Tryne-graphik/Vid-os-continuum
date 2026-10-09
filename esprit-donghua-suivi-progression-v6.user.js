@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.39
+// @version      6.40
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.40', ['Pastille ✓ sur les vignettes des sites : verte = suivi ici, turquoise = nouvel episode a voir, jaune = suivi sur un autre site, rouge = exclu du suivi.']],
             ['6.39', ['Boutons Episode precedent / suivant deplaces en bas au centre, au-dessus de la barre de lecture.',
                 'Le bouton Suivant reste visible (grise, "Pas encore sorti") sur le dernier episode sorti.',
                 'Video sans choix de qualite (fichier d\'origine) qui cale : bascule directe sur YouTube au lieu de recharger.']],
@@ -3467,6 +3468,7 @@
                 lastNewEpisodesCheckAt = new Date();
                 if (changed || firstCheck) buildPersistentPanel();
                 refreshTrackingPopup();
+                refreshThumbnailBadges();
             });
 
             function relocateEdEpisodeUrl(entry) {
@@ -4104,6 +4106,58 @@
             new MutationObserver(() => { clearTimeout(ficheTimer); ficheTimer = setTimeout(addFicheButtons, 300); })
                 .observe(document.body, { childList: true, subtree: true });
         }
+
+        // Pastilles sur les vignettes (v6.40) : vert = suivi ici, turquoise =
+        // suivi ici avec episode(s) en retard, jaune = suivi sur un autre site,
+        // rouge = exclu du suivi. Reconnaissance par le nom (comme les doublons).
+        const BADGES = {
+            ici: ['#2ecc40', 'Suivi sur ce site, a jour'],
+            retard: ['#03d0fc', 'Suivi sur ce site, nouvel episode disponible'],
+            ailleurs: ['#ffd400', 'Suivi sur un autre site'],
+            exclu: ['#ff4136', 'Exclu du suivi']
+        };
+        function nameVariants(name) {
+            const s = String(name || '').replace(/\s*[-:]?\s*(\b(s\d+\s*)?e\d+\b|(episode|épisode|ep\.?)\s*\d+).*$/i, '').replace(/\s*saison\s*\d+.*$/i, '');
+            const inside = (s.match(/\(([^)]+)\)/) || [])[1];
+            return [s, s.replace(/\([^)]*\)/g, ''), inside].map((n) => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .replace(/\b(vostfr|vf)\b/g, '').replace(/[^a-z0-9]/g, '')).filter((n) => n.length >= 3);
+        }
+        function refreshThumbnailBadges() {
+            const progress = loadProgress();
+            const excluded = loadExcludedSeries();
+            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3 };
+            const byName = {};
+            Object.keys(progress).forEach((k) => {
+                const e = progress[k];
+                const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : newEpisodes[k] ? 'retard' : 'ici';
+                nameVariants(e.seriesName).forEach((n) => { if (!byName[n] || rank[state] > rank[byName[n]]) byName[n] = state; });
+            });
+            document.querySelectorAll('a[href] img').forEach((img) => {
+                const a = img.closest('a');
+                if (a.closest('[id^="ep-"],[id^="ed-"]')) return;
+                const title = a.getAttribute('title') || img.getAttribute('alt') || (a.querySelector('h1,h2,h3,h4') || {}).textContent;
+                const state = nameVariants(title).map((n) => byName[n]).filter(Boolean).sort((x, y) => rank[y] - rank[x])[0];
+                const host = img.parentElement;
+                let badge = host.querySelector(':scope > .ep-thumb-badge');
+                if (!state) { if (badge) badge.remove(); return; }
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'ep-thumb-badge';
+                    badge.textContent = '✓';
+                    badge.style.cssText = 'position:absolute;top:6px;left:6px;z-index:5;width:22px;height:22px;border-radius:50%;color:#000;font:bold 14px/22px Arial,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:auto;';
+                    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                    host.appendChild(badge);
+                }
+                badge.style.background = BADGES[state][0];
+                badge.title = BADGES[state][1];
+            });
+        }
+        refreshThumbnailBadges();
+        let badgeTimer = null;
+        new MutationObserver((muts) => {
+            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.classList && n.classList.contains('ep-thumb-badge')))) return;
+            clearTimeout(badgeTimer); badgeTimer = setTimeout(refreshThumbnailBadges, 400);
+        }).observe(document.body, { childList: true, subtree: true });
 
         mergeOdyseeDuplicatesOnce();
         const liveInfoPromise = getLiveEpisodeInfo();

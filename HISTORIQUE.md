@@ -892,3 +892,7 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Boutons ⏮/⏭ en bas au centre (bottom:90px, ±130px), ⏭ toujours visible, grise + "Pas encore sorti" s'il n'y a pas d'episode suivant (signale : Lingwu 219 = dernier sorti, ⏭ absent -> pris pour un bug).
 - Retour utilisateur : les blocages arrivent sur les videos SANS choix de qualite (fichier d'origine), et sur le grand ecran seulement. Le message 'stall' de l'iframe porte `direct` (currentSrc pas en blob: = pas de HLS/MSE) -> pas de rechargement auto, YouTube direct (association ou recherche). Hypothese a confirmer : Odysee sert l'original en URL directe. Piste non-code donnee : desactiver l'acceleration materielle Chrome pour tester le decodage GPU.
 - Teste : node --check seulement, pas en navigateur.
+
+## v6.40 (2026-10-09)
+- Pastilles sur les vignettes (`refreshThumbnailBadges`, tous sites) : vert suivi ici, turquoise suivi ici + `newEpisodes`, jaune suivi sur un autre site, rouge exclu. Reconnaissance par nom (`nameVariants` : nom entier, hors parentheses, entre parentheses ; suffixes "S3 E28", "E280", "Episode N", "Saison N" retires). Titre lu dans a[title], img[alt], puis h1-h4. Pastille en haut a gauche (ED met "ONA" a droite). Rafraichie par MutationObserver (400 ms) et apres checkForNewEpisodes.
+- Teste : Playwright sur l'accueil ED reel (vert/jaune/rouge OK, capture). Turquoise pas teste en vrai (depend de la verif reseau). anime-sama / animoflix pas testes.
