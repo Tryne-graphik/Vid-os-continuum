@@ -922,3 +922,9 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.47 (2026-10-09)
 - Animoflix (capture utilisateur, cartes Red River de "Reprenez votre visionnage") : 2e icone en haut au milieu. Cause : la boucle prend toutes les `a[href] img`, y compris le drapeau `.language-badge-top.badge > img` du meme lien ; quand le nom correspond, icone posee sur le drapeau. Correctif : ignorer les img dans `.badge` ou de largeur < 60px (et retirer une icone deja posee). Parent `.badge` du drapeau verifie sur animoflix.to (Playwright) ; cartes historique non reproduites (generees depuis le compte).
+
+## v6.48 (2026-10-09)
+- Etat "Saison finie, en attente" (demande utilisateur) : GM `seasonDone` {cle: dernier ep. connu au marquage}. Bouton pause (violet #b07cff) dans la fenetre de suivi, bascule. `isBehind(key)` = newEpisodes et pas en attente -> compteurs "a rattraper", filtre et nb de la fenetre l'ignorent. Fin de checkForNewEpisodes : latestKnownEpisode > valeur enregistree -> attente retiree (retour turquoise). Limite : anime-sama, une nouvelle saison = autre adresse, pas detectee.
+- Icones : 36 -> 24px (svg 20), `badgeSvg(state, px)` + `badgeInfo(state)` en fonctions (pas de const -> pas de TDZ pour la legende). Attente = 3 cases cochees.
+- Section "Legende des icones" (2 panneaux), avant Nouveautes.
+- Teste Playwright accueil ED (shims GM, progression semee) : 4 etats sur les vignettes a 24px, legende OK, bouton pause -> ligne violette + seasonDone, re-clic -> retire. Retour automatique pas teste en vrai (depend d'un nouvel episode). Note harnais : un clic JS a ete perdu une fois (pub du site ouverte dans un onglet) -> relancer.

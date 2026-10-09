@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.47
+// @version      6.48
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1462,6 +1462,15 @@
         function loadExcludedSeries() { return GM_getValue('excludedSeries', {}); }
         function saveExcludedSeries(data) { GM_setValue('excludedSeries', data); }
         function isSeriesExcluded(key) { return !!loadExcludedSeries()[key]; }
+        // Saison finie, en attente de la suite (v6.48) : { cle: dernier ep. connu au marquage }.
+        // Reste verifie ; retire tout seul quand un episode plus recent apparait.
+        function loadSeasonDone() { return GM_getValue('seasonDone', {}); }
+        function setSeasonDone(key, on) {
+            const all = loadSeasonDone();
+            if (on) all[key] = Number(latestKnownEpisode[key]) || Number((loadProgress()[key] || {}).episodeNumber) || 0; else delete all[key];
+            GM_setValue('seasonDone', all);
+        }
+        function isBehind(key) { return !!newEpisodes[key] && !loadSeasonDone()[key]; }
         function setSeriesExcluded(key, excluded) {
             const all = loadExcludedSeries();
             if (excluded) all[key] = true; else delete all[key];
@@ -2179,6 +2188,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
             ['6.46', ['Animoflix : icone de suivi des vignettes en bas a droite aussi (meme etiquette Anime qui la cachait).']],
             ['6.45', ['Anime-Sama : icone de suivi des vignettes deplacee en bas a droite (l\'etiquette "Anime" du site la cachait).']],
@@ -2371,6 +2381,7 @@
                     '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser l\'acces au fichier</button>' +
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
                 incidentSectionHtml('ed', false) +
+                legendSectionHtml(false) +
                 newsSectionHtml(false) +
                 '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
@@ -3471,6 +3482,10 @@
                 }).then((info) => { if (info) applyResultFor(e, info, (c) => { if (c) changed = true; }); }).catch(() => {});
             });
             return Promise.all(checks).then(() => {
+                const done = loadSeasonDone();
+                Object.keys(done).forEach((k) => {
+                    if (Number(latestKnownEpisode[k]) > done[k]) { setSeasonDone(k, false); changed = true; console.log('[AnimeTracker v6] nouvel episode, fin d\'attente : ' + k); }
+                });
                 const firstCheck = !lastNewEpisodesCheckAt;
                 lastNewEpisodesCheckAt = new Date();
                 if (changed || firstCheck) buildPersistentPanel();
@@ -3580,7 +3595,7 @@
         // connus, sinon 1 par serie signalee). Ouvre openTrackingPopup().
 
         function countNewEpisodesFor(key, watched) {
-            if (!newEpisodes[key]) return 0;
+            if (!isBehind(key)) return 0;
             const latest = Number(latestKnownEpisode[key]);
             const w = Number(watched);
             return latest && w && latest > w ? latest - w : 1;
@@ -3617,12 +3632,12 @@
         function renderTrackingSummary() {
             const bySite = getTrackedEntriesBySite();
             const onlyBehind = getSiteFilter() === 'behind' && lastNewEpisodesCheckAt;
-            const lines = SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id) && (!onlyBehind || bySite[s.id].some((e) => newEpisodes[e.key]))).map((s) => {
+            const lines = SITES.filter((s) => bySite[s.id] && matchesSiteFilter(s.id) && (!onlyBehind || bySite[s.id].some((e) => isBehind(e.key)))).map((s) => {
                 const entries = bySite[s.id];
                 // Nombre d'ANIMES a rattraper, pas d'episodes : une seule serie
                 // tres en retard (ex. 139 ep.) noyait le total. Detail par
                 // anime dans la fenetre de suivi.
-                const nbBehind = entries.filter((e) => newEpisodes[e.key]).length;
+                const nbBehind = entries.filter((e) => isBehind(e.key)).length;
                 const newText = !lastNewEpisodesCheckAt ? 'verification...' : (nbBehind ? nbBehind + ' a rattraper' : 'a jour');
                 const color = nbBehind > 0 ? '#ffb300' : '#4caf50';
                 return '<div class="ep-summary-line" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.12);border:1px solid #03d0fc;border-radius:6px;padding:7px 9px;font-size:12px;">' +
@@ -3754,20 +3769,23 @@
                 '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">Suivi - ' + siteObj.label + '</h2>' +
                 '<div style="font-size:11px;color:#888;margin-bottom:12px;">' + entries.length + ' anime(s) suivi(s) &middot; ' + checkedText + '</div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
-                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th><th></th></tr>';
+                '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th><th></th><th></th></tr>';
+            const seasonDone = loadSeasonDone();
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
+                const waiting = !!seasonDone[e.key];
                 const latest = latestKnownEpisode[e.key];
                 const link = nb ? newEpisodes[e.key].url : e.episodeUrl;
                 const action = nb ? 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')' : 'Reprendre';
-                html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : '') + '">' +
-                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + '</td>' +
+                html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : waiting ? 'color:#b07cff;' : '') + '">' +
+                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (waiting ? ' <span style="font-size:10px;">(saison finie, en attente)</span>' : '') + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
                     '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-info" data-key="' + escapeHtml(e.key) + '" title="Fiche : synopsis, genres" style="background:none;border:1px solid #03d0fc;border-radius:4px;color:#03d0fc;cursor:pointer;font-size:12px;padding:2px 6px;">&#8505;</button></td>' +
                     '<td style="padding:6px 2px;">' + (nb && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
+                    '<td style="padding:6px 2px;"><button class="ep-tracking-wait" data-key="' + escapeHtml(e.key) + '" data-on="' + (waiting ? '0' : '1') + '" title="' + (waiting ? 'Reprendre le suivi normal' : 'Saison finie : en attente de la suite (repasse en nouvel episode tout seul)') + '" style="background:' + (waiting ? '#b07cff;color:#000' : 'none;color:#b07cff') + ';border:1px solid #b07cff;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;">&#9208;</button></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
             html += '</table><div style="margin-top:16px;text-align:right;">' +
@@ -3792,6 +3810,12 @@
                 markSeriesFullyWatched(btn.getAttribute('data-key'));
                 buildPersistentPanel();
                 refreshTrackingPopup();
+            }));
+            pop.querySelectorAll('.ep-tracking-wait').forEach((btn) => btn.addEventListener('click', () => {
+                setSeasonDone(btn.getAttribute('data-key'), btn.getAttribute('data-on') === '1');
+                buildPersistentPanel();
+                refreshTrackingPopup();
+                refreshThumbnailBadges();
             }));
             pop.querySelectorAll('.ep-tracking-drop').forEach((btn) => btn.addEventListener('click', () => {
                 if (!confirm('Abandonner le suivi de "' + btn.getAttribute('data-name') + '" ?')) return;
@@ -3981,6 +4005,7 @@
                 '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
                 prevOpen.sauvegarde);
             html += incidentSectionHtml('ep', prevOpen.incident);
+            html += legendSectionHtml(prevOpen.legende);
             html += newsSectionHtml(prevOpen.nouveautes);
             html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
@@ -4132,12 +4157,34 @@
         // Pastilles sur les vignettes (v6.40) : vert = suivi ici, turquoise =
         // suivi ici avec episode(s) en retard, jaune = suivi sur un autre site,
         // rouge = exclu du suivi. Reconnaissance par le nom (comme les doublons).
-        const BADGES = {
-            ici: ['#2ecc40', 'Suivi sur ce site, a jour'],
-            retard: ['#03d0fc', 'Suivi sur ce site, nouvel episode disponible'],
-            ailleurs: ['#ffd400', 'Suivi sur un autre site'],
-            exclu: ['#ff4136', 'Exclu du suivi']
-        };
+        // Couleurs/sens des icones (fonction : pas de TDZ, la legende du panneau
+        // peut etre construite avant cette ligne).
+        function badgeInfo(state) {
+            return {
+                ici: ['#2ecc40', 'Suivi sur ce site, a jour'],
+                retard: ['#03d0fc', 'Suivi sur ce site, nouvel episode disponible'],
+                attente: ['#b07cff', 'Saison finie, en attente de la suite'],
+                ailleurs: ['#ffd400', 'Suivi sur un autre site'],
+                exclu: ['#ff4136', 'Abandonne (exclu du suivi)']
+            }[state];
+        }
+        // Icone liste a cases (style Flaticon "lister") : cases a la couleur de
+        // l'etat, 1re cochee (croix si exclu, 3 cochees si saison finie), la
+        // marque se trace (v6.41).
+        function badgeSvg(state, px) {
+            const c = badgeInfo(state)[0];
+            const tick = (y) => 'M3.5 ' + (y + 2.2) + 'l1.2 1.2 2-2.4';
+            const mark = state === 'exclu' ? 'M3.7 3.2l2.6 2.6M6.3 3.2L3.7 5.8' : state === 'attente' ? tick(2.5) + tick(10) + tick(17.5) : tick(2.5);
+            const row = (y) => '<rect x="2.5" y="' + y + '" width="5" height="5" rx=".8" stroke="' + c + '"/><rect x="10.5" y="' + (y + 1.1) + '" width="11" height="2.8" rx="1.4" stroke="#fff" stroke-width="1.3"/>';
+            return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+                row(2) + row(9.5) + row(17) +
+                '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
+        }
+        function legendSectionHtml(open) {
+            return collapsibleSection('legende', 'Legende des icones', ['ici', 'retard', 'attente', 'ailleurs', 'exclu'].map((st) =>
+                '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
+                '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
+        }
         function nameVariants(name) {
             const s = String(name || '').replace(/\s*[-:]?\s*(\b(s\d+\s*)?e\d+\b|(episode|épisode|ep\.?)\s*\d+).*$/i, '').replace(/\s*saison\s*\d+.*$/i, '');
             const inside = (s.match(/\(([^)]+)\)/) || [])[1];
@@ -4147,11 +4194,12 @@
         function refreshThumbnailBadges() {
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
-            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3 };
+            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3 };
+            const seasonDone = loadSeasonDone();
             const byName = {};
             Object.keys(progress).forEach((k) => {
                 const e = progress[k];
-                const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : newEpisodes[k] ? 'retard' : 'ici';
+                const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : seasonDone[k] ? 'attente' : newEpisodes[k] ? 'retard' : 'ici';
                 nameVariants(e.seriesName).forEach((n) => { if (!byName[n] || rank[state] > rank[byName[n]]) byName[n] = state; });
             });
             document.querySelectorAll('a[href] img').forEach((img) => {
@@ -4173,21 +4221,14 @@
                     badge = document.createElement('span');
                     badge.className = 'ep-thumb-badge';
                     // anime-sama / animoflix : etiquette "Anime" (z-index 15) en haut a gauche -> en bas a droite (v6.45-46)
-                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' || site.id === 'animoflix' ?'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:36px;height:36px;border-radius:7px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
+                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' || site.id === 'animoflix' ?'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:24px;height:24px;border-radius:5px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
                     host.appendChild(badge);
                 }
                 if (badge.getAttribute('data-state') === state) return;
                 badge.setAttribute('data-state', state);
-                // Icone liste a cases (style Flaticon "lister") : cases a la couleur
-                // de l'etat, 1re cochee (croix si exclu), la marque se trace (v6.41)
-                const c = BADGES[state][0];
-                const mark = state === 'exclu' ? 'M3.7 3.2l2.6 2.6M6.3 3.2L3.7 5.8' : 'M3.5 4.7l1.2 1.2 2-2.4';
-                const row = (y) => '<rect x="2.5" y="' + y + '" width="5" height="5" rx=".8" stroke="' + c + '"/><rect x="10.5" y="' + (y + 1.1) + '" width="11" height="2.8" rx="1.4" stroke="#fff" stroke-width="1.3"/>';
-                badge.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
-                    row(2) + row(9.5) + row(17) +
-                    '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="10" stroke-dashoffset="10"><animate attributeName="stroke-dashoffset" from="10" to="0" dur=".5s" begin=".1s" fill="freeze"/></path></svg>';
-                badge.title = BADGES[state][1];
+                badge.innerHTML = badgeSvg(state, 20);
+                badge.title = badgeInfo(state)[1];
             });
         }
         refreshThumbnailBadges();
