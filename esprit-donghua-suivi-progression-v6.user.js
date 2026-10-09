@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.48
+// @version      6.49
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1470,7 +1470,60 @@
             if (on) all[key] = Number(latestKnownEpisode[key]) || Number((loadProgress()[key] || {}).episodeNumber) || 0; else delete all[key];
             GM_setValue('seasonDone', all);
         }
-        function isBehind(key) { return !!newEpisodes[key] && !loadSeasonDone()[key]; }
+        function loadNewSeasons() { return GM_getValue('newSeasons', {}); }
+        function isBehind(key) { return (!!newEpisodes[key] || !!loadNewSeasons()[key]) && !loadSeasonDone()[key]; }
+
+        // Nouvelles saisons (v6.49) : anime-sama (saisonN/langue), animoflix
+        // (saison-N, meme entree de suivi), myfluneo (une fiche par saison :
+        // slug, slug-2, slug-3...). fam = meme anime, n = numero de saison.
+        function seasonOf(url) {
+            let m;
+            url = String(url || '');
+            if ((m = url.match(/anime-sama\.[a-z]+\/catalogue\/([^/]+)\/saison(\d+)(?:-(\d+))?\/([^/#?]+)/))) return { fam: 'as:' + m[1] + ':' + m[4], n: Number(m[2]) + (Number(m[3]) || 0) / 100, lang: m[4] };
+            if ((m = url.match(/animoflix\.to\/anime\/([^/]+)\/saison-(\d+)\/([^/]+)\//))) return { fam: 'af:' + m[1], n: Number(m[2]), slug: m[1], lang: m[3] };
+            if ((m = url.match(/myfluneo\.[a-z]+\/anime\/([^/?#]+?)(?:-(\d+))?(?:[/?#]|$)/))) return { fam: 'mf:' + m[1], n: Number(m[2]) || 1, base: m[1] };
+            return null;
+        }
+        function seasonLabel(n) { return 'Saison ' + Math.floor(n) + (n % 1 ? ' partie ' + Math.round((n % 1) * 100) : ''); }
+        function findNextSeason(e) {
+            const esc = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const cur = seasonOf(e.site === 'animoflix' ? e.episodeUrl : e.seriesUrl);
+            if (!cur) return Promise.resolve(null);
+            if (cur.fam.indexOf('as:') === 0) {
+                const base = e.seriesUrl.match(/^(.*\/catalogue\/[^/]+\/)/)[1];
+                return fetchPageHtml(base).then((html) => {
+                    // Saisons commentees (/* ... */) ignorees ; hors-series (saison1hs), films, OAV aussi.
+                    const list = Array.from(html.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/panneauAnime\("[^"]*",\s*"(saison(\d+)(?:-(\d+))?\/([^"/]+))\/?"\)/g))
+                        .map((m) => ({ path: m[1], n: Number(m[2]) + (Number(m[3]) || 0) / 100, lang: m[4] }))
+                        .filter((x) => x.lang === cur.lang && x.n > cur.n).sort((a, b) => a.n - b.n);
+                    return list.length ? { url: base + list[0].path + '/#ep=1', n: list[0].n } : null;
+                });
+            }
+            if (cur.fam.indexOf('af:') === 0) {
+                return fetchPageHtml(e.seriesUrl).then((html) => {
+                    const ns = Array.from(html.matchAll(new RegExp('/anime/' + esc(cur.slug) + '/saison-(\\d+)/', 'g'))).map((m) => Number(m[1])).filter((n) => n > cur.n).sort((a, b) => a - b);
+                    if (!ns.length) return null;
+                    const seasonUrl = 'https://animoflix.to/anime/' + cur.slug + '/saison-' + ns[0] + '/';
+                    // Episode 1 dans la meme langue = la saison est vraiment sortie.
+                    return fetchPageHtml(seasonUrl).then((h2) => {
+                        const m = h2.match(new RegExp('/anime/' + esc(cur.slug) + '/saison-' + ns[0] + '/' + esc(cur.lang) + '/episode-1/'));
+                        return m ? { url: resolveUrl(m[0], seasonUrl), n: ns[0] } : null;
+                    });
+                });
+            }
+            const origin = new URL(e.seriesUrl).origin;
+            const curSlug = (e.seriesUrl.match(/\/anime\/([^/?#]+)/) || [])[1];
+            if (!curSlug) return Promise.resolve(null);
+            return fetchPageHtml(origin + '/anime/' + curSlug).then((html) => {
+                const ns = Array.from(html.matchAll(new RegExp('/anime/' + esc(cur.base) + '-(\\d+)"', 'g'))).map((m) => Number(m[1])).filter((n) => n > cur.n).sort((a, b) => a - b);
+                if (!ns.length) return null;
+                const slug = cur.base + '-' + ns[0];
+                return fetchPageHtml(origin + '/anime/' + slug).then((h2) => {
+                    const m = h2.match(new RegExp('href="(/anime/' + esc(slug) + '/[^"]*episode-1)"'));
+                    return m ? { url: origin + m[1], n: ns[0] } : null;
+                });
+            });
+        }
         function setSeriesExcluded(key, excluded) {
             const all = loadExcludedSeries();
             if (excluded) all[key] = true; else delete all[key];
@@ -1794,7 +1847,21 @@
             } else delete newEpisodes[key];
             if (isSeriesExcluded(key)) return;
             const progress = loadProgress();
-            if (!progress[key] && !force && !hasTrackedSibling(info, progress)) return;
+            // Saison suivante (v6.49) : animoflix garde la meme entree -> fin de
+            // l'annonce ; anime-sama / myfluneo : nouvelle entree, l'ancienne
+            // saison (suivie) est retiree du suivi (reste dans l'historique).
+            const cur = seasonOf(info.site === 'animoflix' ? info.resumeUrl : info.seriesUrl);
+            const newSeasons = loadNewSeasons();
+            if (newSeasons[key] && cur && cur.n >= newSeasons[key].n) delete newSeasons[key];
+            const olderSeasons = cur && info.site !== 'animoflix' ? Object.keys(progress).filter((k) => {
+                if (k === key || progress[k].site !== info.site) return false;
+                const o = seasonOf(progress[k].seriesUrl);
+                return o && o.fam === cur.fam && o.n < cur.n;
+            }) : [];
+            olderSeasons.forEach((k) => { delete newSeasons[k]; setSeasonDone(k, false); });
+            GM_setValue('newSeasons', newSeasons);
+            if (!progress[key] && !force && !hasTrackedSibling(info, progress) && !olderSeasons.length) return;
+            olderSeasons.forEach((k) => { console.log('[AnimeTracker v6] saison precedente retiree du suivi : ' + k); delete progress[k]; });
             progress[key] = {
                 site: info.site, siteLabel: info.siteLabel, siteTag: info.siteTag,
                 seriesName: info.seriesName, seriesUrl: info.seriesUrl,
@@ -2188,6 +2255,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
             ['6.46', ['Animoflix : icone de suivi des vignettes en bas a droite aussi (meme etiquette Anime qui la cachait).']],
@@ -3481,7 +3549,7 @@
                     return site.extract(doc, e.episodeUrl);
                 }).then((info) => { if (info) applyResultFor(e, info, (c) => { if (c) changed = true; }); }).catch(() => {});
             });
-            return Promise.all(checks).then(() => {
+            return Promise.all(checks).then(checkNewSeasons).then(() => {
                 const done = loadSeasonDone();
                 Object.keys(done).forEach((k) => {
                     if (Number(latestKnownEpisode[k]) > done[k]) { setSeasonDone(k, false); changed = true; console.log('[AnimeTracker v6] nouvel episode, fin d\'attente : ' + k); }
@@ -3505,6 +3573,26 @@
                     if (!a) throw new Error('serie introuvable : ' + name);
                     return resolveUrl(a.getAttribute('href'), searchUrl);
                 });
+            }
+
+            // Series en attente (saison finie) : saison suivante publiee ? (v6.49)
+            function checkNewSeasons() {
+                const done = loadSeasonDone();
+                const prog = loadProgress();
+                return Promise.all(Object.keys(done).filter((k) => prog[k] && !excluded[k]).map((k) => {
+                    const e = Object.assign({ key: k }, prog[k]);
+                    const s = SITES.find((x) => x.id === e.site);
+                    if (!s || (s.custom && !hostMatches(location.href, s.label))) return null;
+                    return findNextSeason(e).then((ns) => {
+                        if (!ns) return;
+                        const all = loadNewSeasons();
+                        all[k] = { url: ns.url, n: ns.n, label: seasonLabel(ns.n) };
+                        GM_setValue('newSeasons', all);
+                        setSeasonDone(k, false);
+                        changed = true;
+                        console.log('[AnimeTracker v6] nouvelle saison pour ' + e.seriesName + ' : ' + ns.url);
+                    }).catch((err) => console.log('[AnimeTracker v6] verif. saison echouee pour ' + e.seriesName, err));
+                }));
             }
 
             function relocateEdEpisodeUrl(entry) {
@@ -3771,12 +3859,14 @@
                 '<table style="width:100%;border-collapse:collapse;font-size:12px;">' +
                 '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;"><th style="padding:6px 4px;">Anime</th><th style="padding:6px 4px;">Vu</th><th style="padding:6px 4px;">Dispo</th><th style="padding:6px 4px;">Dernier visionnage</th><th></th><th></th><th></th><th></th><th></th></tr>';
             const seasonDone = loadSeasonDone();
+            const newSeasons = loadNewSeasons();
             entries.forEach((e) => {
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const waiting = !!seasonDone[e.key];
+                const season = !newEpisodes[e.key] && newSeasons[e.key];
                 const latest = latestKnownEpisode[e.key];
-                const link = nb ? newEpisodes[e.key].url : e.episodeUrl;
-                const action = nb ? 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')' : 'Reprendre';
+                const link = nb ? (season ? season.url : newEpisodes[e.key].url) : e.episodeUrl;
+                const action = nb ? (season ? 'Regarder (' + season.label + ')' : 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')') : 'Reprendre';
                 html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : waiting ? 'color:#b07cff;' : '') + '">' +
                     '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (waiting ? ' <span style="font-size:10px;">(saison finie, en attente)</span>' : '') + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
@@ -3784,7 +3874,7 @@
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
                     '<td style="padding:6px 4px;text-align:right;"><a href="' + escapeHtml(link) + '" style="color:' + (nb ? '#000;background:#ffb300' : '#fff;background:#333') + ';text-decoration:none;padding:4px 8px;border-radius:4px;white-space:nowrap;">' + action + '</a></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-info" data-key="' + escapeHtml(e.key) + '" title="Fiche : synopsis, genres" style="background:none;border:1px solid #03d0fc;border-radius:4px;color:#03d0fc;cursor:pointer;font-size:12px;padding:2px 6px;">&#8505;</button></td>' +
-                    '<td style="padding:6px 2px;">' + (nb && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
+                    '<td style="padding:6px 2px;">' + (nb && !season && latest && lastEpisodeUrlFor(e, latest) ? '<button class="ep-tracking-allseen" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" data-latest="' + escapeHtml(String(latest)) + '" title="Deja tout vu (jusqu\'a l\'ep. ' + escapeHtml(String(latest)) + ')" style="background:none;border:1px solid #4caf50;border-radius:4px;color:#4caf50;cursor:pointer;font-size:12px;padding:2px 6px;white-space:nowrap;">&#10003; Tout vu</button>' : '') + '</td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-wait" data-key="' + escapeHtml(e.key) + '" data-on="' + (waiting ? '0' : '1') + '" title="' + (waiting ? 'Reprendre le suivi normal' : 'Saison finie : en attente de la suite (repasse en nouvel episode tout seul)') + '" style="background:' + (waiting ? '#b07cff;color:#000' : 'none;color:#b07cff') + ';border:1px solid #b07cff;border-radius:4px;cursor:pointer;font-size:12px;padding:2px 6px;">&#9208;</button></td>' +
                     '<td style="padding:6px 2px;"><button class="ep-tracking-drop" data-key="' + escapeHtml(e.key) + '" data-name="' + escapeHtml(displayName(e.seriesName)) + '" title="Abandonner le suivi" style="background:none;border:none;color:#f66;cursor:pointer;font-size:14px;padding:2px 6px;">&#10005;</button></td></tr>';
             });
@@ -4196,10 +4286,11 @@
             const excluded = loadExcludedSeries();
             const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3 };
             const seasonDone = loadSeasonDone();
+            const newSeasons = loadNewSeasons();
             const byName = {};
             Object.keys(progress).forEach((k) => {
                 const e = progress[k];
-                const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : seasonDone[k] ? 'attente' : newEpisodes[k] ? 'retard' : 'ici';
+                const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : seasonDone[k] ? 'attente' : (newEpisodes[k] || newSeasons[k]) ? 'retard' : 'ici';
                 nameVariants(e.seriesName).forEach((n) => { if (!byName[n] || rank[state] > rank[byName[n]]) byName[n] = state; });
             });
             document.querySelectorAll('a[href] img').forEach((img) => {
