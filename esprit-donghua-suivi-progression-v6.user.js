@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.45
+// @version      6.46
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.46', ['Animoflix : icone de suivi des vignettes en bas a droite aussi (meme etiquette Anime qui la cachait).']],
             ['6.45', ['Anime-Sama : icone de suivi des vignettes deplacee en bas a droite (l\'etiquette "Anime" du site la cachait).']],
             ['6.44', ['Boutons Episode precedent / suivant places sous la barre de lecture, dans la rangee des commandes (entre le temps et les reglages).']],
             ['6.43', ['Verification des nouveaux episodes : les series importees d\'une ancienne sauvegarde (Esprit Donghua) retrouvent leur page serie par la recherche du site au lieu d\'une erreur "Refused to connect to legacy:".']],
@@ -4163,8 +4164,8 @@
                 if (!badge) {
                     badge = document.createElement('span');
                     badge.className = 'ep-thumb-badge';
-                    // anime-sama : etiquette "Anime" (z-index 15) en haut a gauche -> en bas a droite (v6.45)
-                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' ? 'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:36px;height:36px;border-radius:7px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
+                    // anime-sama / animoflix : etiquette "Anime" (z-index 15) en haut a gauche -> en bas a droite (v6.45-46)
+                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' || site.id === 'animoflix' ?'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:36px;height:36px;border-radius:7px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
                     host.appendChild(badge);
                 }

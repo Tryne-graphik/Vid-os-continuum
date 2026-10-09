@@ -916,3 +916,6 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.45 (2026-10-09)
 - Anime-Sama : captures utilisateur, icones absentes ou cachees. Cause verifiee sur anime-sama.to (Playwright, elementFromPoint) : `.anime-badge` / `.scan-badge` du site (z-index 15) en haut a gauche recouvrent notre icone (z-index 5) sur les cartes anime-card-premium, scan-card-premium et carteHistorique ; seules les catalog-card (sans etiquette) la montraient. Correctif : sur anime-sama, icone en bas a droite, z-index 16. Verifie sur 9 cartes de chaque type : visible, ne touche pas "Fiche" (bas gauche). Autres sites inchanges.
+
+## v6.46 (2026-10-09)
+- Meme correctif sur animoflix (capture utilisateur : icone sous l'etiquette ANIME ; balisage identique a anime-sama). Verifie Playwright sur animoflix.to : en bas a droite visible sur toutes les cartes a l'ecran (echecs = cartes hors ecran du carrousel). Esprit Donghua reste en haut a gauche.
