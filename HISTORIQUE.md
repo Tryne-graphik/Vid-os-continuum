@@ -896,3 +896,7 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 ## v6.40 (2026-10-09)
 - Pastilles sur les vignettes (`refreshThumbnailBadges`, tous sites) : vert suivi ici, turquoise suivi ici + `newEpisodes`, jaune suivi sur un autre site, rouge exclu. Reconnaissance par nom (`nameVariants` : nom entier, hors parentheses, entre parentheses ; suffixes "S3 E28", "E280", "Episode N", "Saison N" retires). Titre lu dans a[title], img[alt], puis h1-h4. Pastille en haut a gauche (ED met "ONA" a droite). Rafraichie par MutationObserver (400 ms) et apres checkForNewEpisodes.
 - Teste : Playwright sur l'accueil ED reel (vert/jaune/rouge OK, capture). Turquoise pas teste en vrai (depend de la verif reseau). anime-sama / animoflix pas testes.
+
+## v6.41 (2026-10-09)
+- Pastille ronde -> icone SVG inline reprise de l'icone Flaticon "lister" choisie par l'utilisateur (3 cases a la couleur de l'etat + 3 traits pilule blancs, 1re case cochee, croix si exclu) dans un carre sombre 36px, couleur = etat, coche tracee par <animate> SMIL (pas de CSS injecte). Icones Flaticon proposees par l'utilisateur ecartees (GIF non recolorable, attribution, chargement externe ; site bloque Playwright). Redessin seulement si l'etat change (data-state).
+- Teste : Playwright accueil ED (capture vert/jaune/rouge OK).

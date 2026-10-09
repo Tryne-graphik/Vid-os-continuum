@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.40
+// @version      6.41
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.41', ['Pastilles des vignettes remplacees par une petite icone liste a cases, cases a la couleur de l\'etat, 1re case cochee (croix pour les series exclues), la coche se dessine a l\'apparition.']],
             ['6.40', ['Pastille ✓ sur les vignettes des sites : verte = suivi ici, turquoise = nouvel episode a voir, jaune = suivi sur un autre site, rouge = exclu du suivi.']],
             ['6.39', ['Boutons Episode precedent / suivant deplaces en bas au centre, au-dessus de la barre de lecture.',
                 'Le bouton Suivant reste visible (grise, "Pas encore sorti") sur le dernier episode sorti.',
@@ -4143,19 +4144,27 @@
                 if (!badge) {
                     badge = document.createElement('span');
                     badge.className = 'ep-thumb-badge';
-                    badge.textContent = '✓';
-                    badge.style.cssText = 'position:absolute;top:6px;left:6px;z-index:5;width:22px;height:22px;border-radius:50%;color:#000;font:bold 14px/22px Arial,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.7);pointer-events:auto;';
+                    badge.style.cssText = 'position:absolute;top:6px;left:6px;z-index:5;width:36px;height:36px;border-radius:7px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
                     host.appendChild(badge);
                 }
-                badge.style.background = BADGES[state][0];
+                if (badge.getAttribute('data-state') === state) return;
+                badge.setAttribute('data-state', state);
+                // Icone liste a cases (style Flaticon "lister") : cases a la couleur
+                // de l'etat, 1re cochee (croix si exclu), la marque se trace (v6.41)
+                const c = BADGES[state][0];
+                const mark = state === 'exclu' ? 'M3.7 3.2l2.6 2.6M6.3 3.2L3.7 5.8' : 'M3.5 4.7l1.2 1.2 2-2.4';
+                const row = (y) => '<rect x="2.5" y="' + y + '" width="5" height="5" rx=".8" stroke="' + c + '"/><rect x="10.5" y="' + (y + 1.1) + '" width="11" height="2.8" rx="1.4" stroke="#fff" stroke-width="1.3"/>';
+                badge.innerHTML = '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+                    row(2) + row(9.5) + row(17) +
+                    '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="10" stroke-dashoffset="10"><animate attributeName="stroke-dashoffset" from="10" to="0" dur=".5s" begin=".1s" fill="freeze"/></path></svg>';
                 badge.title = BADGES[state][1];
             });
         }
         refreshThumbnailBadges();
         let badgeTimer = null;
         new MutationObserver((muts) => {
-            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.classList && n.classList.contains('ep-thumb-badge')))) return;
+            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge')))) return;
             clearTimeout(badgeTimer); badgeTimer = setTimeout(refreshThumbnailBadges, 400);
         }).observe(document.body, { childList: true, subtree: true });
 
