@@ -913,3 +913,6 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.44 (2026-10-09)
 - ⏮/⏭ sous la barre de lecture (demande utilisateur, capture Odysee : barre a ~45px du bas, rangee des commandes centree a ~22px) : bottom 64 -> 6px, 42 -> 32px, police 17 -> 14. Non teste en navigateur (YouTube : rangee de commandes similaire, a verifier).
+
+## v6.45 (2026-10-09)
+- Anime-Sama : captures utilisateur, icones absentes ou cachees. Cause verifiee sur anime-sama.to (Playwright, elementFromPoint) : `.anime-badge` / `.scan-badge` du site (z-index 15) en haut a gauche recouvrent notre icone (z-index 5) sur les cartes anime-card-premium, scan-card-premium et carteHistorique ; seules les catalog-card (sans etiquette) la montraient. Correctif : sur anime-sama, icone en bas a droite, z-index 16. Verifie sur 9 cartes de chaque type : visible, ne touche pas "Fiche" (bas gauche). Autres sites inchanges.
