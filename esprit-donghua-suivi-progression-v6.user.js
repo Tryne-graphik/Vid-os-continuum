@@ -1288,7 +1288,7 @@
             OPEN_MODES.map(([v, l]) => '<option value="' + v + '"' + (v === cur ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>';
     }
     // Delegation globale : liens de sites/"Reprendre" et selecteur de mode,
-    // ou qu'ils soient (panneau, calque, fenetre "Mes animes").
+    // ou qu'ils soient (panneau, calque).
     if (isTopFrame) {
         document.addEventListener('click', (ev) => {
             const a = ev.target.closest && ev.target.closest('a.vc-open-link');
@@ -1302,55 +1302,10 @@
             document.querySelectorAll('select.vc-open-mode').forEach((sel) => { sel.value = ev.target.value; });
         }, true);
     }
-    function relativeDays(iso) {
-        if (!iso) return '';
-        const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-        return days <= 0 ? "aujourd'hui" : days === 1 ? 'hier' : 'il y a ' + days + 'j';
-    }
-    function openFavoritesPopup() {
-        const old = document.getElementById('vc-favorites');
-        if (old) { old.remove(); return; }
-        const progress = GM_getValue('progress', {});
-        const excluded = GM_getValue('excludedSeries', {});
-        const entries = Object.keys(progress).filter((k) => !excluded[k]).map((k) => progress[k])
-            .sort((a, b) => String(b.watchedAt || '').localeCompare(String(a.watchedAt || '')));
-        const bySite = {};
-        entries.forEach((e) => { (bySite[e.siteLabel || e.site] = bySite[e.siteLabel || e.site] || []).push(e); });
-        const version = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '';
-        let html = '<div style="background:#15151f;color:#eee;width:min(520px,92vw);max-height:80vh;overflow:auto;border-radius:8px;padding:16px;font-family:Arial,sans-serif;display:flex;flex-direction:column;gap:10px;">' +
-            '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + escHtml(version) + '</span></div>' +
-            siteLinksHtml() + openModeSelectHtml();
-        if (!entries.length) html += '<div style="font-size:12px;color:#aaa;">Aucun anime suivi pour le moment.</div>';
-        Object.keys(bySite).forEach((siteLabel) => {
-            html += '<div style="font-size:12px;font-weight:bold;color:#03d0fc;border-top:1px solid #2a2a35;padding-top:6px;">' + escHtml(siteLabel) + '</div>';
-            bySite[siteLabel].forEach((e) => {
-                html += '<div style="display:flex;align-items:center;gap:8px;font-size:12px;">' +
-                    '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escHtml(e.seriesName) + '">' + escHtml(e.seriesName) + '</span>' +
-                    '<span style="color:#aaa;white-space:nowrap;">ep. ' + escHtml(e.episodeNumber || '?') + ' &middot; ' + relativeDays(e.watchedAt) + '</span>' +
-                    (/^https?:\/\//.test(e.episodeUrl || '') ? '<a href="' + escHtml(e.episodeUrl) + '" class="vc-open-link" style="background:#03d0fc;color:#000;text-decoration:none;padding:3px 8px;border-radius:4px;font-weight:bold;white-space:nowrap;">Reprendre</a>' : '') +
-                    '</div>';
-            });
-        });
-        if (!detectSite()) html += '<button type="button" id="vc-add-site" style="background:#1f2a33;color:#4caf50;border:1px solid #4caf50;border-radius:4px;padding:7px;font:bold 12px Arial,sans-serif;cursor:pointer;">&#10133; Ajouter ce site (' + escHtml(hostOf(location.href)) + ') a Video Continuum</button>' +
-            '<div style="font-size:10px;color:#888;margin-top:-6px;">A faire depuis la page d\'un episode, avec son lecteur affiche.</div>';
-        html += '<div style="text-align:right;"><button type="button" id="vc-fav-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div></div>';
-        const pop = document.createElement('div');
-        pop.id = 'vc-favorites';
-        pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;';
-        pop.innerHTML = html;
-        pop.addEventListener('click', (ev) => {
-            if (ev.target === pop || ev.target.id === 'vc-fav-close') pop.remove();
-            if (ev.target.id === 'vc-add-site') addCurrentSite(ev.target);
-        });
-        // Dans le calque plein ecran s'il est affiche (sinon invisible).
-        (document.fullscreenElement || document.body).appendChild(pop);
-    }
-    function addCurrentSite(btn) {
+    function addCurrentSite() {
         const host = hostOf(location.href);
         const site = makeGenericSite(host);
-        btn.disabled = true; btn.textContent = 'Analyse de la page...';
         Promise.resolve(site.isPlayablePage(document) ? site.extract(document, location.href) : null).then((info) => {
-            btn.disabled = false; btn.textContent = 'Ajouter ce site (' + host + ')';
             if (!info || !info.embedSrc) {
                 alert('Aucun lecteur video reconnu sur cette page.\n\nOuvre la page d\'un episode (lecteur visible), puis reessaie.');
                 return;
@@ -1369,9 +1324,10 @@
 
     const CURRENT_SITE = detectSite();
     if (!CURRENT_SITE) {
-        // Autre site : juste "Mes animes" (menu Tampermonkey ; bouton flottant retire en v6.50).
+        // Autre site : seulement "Ajouter ce site" dans le menu Tampermonkey
+        // (fenetre "Mes animes" et bouton flottant retires en v6.50).
         if (!isTopFrame) return;
-        GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
+        GM_registerMenuCommand('\u2795 Ajouter ce site a Vidéo Continuum', addCurrentSite);
         return;
     }
 
@@ -2256,7 +2212,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
-            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Petit bouton ▶ retire des autres sites. "Mes animes" et "Ajouter ce site" restent dans le menu Tampermonkey.']],
+            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
@@ -4225,7 +4181,6 @@
             if (!confirm('Retirer ' + site.label + ' des sites geres ? (les animes suivis restent dans la liste)')) return;
             const all = loadCustomSites(); delete all[site.label]; GM_setValue('customSites', all); location.reload();
         });
-        GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
         GM_registerMenuCommand('Exporter en fichier', exportProgress);
         GM_registerMenuCommand('Choisir le fichier de sauvegarde', chooseBackupFile);
         GM_registerMenuCommand('Ouvrir le lecteur', () => startEpisode(getEpisodeInfoForCurrentPage(), 'commande menu'));
