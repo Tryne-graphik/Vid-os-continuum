@@ -27,6 +27,14 @@ Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7
 - Toujours `ucbcb=1` dans les adresses YouTube : sinon page de consentement cookies (Europe), sans resultats.
 - Le script tourne aussi dans l'iframe YouTube (sous-titres FR, CSS qui masque "Plus de videos").
 
+## Suivi : etats et saisons (v6.40 -> v6.49)
+- Icones des vignettes : `refreshThumbnailBadges`, `badgeSvg` / `badgeInfo` (fonctions, pas de const : legende du panneau).
+  Anime-sama / animoflix : en bas a droite (leur etiquette "Anime" z-index 15 cache le haut gauche).
+- GM `seasonDone` (pause = saison finie), `newSeasons` (saison suivante trouvee), `seasonDismissed` (saison ignoree) ;
+  `isBehind(key)` = regle unique "a rattraper" (compteurs, liste, tri, icones). `forgetSeasonState` quand une entree disparait.
+- `seasonOf(url)` / `findNextSeason(e)` : anime-sama (panneauAnime + episodes.js non vide), animoflix (saison-N, meme cle),
+  myfluneo (slug-N). Saison suivante vue -> l'ancienne (anime-sama / myfluneo) est retiree de la progression.
+
 ## Pieges connus
 - Sous Tampermonkey, `window` est un proxy : `unsafeWindow` pour `showSaveFilePicker`.
 - Adaptateurs par site (`SITE_ESPRIT_DONGHUA`, `SITE_ANIMOFLIX`, `SITE_ANIME_SAMA`), stockage cle `site::seriesUrl`.
