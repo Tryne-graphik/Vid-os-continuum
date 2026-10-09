@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.43
+// @version      6.44
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.44', ['Boutons Episode precedent / suivant places sous la barre de lecture, dans la rangee des commandes (entre le temps et les reglages).']],
             ['6.43', ['Verification des nouveaux episodes : les series importees d\'une ancienne sauvegarde (Esprit Donghua) retrouvent leur page serie par la recherche du site au lieu d\'une erreur "Refused to connect to legacy:".']],
             ['6.42', ['Boutons Episode precedent / suivant plus petits et plus bas, juste au-dessus de la barre de lecture.']],
             ['6.41', ['Pastilles des vignettes remplacees par une petite icone liste a cases, cases a la couleur de l\'etat, 1re case cochee (croix pour les series exclues), la coche se dessine a l\'apparition.']],
@@ -2393,7 +2394,7 @@
 
             // Prec./Suiv. sur la video (v6.38) : apparaissent quand la souris
             // bouge, disparaissent apres 3 s, comme lecture/pause.
-            const NAV = 'position:absolute;bottom:64px;z-index:9;transform:translateX(-50%);width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:17px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
+            const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
             const navPrev = document.createElement('button');
             navPrev.type = 'button'; navPrev.title = 'Episode precedent'; navPrev.textContent = '⏮';
             navPrev.style.cssText = NAV + 'left:calc(50% - 90px);';

@@ -910,3 +910,6 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Console utilisateur : "Refused to connect to legacy:Tun Shi Xing Kong (Swallowed Star)" + 404 sur s4-e243 / s4-e178. Cause : entrees importees d'une vieille sauvegarde (seriesUrl = "legacy:<nom>") ; adresse d'episode renumerotee -> 404 -> relocateEdEpisodeUrl chargeait seriesUrl = "legacy:..." -> refus Tampermonkey. Correctif : edSeriesPageUrl() = recherche ED `?s=<nom hors parentheses>`, 1er `article.bs a[href*="/anime/"]` (verifie a la main : swallowed-star, will-eternal ; will-eternal liste bien epl-num 178). seriesUrl (= cle) non modifie, seule l'adresse d'episode est corrigee et enregistree.
 - Page Bitdefender "telechargement bloque" sur mushen-ji-tales-of-herding-gods-e08 : vient d'une pub du site, pas du script (aucune ligne du script ne telecharge d'executable).
 - Teste : node --check seulement.
+
+## v6.44 (2026-10-09)
+- ⏮/⏭ sous la barre de lecture (demande utilisateur, capture Odysee : barre a ~45px du bas, rangee des commandes centree a ~22px) : bottom 64 -> 6px, 42 -> 32px, police 17 -> 14. Non teste en navigateur (YouTube : rangee de commandes similaire, a verifier).
