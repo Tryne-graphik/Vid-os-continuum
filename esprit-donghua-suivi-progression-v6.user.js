@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.49
+// @version      6.50
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2279,6 +2279,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
@@ -3889,12 +3890,14 @@
                 const nb = countNewEpisodesFor(e.key, e.episodeNumber);
                 const waiting = !!seasonDone[e.key];
                 const ignored = waiting && seasonDismissed[e.key];
+                // Saison vue (anime-sama / animoflix / myfluneo), v6.50
+                const curSeason = seasonOf(e.site === 'animoflix' ? e.episodeUrl : e.seriesUrl);
                 const season = !newEpisodes[e.key] && newSeasons[e.key];
                 const latest = latestKnownEpisode[e.key];
                 const link = nb ? (season ? season.url : newEpisodes[e.key].url) : e.episodeUrl;
                 const action = nb ? (season ? 'Regarder (' + season.label + ')' : 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')') : 'Reprendre';
                 html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : waiting ? 'color:#b07cff;' : '') + '">' +
-                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (waiting ? ' <span style="font-size:10px;">(' + (ignored ? escapeHtml(seasonLabel(ignored)) + ' ignoree' : 'saison finie, en attente') + ')</span>' : '') + '</td>' +
+                    '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (curSeason ? ' &middot; ' + escapeHtml(seasonLabel(curSeason.n)) : '') + (waiting ? ' <span style="font-size:10px;">(' + (ignored ? escapeHtml(seasonLabel(ignored)) + ' ignoree' : 'saison finie, en attente') + ')</span>' : '') + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
                     '<td style="padding:6px 4px;">' + (latest || '?') + '</td>' +
                     '<td style="padding:6px 4px;font-weight:normal;color:#aaa;">' + (formatRelativeDays(e.watchedAt) || '') + '</td>' +
