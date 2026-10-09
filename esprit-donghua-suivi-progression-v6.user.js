@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.38
+// @version      6.39
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -367,7 +367,7 @@
                 if (++stallFor >= 15 && !stallSent) {
                     stallSent = true;
                     console.log('[AnimeTracker v6] (' + cfg.label + ') lecture bloquee depuis 15 s a ' + Math.round(video.currentTime) + 's');
-                    window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'stall' }, '*');
+                    window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'stall', direct: !/^blob:/.test(video.currentSrc || '') }, '*');
                 }
             }, 1000);
 
@@ -2179,6 +2179,9 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.39', ['Boutons Episode precedent / suivant deplaces en bas au centre, au-dessus de la barre de lecture.',
+                'Le bouton Suivant reste visible (grise, "Pas encore sorti") sur le dernier episode sorti.',
+                'Video sans choix de qualite (fichier d\'origine) qui cale : bascule directe sur YouTube au lieu de recharger.']],
             ['6.38', ['Boutons Episode precedent / suivant sur la video, a gauche et a droite du centre : ils apparaissent quand la souris bouge et disparaissent apres 3 s.',
                 'Vignettes YouTube : badge VOSTFR (annonce dans le titre) ou ST auto FR (sous-titres traduits automatiquement par YouTube).',
                 'Lecture sur YouTube : "Prec." revient a l\'episode precedent au lieu d\'afficher "Aucun episode precedent".']],
@@ -2386,7 +2389,7 @@
 
             // Prec./Suiv. sur la video (v6.38) : apparaissent quand la souris
             // bouge, disparaissent apres 3 s, comme lecture/pause.
-            const NAV = 'position:absolute;top:50%;z-index:9;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:26px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
+            const NAV = 'position:absolute;bottom:90px;z-index:9;transform:translateX(-50%);width:64px;height:64px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:26px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
             const navPrev = document.createElement('button');
             navPrev.type = 'button'; navPrev.title = 'Episode precedent'; navPrev.textContent = '⏮';
             navPrev.style.cssText = NAV + 'left:calc(50% - 130px);';
@@ -2396,7 +2399,7 @@
             overlay.appendChild(navPrev);
             overlay.appendChild(navNext);
             navPrev.addEventListener('click', () => topbar.querySelector('#ed-prev-btn').click());
-            navNext.addEventListener('click', () => topbar.querySelector('#ed-next-btn').click());
+            navNext.addEventListener('click', () => (ytActive || hasNextEpisode(currentEpisode)) && topbar.querySelector('#ed-next-btn').click());
             overlay.addEventListener('mousemove', showNavButtons);
 
             document.body.appendChild(overlay);
@@ -2514,7 +2517,12 @@
             if (!overlayEls || !currentEpisode) return;
             const show = (el, on) => { el.style.opacity = on ? '1' : '0'; el.style.pointerEvents = on ? 'auto' : 'none'; };
             show(overlayEls.navPrev, ytActive || hasPrevEpisode(currentEpisode));
-            show(overlayEls.navNext, ytActive || hasNextEpisode(currentEpisode));
+            // Suiv. toujours visible, grise s'il n'y a rien apres (v6.39)
+            const hasNext = ytActive || hasNextEpisode(currentEpisode);
+            show(overlayEls.navNext, true);
+            overlayEls.navNext.style.opacity = hasNext ? '1' : '.35';
+            overlayEls.navNext.style.cursor = hasNext ? 'pointer' : 'default';
+            overlayEls.navNext.title = hasNext ? 'Episode suivant' : 'Pas encore sorti';
             clearTimeout(navHideTimer);
             navHideTimer = setTimeout(() => { show(overlayEls.navPrev, false); show(overlayEls.navNext, false); }, 3000);
         }
@@ -2723,7 +2731,9 @@
                     // "Reessayer" suffisait presque toujours au changement
                     // d'episode (signale 2026-10-06) : on le fait une fois tout
                     // seul avant d'afficher l'encadre.
-                    if (stallRetriedSrc !== overlayEls.playerFrame.src) {
+                    // Fichier d'origine sans choix de qualite (pas de flux HLS en blob:) :
+                    // recharger ne sert a rien, on passe direct a YouTube (v6.39).
+                    if (!event.data.direct && stallRetriedSrc !== overlayEls.playerFrame.src) {
                         stallRetriedSrc = overlayEls.playerFrame.src;
                         setStatus('La video cale, nouvel essai...');
                         positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src;

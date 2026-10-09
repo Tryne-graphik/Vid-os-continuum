@@ -887,3 +887,8 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - goToPreviousEpisode en mode YouTube : episodeInfoForNumber(n - 1) comme Suivant (avant : "Aucun episode precedent detecte" sur les sites une page par episode).
 - Vignettes : badge vert VOSTFR (titre) ou orange "ST auto FR" (piste traduite par YouTube).
 - Teste Playwright (Ten Thousand Worlds ep. 149) : Odysee -> boutons invisibles au repos, visibles quand la souris bouge, caches apres 3,5 s, ⏭ -> 150, ⏮ -> 149 ; vignette compilation 141-160 badge ST auto FR ; YouTube -> ⏮ -> 148 dans la meme video (3389 s -> 2965 s).
+
+## v6.39 (2026-10-09)
+- Boutons ⏮/⏭ en bas au centre (bottom:90px, ±130px), ⏭ toujours visible, grise + "Pas encore sorti" s'il n'y a pas d'episode suivant (signale : Lingwu 219 = dernier sorti, ⏭ absent -> pris pour un bug).
+- Retour utilisateur : les blocages arrivent sur les videos SANS choix de qualite (fichier d'origine), et sur le grand ecran seulement. Le message 'stall' de l'iframe porte `direct` (currentSrc pas en blob: = pas de HLS/MSE) -> pas de rechargement auto, YouTube direct (association ou recherche). Hypothese a confirmer : Odysee sert l'original en URL directe. Piste non-code donnee : desactiver l'acceleration materielle Chrome pour tester le decodage GPU.
+- Teste : node --check seulement, pas en navigateur.
