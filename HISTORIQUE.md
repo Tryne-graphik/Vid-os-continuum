@@ -939,3 +939,4 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.50 (2026-10-09)
 - Retour utilisateur : Clevatess reste violet, ne savait pas quelle saison. Verifie : sa ligne = saison 2 (13 ep. ; S1 = 12), pas de S3 sur anime-sama -> violet correct. Fenetre de suivi : saison vue affichee apres le nom (seasonOf, anime-sama / animoflix / myfluneo). Teste Playwright : "Clevatess · Saison 2 (saison finie, en attente)", aucune saison suivante trouvee.
+- Bouton flottant ▶ retire (demande utilisateur : "il ne fonctionne pas") : isFloatingButtonEnabled / installFloatingButton / commande de menu Masquer-Afficher supprimes ; reste la commande "Mes animes" du menu Tampermonkey (fenetre + Ajouter ce site). Fenetre testee OK sur fr.wikipedia.org (harnais) ; YouTube / GitHub non testables avec le harnais (CSP bloque l'eval de l'injection) - cause de la panne cote utilisateur a confirmer.

@@ -1366,35 +1366,12 @@
             location.reload();
         });
     }
-    function isFloatingButtonEnabled() { return GM_getValue('floatingButtonEverywhere', true); }
-    function installFloatingButton() {
-        if (document.getElementById('vc-float-btn')) return;
-        const b = document.createElement('button');
-        b.id = 'vc-float-btn';
-        b.type = 'button';
-        b.title = 'Vidéo Continuum - mes animes (masquable via le menu Tampermonkey)';
-        b.textContent = '\u25B6';
-        b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:2147483646;width:30px;height:30px;border-radius:50%;border:1px solid #03d0fc;background:#15151f;color:#03d0fc;font-size:13px;cursor:pointer;opacity:.55;box-shadow:0 2px 8px rgba(0,0,0,.4);padding:0;';
-        b.addEventListener('mouseenter', () => { b.style.opacity = '1'; });
-        b.addEventListener('mouseleave', () => { b.style.opacity = '.55'; });
-        b.addEventListener('click', openFavoritesPopup);
-        document.body.appendChild(b);
-    }
 
     const CURRENT_SITE = detectSite();
     if (!CURRENT_SITE) {
-        // Autre site : juste "Mes animes" (menu Tampermonkey + petit bouton).
+        // Autre site : juste "Mes animes" (menu Tampermonkey ; bouton flottant retire en v6.50).
         if (!isTopFrame) return;
         GM_registerMenuCommand('\uD83C\uDFAC Mes animes (Vidéo Continuum)', openFavoritesPopup);
-        GM_registerMenuCommand((isFloatingButtonEnabled() ? 'Masquer' : 'Afficher') + ' le bouton sur tous les sites', () => {
-            GM_setValue('floatingButtonEverywhere', !isFloatingButtonEnabled());
-            const b = document.getElementById('vc-float-btn');
-            if (b) b.remove(); else installFloatingButton();
-        });
-        if (isFloatingButtonEnabled()) {
-            if (document.body) installFloatingButton();
-            else document.addEventListener('DOMContentLoaded', installFloatingButton, { once: true });
-        }
         return;
     }
 
@@ -2279,7 +2256,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
-            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".']],
+            ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Petit bouton ▶ retire des autres sites. "Mes animes" et "Ajouter ce site" restent dans le menu Tampermonkey.']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
