@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.42
+// @version      6.43
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.43', ['Verification des nouveaux episodes : les series importees d\'une ancienne sauvegarde (Esprit Donghua) retrouvent leur page serie par la recherche du site au lieu d\'une erreur "Refused to connect to legacy:".']],
             ['6.42', ['Boutons Episode precedent / suivant plus petits et plus bas, juste au-dessus de la barre de lecture.']],
             ['6.41', ['Pastilles des vignettes remplacees par une petite icone liste a cases, cases a la couleur de l\'etat, 1re case cochee (croix pour les series exclues), la coche se dessine a l\'apparition.']],
             ['6.40', ['Pastille ✓ sur les vignettes des sites : verte = suivi ici, turquoise = nouvel episode a voir, jaune = suivi sur un autre site, rouge = exclu du suivi.']],
@@ -3473,8 +3474,23 @@
                 refreshThumbnailBadges();
             });
 
+            // Entree importee d'une vieille sauvegarde : seriesUrl = "legacy:<nom>"
+            // (pas une adresse, Tampermonkey refusait). Page serie = 1er resultat
+            // de la recherche du site sur le nom hors parentheses.
+            function edSeriesPageUrl(entry) {
+                if (/^https:/i.test(entry.seriesUrl)) return Promise.resolve(entry.seriesUrl);
+                const name = entry.seriesName.replace(/\([^)]*\)/g, '').trim() || entry.seriesName;
+                const searchUrl = 'https://esprit-donghua.xyz/?s=' + encodeURIComponent(name);
+                return fetchPageHtml(searchUrl).then((html) => {
+                    const a = new DOMParser().parseFromString(html, 'text/html').querySelector('article.bs a[href*="/anime/"]');
+                    if (!a) throw new Error('serie introuvable : ' + name);
+                    return resolveUrl(a.getAttribute('href'), searchUrl);
+                });
+            }
+
             function relocateEdEpisodeUrl(entry) {
-                return fetchPageHtml(entry.seriesUrl).then((html) => {
+                let seriesPage;
+                return edSeriesPageUrl(entry).then((u) => { seriesPage = u; return fetchPageHtml(u); }).then((html) => {
                     const doc = new DOMParser().parseFromString(html, 'text/html');
                     const li = Array.from(doc.querySelectorAll('.eplister li')).find((el) => {
                         const num = el.querySelector('.epl-num');
@@ -3482,7 +3498,7 @@
                     });
                     const a = li && li.querySelector('a[href]');
                     if (!a) throw new Error('episode ' + entry.episodeNumber + ' introuvable sur la page serie');
-                    const url = resolveUrl(a.getAttribute('href'), entry.seriesUrl);
+                    const url = resolveUrl(a.getAttribute('href'), seriesPage);
                     const oldUrl = entry.episodeUrl;
                     const progress = loadProgress();
                     if (progress[entry.key]) { progress[entry.key].episodeUrl = url; saveProgress(progress); }

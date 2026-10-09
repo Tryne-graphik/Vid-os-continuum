@@ -905,3 +905,8 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - ⏮/⏭ : 64px -> 42px (police 26 -> 17), bottom 90 -> 64px (barre de progression Odysee a ~54px du bas sur la capture utilisateur), ecart ±130 -> ±90px. Non teste en navigateur.
 - Session 2026-10-09 : v6.39 a v6.42 publiees (dernier commit 4b457ce).
 - Suite : retours utilisateur attendus sur (1) les icones des vignettes sur anime-sama/animoflix et la turquoise, (2) la bascule YouTube directe sur les videos sans choix de qualite (si un rechargement a encore lieu, le test `direct` = pas d'adresse blob: est faux), (3) le test acceleration materielle Chrome desactivee sur le grand ecran, (4) taille/position de ⏮/⏭ v6.42.
+
+## v6.43 (2026-10-09)
+- Console utilisateur : "Refused to connect to legacy:Tun Shi Xing Kong (Swallowed Star)" + 404 sur s4-e243 / s4-e178. Cause : entrees importees d'une vieille sauvegarde (seriesUrl = "legacy:<nom>") ; adresse d'episode renumerotee -> 404 -> relocateEdEpisodeUrl chargeait seriesUrl = "legacy:..." -> refus Tampermonkey. Correctif : edSeriesPageUrl() = recherche ED `?s=<nom hors parentheses>`, 1er `article.bs a[href*="/anime/"]` (verifie a la main : swallowed-star, will-eternal ; will-eternal liste bien epl-num 178). seriesUrl (= cle) non modifie, seule l'adresse d'episode est corrigee et enregistree.
+- Page Bitdefender "telechargement bloque" sur mushen-ji-tales-of-herding-gods-e08 : vient d'une pub du site, pas du script (aucune ligne du script ne telecharge d'executable).
+- Teste : node --check seulement.
