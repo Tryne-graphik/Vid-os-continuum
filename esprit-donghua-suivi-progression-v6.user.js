@@ -1469,6 +1469,16 @@
             const all = loadSeasonDone();
             if (on) all[key] = Number(latestKnownEpisode[key]) || Number((loadProgress()[key] || {}).episodeNumber) || 0; else delete all[key];
             GM_setValue('seasonDone', all);
+            // Pause alors qu'une saison suivante est annoncee = pas interesse :
+            // elle n'est plus re-signalee (sinon retiree de l'attente a chaque verif).
+            const ns = loadNewSeasons();
+            if (on && ns[key]) {
+                const dismissed = GM_getValue('seasonDismissed', {});
+                dismissed[key] = ns[key].n;
+                GM_setValue('seasonDismissed', dismissed);
+                delete ns[key];
+                GM_setValue('newSeasons', ns);
+            }
         }
         function loadNewSeasons() { return GM_getValue('newSeasons', {}); }
         function isBehind(key) { return (!!newEpisodes[key] || !!loadNewSeasons()[key]) && !loadSeasonDone()[key]; }
@@ -1852,6 +1862,7 @@
             // saison (suivie) est retiree du suivi (reste dans l'historique).
             const cur = seasonOf(info.site === 'animoflix' ? info.resumeUrl : info.seriesUrl);
             const newSeasons = loadNewSeasons();
+            const nsCount = Object.keys(newSeasons).length;
             if (newSeasons[key] && cur && cur.n >= newSeasons[key].n) delete newSeasons[key];
             const olderSeasons = cur && info.site !== 'animoflix' ? Object.keys(progress).filter((k) => {
                 if (k === key || progress[k].site !== info.site) return false;
@@ -1859,7 +1870,7 @@
                 return o && o.fam === cur.fam && o.n < cur.n;
             }) : [];
             olderSeasons.forEach((k) => { delete newSeasons[k]; setSeasonDone(k, false); });
-            GM_setValue('newSeasons', newSeasons);
+            if (Object.keys(newSeasons).length !== nsCount) GM_setValue('newSeasons', newSeasons);
             if (!progress[key] && !force && !hasTrackedSibling(info, progress) && !olderSeasons.length) return;
             olderSeasons.forEach((k) => { console.log('[AnimeTracker v6] saison precedente retiree du suivi : ' + k); delete progress[k]; });
             progress[key] = {
@@ -3584,7 +3595,7 @@
                     const s = SITES.find((x) => x.id === e.site);
                     if (!s || (s.custom && !hostMatches(location.href, s.label))) return null;
                     return findNextSeason(e).then((ns) => {
-                        if (!ns) return;
+                        if (!ns || ns.n <= (GM_getValue('seasonDismissed', {})[k] || 0)) return;
                         const all = loadNewSeasons();
                         all[k] = { url: ns.url, n: ns.n, label: seasonLabel(ns.n) };
                         GM_setValue('newSeasons', all);
