@@ -919,3 +919,6 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.46 (2026-10-09)
 - Meme correctif sur animoflix (capture utilisateur : icone sous l'etiquette ANIME ; balisage identique a anime-sama). Verifie Playwright sur animoflix.to : en bas a droite visible sur toutes les cartes a l'ecran (echecs = cartes hors ecran du carrousel). Esprit Donghua reste en haut a gauche.
+
+## v6.47 (2026-10-09)
+- Animoflix (capture utilisateur, cartes Red River de "Reprenez votre visionnage") : 2e icone en haut au milieu. Cause : la boucle prend toutes les `a[href] img`, y compris le drapeau `.language-badge-top.badge > img` du meme lien ; quand le nom correspond, icone posee sur le drapeau. Correctif : ignorer les img dans `.badge` ou de largeur < 60px (et retirer une icone deja posee). Parent `.badge` du drapeau verifie sur animoflix.to (Playwright) ; cartes historique non reproduites (generees depuis le compte).

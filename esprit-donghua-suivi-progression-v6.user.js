@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.46
+// @version      6.47
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2179,6 +2179,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
             ['6.46', ['Animoflix : icone de suivi des vignettes en bas a droite aussi (meme etiquette Anime qui la cachait).']],
             ['6.45', ['Anime-Sama : icone de suivi des vignettes deplacee en bas a droite (l\'etiquette "Anime" du site la cachait).']],
             ['6.44', ['Boutons Episode precedent / suivant places sous la barre de lecture, dans la rangee des commandes (entre le temps et les reglages).']],
@@ -4156,6 +4157,13 @@
             document.querySelectorAll('a[href] img').forEach((img) => {
                 const a = img.closest('a');
                 if (a.closest('[id^="ep-"],[id^="ed-"]')) return;
+                // Drapeau de langue / petite image dans le meme lien (animoflix :
+                // 2e icone sur le drapeau, v6.47) -> seulement la vignette.
+                if (img.closest('.badge') || (img.offsetWidth && img.offsetWidth < 60)) {
+                    const stray = img.parentElement.querySelector(':scope > .ep-thumb-badge');
+                    if (stray) stray.remove();
+                    return;
+                }
                 const title = a.getAttribute('title') || img.getAttribute('alt') || (a.querySelector('h1,h2,h3,h4') || {}).textContent;
                 const state = nameVariants(title).map((n) => byName[n]).filter(Boolean).sort((x, y) => rank[y] - rank[x])[0];
                 const host = img.parentElement;
