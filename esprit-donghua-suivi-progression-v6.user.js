@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.50
+// @version      6.52
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1637,7 +1637,7 @@
                 if (!zone.isConnected || currentEpisode !== info) return;
                 if (!results.length) { zone.textContent = 'Rien de sur trouve sur YouTube (nom + episode ' + info.episodeNumber + ').'; return; }
                 zone.innerHTML = '<div style="margin-bottom:4px;">Sur YouTube (clique pour regarder) :</div>' + results.map((r, i) =>
-                    '<div data-yt="' + i + '" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
+                    '<div data-yt="' + i + '" role="button" tabindex="0" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
                     '<img src="https://i.ytimg.com/vi/' + escapeHtml(r.id) + '/mqdefault.jpg" style="width:96px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;">' +
                     '<div style="min-width:0;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
                     '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</span> ' +
@@ -2047,7 +2047,7 @@
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
-        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2'];
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2191,12 +2191,12 @@
         }
 
         // ---- Sections repliables + signalement d'incident (v6.8) ----
-        const BTN_STYLE = 'background:#333;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;';
+        const BTN_STYLE = 'background:#333;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
 
         function collapsibleSection(key, title, innerHtml, open, sub) {
             // sub : sous-menu (decale et plus clair, ex. Reglages > Plus).
             return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;' + (sub ? 'margin-left:10px;' : '') + '">' +
-                '<summary style="cursor:pointer;font-size:' + (sub ? 11 : 12) + 'px;font-weight:bold;color:#eee;background:' + (sub ? '#4a4a58' : '#3a3a46') + ';padding:' + (sub ? '4px 8px' : '5px 8px') + ';border-radius:4px;">' + title + '</summary>' +
+                '<summary style="cursor:pointer;font-size:11px;font-weight:bold;color:#eee;background:' + (sub ? '#4a4a58' : '#3a3a46') + ';padding:6px 8px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</summary>' +
                 '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' + innerHtml + '</div></details>';
         }
 
@@ -2205,16 +2205,17 @@
             if (document.getElementById('vc-styles')) return;
             const st = document.createElement('style');
             st.id = 'vc-styles';
-            st.textContent = '.vc-track{display:block;text-align:center;padding:8px;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
-                '.vc-track.vc-small{flex:1;padding:6px 4px;font-size:11px;}' +
+            st.textContent = '.vc-track{position:relative;display:block;text-align:center;padding:5px 4px;border-radius:4px;font-size:11px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
+                '.vc-track.vc-small{flex:1;white-space:nowrap;}.vc-pair>.vc-track{flex:1;min-width:0;}' +
+                '.vc-pair{display:flex;flex-wrap:wrap;gap:4px;}.vc-pair>details{flex:1 1 40%;min-width:0;}.vc-pair>details[open]{flex-basis:100%;order:1;}.vc-pair>button{flex:1;min-width:0;padding:6px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
                 '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
-                '.vc-track input{display:none;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}';
+                '.vc-track input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}.vc-track:has(input:focus-visible){outline:2px solid #03d0fc;outline-offset:2px;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}';
             (document.head || document.documentElement).appendChild(st);
         }
         function toggleButtonsHtml(prefix, autoNext, autoOpen) {
             ensureVcStyles();
-            const t = (id, on, label) => '<label class="vc-track vc-small"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span class="off">' + label + '</span><span class="on">&#10003; ' + label + '</span></label>';
-            return '<div style="display:flex;gap:4px;">' + t(prefix + 'autonext' + (prefix === 'ed-' ? '-cb' : ''), autoNext, 'Lecture continue') +
+            const t = (id, on, label) => '<label class="vc-track vc-small" title="' + (label === 'Lecteur auto' ? 'Ouvre le lecteur tout seul sur une page d\'episode' : 'Enchaine l\'episode suivant a la fin') + '"><input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + '><span class="off">' + label + '</span><span class="on">&#10003; ' + label + '</span></label>';
+            return '<div style="display:flex;gap:4px;">' + t(prefix + 'autonext' + (prefix === 'ed-' ? '-cb' : ''), autoNext, 'Lect. continue') +
                 t(prefix + 'autoopen' + (prefix === 'ed-' ? '-cb' : ''), autoOpen, 'Lecteur auto') + '</div>';
         }
         // "Chargement... 42%" -> fine barre ; tout autre message reste en texte.
@@ -2226,7 +2227,7 @@
         }
         function trackButtonHtml(id, checked) {
             ensureVcStyles();
-            return '<label class="vc-track"><input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '><span class="off">&#9734; Suivre cet anime</span><span class="on">&#9733; Suivi</span></label>';
+            return '<label class="vc-track"><input type="checkbox" id="' + id + '"' + (checked ? ' checked' : '') + '><span class="off">&#9734; Suivre</span><span class="on">&#9733; Suivi</span></label>';
         }
 
         // Endpoint Apps Script (google-apps-script/incidents-collector.gs).
@@ -2251,10 +2252,10 @@
 
         function incidentSectionHtml(prefix, open) {
             const draft = incidentDraft.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-            return collapsibleSection('incident', '&#9888; Signaler un probleme',
+            return collapsibleSection('incident', '&#9888; Signaler',
                 '<select id="' + prefix + '-fb-type" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 '<option>Bug</option><option>Video ne se lance pas</option><option>Suggestion</option><option>Autre</option></select>' +
-                '<textarea id="' + prefix + '-fb-body" rows="4" placeholder="Ce que tu faisais, ce qui s\'est passe..." style="width:100%;box-sizing:border-box;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;resize:vertical;">' + draft + '</textarea>' +
+                '<textarea id="' + prefix + '-fb-body" aria-label="Description du problème" rows="4" placeholder="Ce que tu faisais, ce qui s\'est passe..." style="width:100%;box-sizing:border-box;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;resize:vertical;">' + draft + '</textarea>' +
                 '<div style="font-size:10px;color:#888;">Envoye avec : site, anime, episode, version, navigateur.</div>' +
                 '<button id="' + prefix + '-fb-send" style="' + BTN_STYLE + '">&#128228; Envoyer</button>' +
                 '<span id="' + prefix + '-fb-note" style="font-size:11px;color:' + incidentNote.color + ';">' + incidentNote.text + '</span>', open);
@@ -2263,6 +2264,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein ecran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Verifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein ecran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
+            ['6.51', ['Clavier : Echap ferme les fenetres (fiche, reglages, historique, suivi) ; cases Suivre, vignettes YouTube, lignes du resume et bouton Fiche utilisables au clavier (Tab, Entree).', 'Lecteurs d\'ecran : champs et listes etiquetes, statut et compte a rebours annonces.']],
             ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).', 'Sauvegarde complete : en plus de la progression et de l\'historique, le fichier garde les series abandonnees / en attente, les reglages intro/outro, les chaines YouTube, les sites ajoutes, les reprises et les preferences (restaures a l\'import, sans ecraser ceux deja presents).']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
             ['6.48', ['Nouvel etat "Saison finie, en attente" (violet, 3 cases cochees) : bouton pause dans la fenetre de suivi d\'un site. La serie n\'est plus comptee "a rattraper" et repasse toute seule en nouvel episode quand la suite sort (sites qui continuent la numerotation, ex. Esprit Donghua).', 'Icones des vignettes plus petites (24 px).', 'Section "Legende des icones" dans le panneau.']],
@@ -2329,11 +2332,12 @@
             ['6.14', ['Reprise de la lecture la ou tu t\'etais arrete.']]
         ];
         function currentScriptVersion() { return (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?'; }
-        function newsSectionHtml(prevOpen) {
+        function newsSectionHtml(prevOpen, prefix) {
             const unseen = GM_getValue('lastSeenVersion', '') !== currentScriptVersion();
             const body = CHANGELOG.map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
-                items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('');
-            return collapsibleSection('nouveautes', '&#127381; Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(nouveau !)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen);
+                items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('') +
+                '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
+            return collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen);
         }
         function bindNewsSection(container) {
             const d = container.querySelector('details[data-sec="nouveautes"]');
@@ -2412,55 +2416,54 @@
             const topbar = document.createElement('div');
             topbar.style.cssText = 'position:absolute;top:52px;left:10px;z-index:10;display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.6);padding:10px;border-radius:8px;font-family:Arial,sans-serif;color:#eee;font-size:12px;max-width:220px;max-height:calc(100vh - 70px);overflow-y:auto;';
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
-            const B = 'background:#333;color:#fff;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;';
+            const B = BTN_STYLE;
             const SELECT = 'width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;';
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
-                '<div id="ed-current-name" style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;"></div>' +
-                '<div id="ed-current-ep" style="font-size:18px;font-weight:bold;text-align:center;"></div>' +
-                '<button id="ed-info-btn" title="Synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;">&#8505; Fiche de l\'anime</button>' +
-                '<div id="ed-status" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
+                '<div style="position:relative;flex-shrink:0;"><div id="ed-current-name" style="padding:0 24px;text-align:center;font-size:16px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
+                '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>' +
+                '<div id="ed-current-ep" style="font-size:17px;font-weight:bold;text-align:center;"></div>' +
+                '<div id="ed-status" role="status" aria-live="polite" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
                 '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
-                '<button id="ed-fullscreen-btn" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:12px;">Plein ecran</button>' +
-                '<button id="ed-close-btn" style="' + B + '">Fermer</button>' +
                 '<div style="display:flex;gap:4px;">' +
-                '<button id="ed-prev-btn" style="' + B + 'flex:1;">&#9664; Prec.</button>' +
-                '<button id="ed-next-btn" style="' + B + 'flex:1;">Suiv. &#9654;</button>' +
+                '<button id="ed-fullscreen-btn" style="flex:2;background:#03d0fc;color:#000;border:none;padding:6px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:11px;">Plein ecran</button>' +
+                '<button id="ed-close-btn" style="' + B + 'flex:1;padding:6px 4px;">Fermer</button>' +
                 '</div>' +
                 '<div style="display:flex;gap:4px;">' +
-                '<input type="number" id="ed-goto-input" min="1" placeholder="N&#176; episode" style="width:0;flex:1;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:12px;">' +
-                '<button id="ed-goto-btn" style="' + B + '">Aller</button>' +
+                '<button id="ed-prev-btn" title="Episode precedent" aria-label="Episode precedent" style="' + B + 'padding:6px 8px;">&#9664;</button>' +
+                '<input type="number" id="ed-goto-input" aria-label="Numéro de l’épisode" min="1" placeholder="N&#176; ep." style="width:0;flex:1;padding:5px 6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                '<button id="ed-goto-btn" style="' + B + 'padding:6px 6px;">Aller</button>' +
+                '<button id="ed-next-btn" title="Episode suivant" aria-label="Episode suivant" style="' + B + 'padding:6px 8px;">&#9654;</button>' +
                 '</div>' +
-                trackButtonHtml('ed-track-cb', false) +
-                '<select id="ed-series-select" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
-                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
-                '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>' +
+                '<div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
+                '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>' +
+                '<div style="display:flex;gap:4px;"><select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'width:0;flex:1;font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
+                '<button id="ed-check-new-btn" title="Verifier les nouveaux episodes" aria-label="Verifier les nouveaux episodes" style="' + BTN_STYLE + 'padding:6px 9px;">&#8635;</button></div>' +
                 toggleButtonsHtml('ed-', false, false) +
-                collapsibleSection('reglages', 'Reglages',
+                '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
+                    '<label style="font-size:11px;color:#ccc;cursor:pointer;"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '> Afficher l\'etat AniSkip</label>' +
                     '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
                     collapsibleSection('plus', 'Plus',
                         '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
-                        '<button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
-                        '<button id="ed-reload-btn" style="' + B + '">&#8635; Recharger la page</button>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>', false, true)) +
-                collapsibleSection('youtube', 'Autres sources',
+                        '<div class="vc-pair"><button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
+                        '<button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button></div>' +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>', false, true)) +
+                collapsibleSection('youtube', 'Sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
-                    '<button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">Trouver sur YouTube</button>' +
-                    '<button id="ed-youtube-off-btn" style="' + B + '">Revenir a la source du site</button>') +
-                collapsibleSection('sauvegarde', 'Sauvegarde',
-                    '<button id="ed-export-btn" style="' + B + '">Exporter</button>' +
-                    '<button id="ed-import-btn" style="' + B + '">Importer</button>' +
+                    '<div class="vc-pair"><button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">YouTube</button>' +
+                    '<button id="ed-youtube-off-btn" title="Revenir a la source du site" style="' + B + '">Source du site</button></div>') + '</div>' +
+                '<div class="vc-pair">' + collapsibleSection('sauvegarde', 'Sauvegarde',
+                    '<div class="vc-pair"><button id="ed-export-btn" style="' + B + '">Exporter</button>' +
+                    '<button id="ed-import-btn" style="' + B + '">Importer</button></div>' +
                     '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
-                    '<button id="ed-choose-backup-btn" style="' + B + '">Choisir fichier sauvegarde</button>' +
-                    '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser l\'acces au fichier</button>' +
+                    '<button id="ed-choose-backup-btn" style="' + B + '">Choisir le fichier</button>' +
+                    '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser le fichier</button>' +
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
-                incidentSectionHtml('ed', false) +
-                legendSectionHtml(false) +
-                newsSectionHtml(false) +
-                '<button id="ed-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + B + '">&#128260; Verifier MAJ</button>' +
+                newsSectionHtml(false, 'ed') + '</div>' +
+                '<div class="vc-pair">' + incidentSectionHtml('ed', false) + legendSectionHtml(false) + '</div>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 siteLinksHtml() + openModeSelectHtml();
@@ -2479,6 +2482,7 @@
 
             const toast = document.createElement('div');
             toast.id = 'ed-toast';
+            toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
             toast.style.cssText = 'position:absolute;bottom:30px;right:30px;z-index:10;background:#15151f;color:#eee;padding:14px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.6);font-family:Arial,sans-serif;display:none;align-items:center;gap:12px;';
             toast.innerHTML = '<span id="ed-toast-text">Episode suivant dans 3s...</span><button id="ed-toast-now" style="background:#03d0fc;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">Suivant maintenant</button><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
             overlay.appendChild(toast);
@@ -2520,6 +2524,7 @@
             topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
             topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
+            topbar.querySelector('#ed-aniskip-cb').addEventListener('change', (ev) => { GM_setValue('aniskipShown', ev.target.checked); renderAniSkipStatus(); });
             bindIncidentSection(topbar, 'ed');
             bindNewsSection(topbar);
 
@@ -2542,7 +2547,7 @@
             topbar.querySelector('#ed-check-new-btn').addEventListener('click', (ev) => {
                 const btn = ev.currentTarget;
                 btn.disabled = true; btn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Verifier les nouveaux episodes'; });
+                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻'; });
             });
 
             seriesSelectEl.addEventListener('change', () => { if (seriesSelectEl.value) location.href = seriesSelectEl.value; });
@@ -2910,13 +2915,16 @@
             if (cfg.outroStart) parts.push('outro ' + formatTimecode(cfg.outroStart) + (cfg.outroEnd ? '-' + formatTimecode(cfg.outroEnd) : ''));
             return parts.join(', ');
         }
+        function isAniSkipShown() { return GM_getValue('aniskipShown', false); }
         function renderAniSkipStatus() {
             const el = overlayEls && overlayEls.overlay.querySelector('#ed-aniskip');
             if (!el) return;
-            if (!aniSkip || !currentEpisode || aniSkip.key !== storageKey(currentEpisode)) { el.style.display = 'none'; return; }
+            if (!isAniSkipShown() || !aniSkip || !currentEpisode || aniSkip.key !== storageKey(currentEpisode)) { el.style.display = 'none'; return; }
             const io = getIntroOutroForKey(aniSkip.key);
-            const manual = io.introEnd || io.outroStart ? ' <span style="color:#888;">(tes reglages manuels passent avant)</span>' : '';
-            el.innerHTML = 'AniSkip : ' + escapeHtml(aniSkip.note || 'en attente du lecteur...') + manual +
+            const ok = aniSkip.cfg && describeAniSkip(aniSkip.cfg);
+            const mark = ok ? '<span style="color:#4caf50;">&#10003;</span>' : aniSkip.note && !/recherche\.\.\.$/.test(aniSkip.note) ? '<span style="color:#f66;">&#10007;</span>' : '&#8230;';
+            const tip = (aniSkip.note || 'en attente du lecteur...') + (io.introEnd || io.outroStart ? ' (tes reglages manuels passent avant)' : '');
+            el.innerHTML = '<span title="' + escapeHtml(tip) + '">AniSkip ' + mark + '</span>' +
                 ' <a href="#" id="ed-aniskip-change" style="color:#03d0fc;">Changer</a>';
             el.style.display = 'block';
             el.querySelector('#ed-aniskip-change').addEventListener('click', (ev) => { ev.preventDefault(); changeAniLink(); });
@@ -2983,6 +2991,7 @@
             if (old) old.remove();
             const pop = document.createElement('div');
             pop.id = 'ep-info-overlay';
+            pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true');
             pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
             pop.innerHTML = '<div id="ep-info-box" style="background:#15151f;color:#eee;max-width:640px;width:92%;max-height:84vh;overflow:auto;border-radius:8px;padding:18px;font-size:13px;line-height:1.5;">Chargement de la fiche de ' + escapeHtml(displayName(info.seriesName)) + '...</div>';
             (overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body).appendChild(pop);
@@ -3441,6 +3450,7 @@
 
             const overlay = document.createElement('div');
             overlay.id = 'ep-settings-overlay';
+            overlay.setAttribute('role', 'dialog'); overlay.setAttribute('aria-modal', 'true');
             overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:1000001;display:flex;align-items:center;justify-content:center;';
 
             const box = document.createElement('div');
@@ -3463,10 +3473,10 @@
                     html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + e.key + '">' +
                         '<td style="padding:6px 4px;color:#888;">' + (e.siteTag || '') + '</td>' +
                         '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + escapeHtml(e.seriesName) + '</td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introStart-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introStart) + '"></td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introEnd-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroStart-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroStart) + '"></td>' +
-                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroEnd-input" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroEnd) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introStart-input" aria-label="Début intro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introStart) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-introEnd-input" aria-label="Fin intro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroStart-input" aria-label="Début outro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroStart) + '"></td>' +
+                        '<td style="padding:6px 4px;"><input type="text" class="ep-set-outroEnd-input" aria-label="Fin outro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.outroEnd) + '"></td>' +
                         '<td style="padding:6px 4px;text-align:center;"><input type="checkbox" class="ep-set-tracked-input" ' + (tracked ? 'checked' : '') + '></td>' +
                         '</tr>';
                 });
@@ -3737,7 +3747,7 @@
                 const nbBehind = entries.filter((e) => isBehind(e.key)).length;
                 const newText = !lastNewEpisodesCheckAt ? 'verification...' : (nbBehind ? nbBehind + ' a rattraper' : 'a jour');
                 const color = nbBehind > 0 ? '#ffb300' : '#4caf50';
-                return '<div class="ep-summary-line" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.12);border:1px solid #03d0fc;border-radius:6px;padding:7px 9px;font-size:12px;">' +
+                return '<div class="ep-summary-line" role="button" tabindex="0" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.12);border:1px solid #03d0fc;border-radius:6px;padding:7px 9px;font-size:12px;">' +
                     '<div style="font-weight:bold;color:#03d0fc;">' + s.label + ' &#9656;</div>' +
                     '<div style="color:' + color + ';">' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div></div>';
             }).join('');
@@ -3800,6 +3810,7 @@
             const dupKeys = new Set([].concat(...crossSiteDuplicates(rows)).map((e) => e.key));
             const pop = document.createElement('div');
             pop.id = 'vc-history-overlay';
+            pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true');
             pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
             let html = '<div style="background:#15151f;color:#eee;max-width:720px;width:92%;max-height:80vh;overflow:auto;border-radius:8px;padding:20px;">' +
                 '<h2 style="margin:0 0 4px;color:#03d0fc;font-size:16px;">&#128338; Historique</h2>' +
@@ -3860,6 +3871,7 @@
 
             const pop = document.createElement('div');
             pop.id = 'ep-tracking-overlay';
+            pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-modal', 'true');
             pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
             const checkedText = lastNewEpisodesCheckAt ? 'Derniere verification : ' + lastNewEpisodesCheckAt.toLocaleTimeString().slice(0, 5) : 'Pas encore verifie';
             let html = '<div style="background:#15151f;color:#eee;max-width:720px;width:92%;max-height:80vh;overflow:auto;border-radius:8px;padding:20px;">' +
@@ -4064,18 +4076,20 @@
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="font-size:13px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
-                html += '<div style="font-size:18px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
-                html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:7px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-weight:bold;">Ouvrir le lecteur</button>';
-                html += '<button id="ep-info-btn" style="' + BTN_STYLE + '">&#8505; Fiche de l\'anime</button>';
+                html += '<div style="position:relative;flex-shrink:0;"><div style="padding:0 24px;text-align:center;font-size:16px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>' +
+                    '<button id="ep-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>';
+                html += '<div style="font-size:17px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
+                html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div>';
-                html += trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode)));
             }
 
+            html += '<div class="vc-pair">' + (currentEpisode && currentEpisode.seriesName ? trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode))) : '') +
+                '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>';
+            html += '<div style="display:flex;gap:4px;">';
             if (entries.length === 0) {
-                html += '<div style="font-size:12px;color:#aaa;">Aucun anime suivi.</div>';
+                html += '<div style="flex:1;font-size:12px;color:#aaa;">Aucun anime suivi.</div>';
             } else {
-                html += '<select id="ep-select" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">';
+                html += '<select id="ep-select" aria-label="Choisir un anime" style="width:0;flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">';
                 html += '<option value="">-- Choisir un anime --</option>';
                 entries.forEach((e) => {
                     const label = buildSeriesOptionLabel(e);
@@ -4088,37 +4102,35 @@
                 html += '</select>';
             }
 
-            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
-            html += '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button>';
+            html += '<button id="ep-check-new" title="Verifier les nouveaux episodes" aria-label="Verifier les nouveaux episodes" style="' + BTN_STYLE + 'padding:6px 9px;">&#8635;</button></div>';
             html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
 
-            html += collapsibleSection('reglages', 'Reglages',
+            html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
                 '<div style="display:flex;gap:4px;"><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button></div>' +
                 collapsibleSection('plus', 'Plus',
                     '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
-                    (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie selectionnee</button>' : ''),
+                    (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
                     prevOpen.plus, true),
                 prevOpen.reglages);
             if (currentEpisode && currentEpisode.seriesName) {
-                html += collapsibleSection('youtube', 'Autres sources',
+                html += collapsibleSection('youtube', 'Sources',
                     (currentEpisode.site === 'esprit-donghua' ? '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>' : '') +
-                    '<button id="ep-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + BTN_STYLE + '">Trouver sur YouTube</button>' +
-                    '<button id="ep-youtube-off-btn" style="' + BTN_STYLE + '">Revenir a la source du site</button>',
+                    '<div class="vc-pair"><button id="ep-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + BTN_STYLE + '">YouTube</button>' +
+                    '<button id="ep-youtube-off-btn" title="Revenir a la source du site" style="' + BTN_STYLE + '">Source du site</button></div>',
                     prevOpen.youtube);
             }
-            html += collapsibleSection('sauvegarde', 'Sauvegarde',
-                '<button id="ep-export-panel" style="' + BTN_STYLE + '">Exporter</button>' +
-                '<button id="ep-import-panel" style="' + BTN_STYLE + '">Importer</button>' +
-                '<button id="ep-choose-backup" style="' + BTN_STYLE + '">Choisir fichier sauvegarde</button>' +
-                '<button id="ep-reauth-backup" style="' + BTN_STYLE + '">Reautoriser l\'acces au fichier</button>' +
+            html += '</div>';
+            html += '<div class="vc-pair">' + collapsibleSection('sauvegarde', 'Sauvegarde',
+                '<div class="vc-pair"><button id="ep-export-panel" style="' + BTN_STYLE + '">Exporter</button>' +
+                '<button id="ep-import-panel" style="' + BTN_STYLE + '">Importer</button></div>' +
+                '<button id="ep-choose-backup" style="' + BTN_STYLE + '">Choisir le fichier</button>' +
+                '<button id="ep-reauth-backup" style="' + BTN_STYLE + '">Reautoriser le fichier</button>' +
                 '<span id="ep-backup-status" style="font-size:11px;color:#888;"></span>' +
                 '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
                 prevOpen.sauvegarde);
-            html += incidentSectionHtml('ep', prevOpen.incident);
-            html += legendSectionHtml(prevOpen.legende);
-            html += newsSectionHtml(prevOpen.nouveautes);
-            html += '<button id="ep-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
+            html += newsSectionHtml(prevOpen.nouveautes, 'ep') + '</div>';
+            html += '<div class="vc-pair">' + incidentSectionHtml('ep', prevOpen.incident) + legendSectionHtml(prevOpen.legende) + '</div>';
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';
             html += renderTrackingSummary();
@@ -4149,8 +4161,8 @@
             bindNewsSection(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
-                checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Verifier les nouveaux episodes'; });
+                checkNewBtn.disabled = true; checkNewBtn.textContent = '…';
+                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻'; });
             });
 
             const exportBtn = panel.querySelector('#ep-export-panel');
@@ -4249,6 +4261,7 @@
                     if (!m) return;
                     const btn = document.createElement('span');
                     btn.className = 'ep-fiche-btn';
+                    btn.setAttribute('role', 'button'); btn.tabIndex = 0;
                     btn.title = 'Page de l\'anime (synopsis, genres)';
                     btn.textContent = '\u2139 Fiche';
                     btn.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:5;background:rgba(3,208,252,.9);color:#000;font:bold 11px Arial,sans-serif;padding:3px 7px;border-radius:4px;cursor:pointer;';
@@ -4291,7 +4304,7 @@
                 '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
         }
         function legendSectionHtml(open) {
-            return collapsibleSection('legende', 'Legende des icones', ['ici', 'retard', 'attente', 'ailleurs', 'exclu'].map((st) =>
+            return collapsibleSection('legende', 'Legende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu'].map((st) =>
                 '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
                 '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
         }
@@ -4364,6 +4377,15 @@
 
         setTimeout(checkForNewEpisodes, 8000);
         setInterval(checkForNewEpisodes, 20 * 60 * 1000);
+        document.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') {
+                const top = ['ep-info-overlay', 'ep-settings-overlay', 'vc-history-overlay', 'ep-tracking-overlay']
+                    .map((id) => document.getElementById(id)).find(Boolean);
+                if (top) { ev.preventDefault(); top.remove(); }
+            } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn')) {
+                ev.preventDefault(); ev.target.click();
+            }
+        }, true);
         console.log('[AnimeTracker v6] initialisation terminee');
     }
 })();

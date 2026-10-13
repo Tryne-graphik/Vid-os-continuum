@@ -944,3 +944,38 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Sauvegarde complete : 3e bloc JSON `ed-settings-backup` (excludedSeries, seasonDone, newSeasons, seasonDismissed, introOutro, customSites, youtubeChannelAssociations, youtubeMode, youtubeOverrides, resumePositions, aniLinks + prefs autoNextEnabled, popupAutoOpen, openMode, panelSiteFilter2). Import : reglages d'abord (sites ajoutes ajoutes a SITES -> leurs animes ne sont plus ignores), fusion ou les valeurs locales gagnent, prefs seulement si absentes. cleanBackupValue : types simples, profondeur 4, 5000 cles, chaines <= 2000, pas de schema autre que https, pas de __proto__ ; customSites = noms d'hote valides ; youtubeOverrides = youtube.com uniquement. Teste Playwright : export reel (5 groupes) -> import dans profil vide = 2 series (dont myfluneo) + 5 groupes ; fichier piege : hote invalide, __proto__, javascript:, https://evil.example, data: tous ecartes, pas de pollution de prototype.
 - README : section "Ce qu'il fait", vie privee mise a jour (plus de cle API YouTube ; pages publiques lues : sites, recherche YouTube, AniList).
 - anime-tracker-generique.user.js supprime (v1.0 jamais testee ; le generique partira de la v6).
+
+## Session outillage (2026-10-09, pas de changement du script)
+- Hook global PostToolUse `~/.claude/hooks/userscript-check.ps1` : `node --check` sur tout `*.user.js` edite (silencieux si OK, erreur renvoyee a Claude sinon). v6.50 passe.
+- Suite inchangee : tester la v6.50 au quotidien avant de partir sur la version generique.
+
+## v6.51 (2026-10-10) - accessibilite
+- Audit skill web-design-guidelines (Vercel) via Gemini + DeepSeek, constats verifies dans le code. Corriges (points 1 a 3) :
+  Echap ferme la fenetre du dessus (ep-info / ep-settings / vc-history / ep-tracking, role=dialog aria-modal) ; un seul keydown en capture a la fin de l'init.
+  Cases .vc-track : plus de display:none (masquees mais focusables, contour au focus). Faux boutons [data-yt], .ep-summary-line, .ep-fiche-btn : role=button tabindex=0, Entree/Espace = clic.
+  aria-label : ed-goto-input, ed-series-select, ep-select, *-fb-body, 4 champs intro/outro. ed-status et ed-toast : role=status aria-live=polite.
+- Deja OK (title present) : boutons ☰, ⏮/⏭, ℹ ⏸ ✕, suppression historique.
+- Non fait (facultatif) : … au lieu de ..., overscroll-behavior, alt vignette YouTube, :hover, prefers-reduced-motion.
+- Piege rencontre : apostrophe de "d'ecran" non echappee par le patch python -> node --check l'a vue.
+- node --check OK. PAS teste en navigateur : a verifier (Echap sur chaque fenetre, Tab jusqu'aux cases Suivre, Entree sur une vignette YouTube).
+
+## v6.52 (2026-10-13) - panneau compact (1080p)
+- Demande utilisateur (capture 1080p : liste des sites coupee en bas). Lecteur (ed-) et panneau du site (ep-) :
+  Fiche de l'anime = bouton ℹ a cote du nom ; Plein ecran | Fermer ; ◀ | N° ep. | Aller | ▶ ; "↻ Nouveaux ep." | Historique ;
+  Signaler | Legende en `.vc-pair` (flex-wrap : la section ouverte passe en pleine largeur dessous) ; Verifier MAJ dans Nouveautes
+  (newsSectionHtml(open, prefix)) ; Lecture continue / Lecteur auto plus petits ("Lect. continue", nowrap, title explicatif).
+- AniSkip : ligne masquee par defaut, case "Afficher l'etat AniSkip" dans Reglages (GM `aniskipShown`, ajoute a BACKUP_PREFS) ;
+  version courte "AniSkip ✓ / ✗ / …" + Changer, detail (note + reglages manuels) au survol.
+- Teste Playwright sur anime-sama Psyren, fenetre 1920x950 : tout le panneau tient (fin vers 750 px), pas d'erreur du script ;
+  case AniSkip -> ligne "AniSkip ✗" (erreur reseau = harnais) + GM enregistre ; Signaler ouvert -> pleine largeur sous Legende ;
+  Verifier MAJ dans Nouveautes. Pas teste : AniSkip ✓ reel (harnais sans GM_xmlhttpRequest cross-origin), panneau du site visuellement.
+- Suite (retour utilisateur : tailles tres differentes, "Suivre cet anime" enorme) : une seule taille partout (B du lecteur = BTN_STYLE,
+  padding 6px, 11px, nowrap + ellipsis ; .vc-track 5px ; summary 6px 8px 11px ; Plein ecran / Ouvrir le lecteur 11px).
+  Nouvelles paires : Suivre | Historique, liste des series + ↻ (verifier les nouveaux ep., icone), Reglages | Sources,
+  Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site, Configuration | Recharger.
+  Libelles raccourcis : Suivre, Sources, Supprimer la serie, Choisir le fichier, Reautoriser le fichier ; Nouveautes sans emoji, "(!)".
+- Teste Playwright (anime-sama Psyren, 1920x950) : lecteur avec toutes les sections ouvertes -> tous les boutons / titres a 29 px,
+  pas d'erreur du script ; panneau du site (lecteur ferme) : memes paires, rendu OK.
+- Nom de la serie 13 -> 16px centre (ℹ en absolu a droite, padding 0 24px), episode 18 -> 17px (lecteur et panneau du site).
+  Mesure Playwright : "[AS] Psyren" 91 px / "Episode 1 / 2" 104 px.
+- Publie avec la v6.51 (clavier) pour test chez l'utilisateur.
