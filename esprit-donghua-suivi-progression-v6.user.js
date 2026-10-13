@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.53
+// @version      6.54
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2264,7 +2264,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
-            ['6.53', ['Nom de la serie et numero d'episode un peu plus petits.']],
+            ['6.54', ['Correctif : la 6.53 ne se lancait pas (erreur de syntaxe).']],
+            ['6.53', ['Nom de la serie et numero d\'episode un peu plus petits.']],
             ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein ecran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Verifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein ecran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
             ['6.51', ['Clavier : Echap ferme les fenetres (fiche, reglages, historique, suivi) ; cases Suivre, vignettes YouTube, lignes du resume et bouton Fiche utilisables au clavier (Tab, Entree).', 'Lecteurs d\'ecran : champs et listes etiquetes, statut et compte a rebours annonces.']],
             ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).', 'Sauvegarde complete : en plus de la progression et de l\'historique, le fichier garde les series abandonnees / en attente, les reglages intro/outro, les chaines YouTube, les sites ajoutes, les reprises et les preferences (restaures a l\'import, sans ecraser ceux deja presents).']],

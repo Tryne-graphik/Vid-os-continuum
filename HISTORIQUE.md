@@ -979,3 +979,8 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Nom de la serie 13 -> 16px centre (ℹ en absolu a droite, padding 0 24px), episode 18 -> 17px (lecteur et panneau du site).
   Mesure Playwright : "[AS] Psyren" 91 px / "Episode 1 / 2" 104 px.
 - Publie avec la v6.51 (clavier) pour test chez l'utilisateur.
+- ERREUR : la 6.53 a ete poussee avec une apostrophe non echappee dans le CHANGELOG (node --check avait echoue mais
+  la commande git etait sur une ligne separee, pas chainee par &&). Script casse pour qui a installe la 6.53.
+
+## v6.54 (2026-10-13)
+- Correctif de la 6.53 (apostrophe echappee), node --check OK avant le commit. Lecon : toujours chainer check && commit && push.
