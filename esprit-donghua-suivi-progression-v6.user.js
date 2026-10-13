@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.55
+// @version      6.56
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -14,6 +14,10 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
+// @grant        GM_getResourceURL
+// @resource     vcMetal https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/metal.jpg
+// @resource     vcPierreNoire https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/pierre-noire.jpg
+// @resource     vcPierreBleue https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/pierre-bleue.jpg
 // @connect      esprit-donghua.xyz
 // @connect      animoflix.to
 // @connect      anime-sama.to
@@ -2047,7 +2051,7 @@
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
-        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown'];
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2209,8 +2213,81 @@
                 '.vc-track.vc-small{flex:1;white-space:nowrap;}.vc-pair>.vc-track{flex:1;min-width:0;}' +
                 '.vc-pair{display:flex;flex-wrap:wrap;gap:4px;}.vc-pair>details{flex:1 1 40%;min-width:0;}.vc-pair>details[open]{flex-basis:100%;order:1;}.vc-pair>button{flex:1;min-width:0;padding:6px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
                 '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
-                '.vc-track input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}.vc-track:has(input:focus-visible){outline:2px solid #03d0fc;outline-offset:2px;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}';
+                '.vc-track input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}.vc-track:has(input:focus-visible){outline:2px solid #03d0fc;outline-offset:2px;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}' +
+                themeCss();
             (document.head || document.documentElement).appendChild(st);
+        }
+
+        // ---- Themes (v6.56) : classe sur le lecteur (topbar) et le panneau du site.
+        // Les styles des boutons sont en ligne -> surcharges en !important.
+        // Photos (dossier themes/ du depot) via @resource, repli sur l'URL brute.
+        // fonction (pas de const) : ensureVcStyles peut tourner avant cette ligne.
+        function themes() { return {
+            actuel: { label: 'Actuel' },
+            metal: { label: 'Metallique', tex: ['vcMetal', 'metal.jpg'], v: {
+                text: '#f1f3f5', acc: '#7fd6ff', onacc: '#000', btn: 'linear-gradient(#4a4f55,#2b2f33)', bline: '#6d737a',
+                bsh: 'inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.6)', sec: 'linear-gradient(#3c4146,#26292d)', field: '#101214',
+                card: 'rgba(0,0,0,.35)', on: 'linear-gradient(#2f6b3a,#1d4a26)', onl: '#6fcf7f', edge: '#8a9097',
+                bg: 'linear-gradient(90deg,rgba(15,17,19,.55),rgba(15,17,19,.35)),var(--vc-tex,none) center/cover,#2a2d30' } },
+            carbone: { label: 'Fibre de carbone', v: {
+                text: '#eceff1', acc: '#b71c1c', acct: '#ef5350', onacc: '#fff', btn: '#1b1d20', bline: '#2c2f33', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                sec: '#232529', field: '#0a0a0b', card: 'rgba(183,28,28,.10)', on: '#3a1412', onl: '#c62828', edge: '#000',
+                bg: 'linear-gradient(27deg,#151515 5px,transparent 5px) 0 5px/20px 20px,linear-gradient(207deg,#151515 5px,transparent 5px) 10px 0/20px 20px,' +
+                    'linear-gradient(27deg,#222 5px,transparent 5px) 0 10px/20px 20px,linear-gradient(207deg,#222 5px,transparent 5px) 10px 5px/20px 20px,' +
+                    'linear-gradient(90deg,#1b1b1b 10px,transparent 10px) 0 0/20px 20px,linear-gradient(#1d1d1d 25%,#1a1a1a 25%,#1a1a1a 50%,transparent 50%,transparent 75%,#242424 75%,#242424) 0 0/20px 20px,#131313' } },
+            verre: { label: 'Verre trempe', glass: true, v: {
+                text: '#fff', acc: '#7ee0ff', onacc: '#000', btn: 'rgba(255,255,255,.10)', bline: 'rgba(255,255,255,.22)', bsh: 'inset 0 1px 0 rgba(255,255,255,.25)',
+                sec: 'rgba(255,255,255,.14)', field: 'rgba(0,0,0,.35)', card: 'rgba(255,255,255,.08)', on: 'rgba(76,175,80,.35)', onl: 'rgba(140,230,150,.8)',
+                edge: 'rgba(255,255,255,.35)', bg: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 40%,rgba(255,255,255,.10)),rgba(20,30,40,.30)' } },
+            'pierre-noire': { label: 'Pierre noire', tex: ['vcPierreNoire', 'pierre-noire.jpg'], v: {
+                text: '#efe9df', acc: '#d6a849', onacc: '#000', btn: 'rgba(28,26,24,.88)', bline: 'rgba(214,168,73,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.05)',
+                sec: 'rgba(38,34,30,.9)', field: 'rgba(0,0,0,.6)', card: 'rgba(214,168,73,.08)', on: 'rgba(214,168,73,.18)', onl: '#d6a849', edge: '#3a332a',
+                bg: 'linear-gradient(rgba(10,10,10,.45),rgba(10,10,10,.45)),var(--vc-tex,none) center/cover,#1a1918' } },
+            'pierre-bleue': { label: 'Pierre bleue', tex: ['vcPierreBleue', 'pierre-bleue.jpg'], v: {
+                text: '#e3f1f7', acc: '#3cc8e0', onacc: '#000', btn: 'rgba(14,30,38,.85)', bline: 'rgba(60,200,224,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                sec: 'rgba(20,42,52,.9)', field: 'rgba(0,8,12,.65)', card: 'rgba(0,0,0,.6)', on: 'rgba(60,200,224,.18)', onl: '#3cc8e0', edge: '#1d3a46',
+                bg: 'linear-gradient(rgba(5,14,18,.6),rgba(5,14,18,.6)),var(--vc-tex,none) center/cover,#0d1a20' } },
+        }; }
+        function themeCss() {
+            const T = '.vc-thm';
+            return Object.keys(themes()).filter((k) => themes()[k].v).map((k) => '.vc-th-' + k + '{' +
+                Object.keys(themes()[k].v).map((n) => '--vc-' + n + ':' + themes()[k].v[n] + ';').join('') + '}').join('') +
+                T + '{background:var(--vc-bg)!important;color:var(--vc-text)!important;box-shadow:inset -1px 0 0 var(--vc-edge),0 2px 8px rgba(0,0,0,.5)!important;}' +
+                '.vc-th-verre{backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);}' +
+                T + ' button:not([id$="delete-btn"]){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
+                T + ' button[style*="background:#03d0fc"]{background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
+                T + ' summary{background:var(--vc-sec)!important;border:1px solid var(--vc-bline);box-shadow:var(--vc-bsh);}' +
+                T + ' select,' + T + ' input[type=number],' + T + ' textarea{background:var(--vc-field)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;}' +
+                T + ' .vc-track{background:var(--vc-btn)!important;color:var(--vc-text)!important;border-color:var(--vc-bline)!important;box-shadow:var(--vc-bsh);}' +
+                T + ' .vc-track:has(input:checked){background:var(--vc-on)!important;border-color:var(--vc-onl)!important;color:#fff!important;}' +
+                T + ' .ep-summary-line{background:var(--vc-card)!important;border-color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ' [style*="color:#03d0fc"]{color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ' [style*="background:#03d0fc"]:not(button){background:var(--vc-acc)!important;}' +
+                T + ' .vc-open-link{background:var(--vc-field)!important;border-color:var(--vc-bline)!important;}';
+        }
+        function currentThemeId() { const t = GM_getValue('theme', 'actuel'); return themes()[t] ? t : 'actuel'; }
+        function themeTexUrl(tex) {
+            if (!tex) return 'none';
+            try { const u = typeof GM_getResourceURL === 'function' && GM_getResourceURL(tex[0]); if (u) return 'url("' + u + '")'; } catch (e) { /* repli */ }
+            return 'url("https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/' + tex[1] + '")';
+        }
+        function applyTheme(el) {
+            if (!el) return;
+            ensureVcStyles();
+            const id = currentThemeId();
+            el.classList.add('vc-th-host');
+            Object.keys(themes()).forEach((k) => el.classList.toggle('vc-th-' + k, k === id));
+            el.classList.toggle('vc-thm', id !== 'actuel');
+            el.style.setProperty('--vc-tex', themeTexUrl(themes()[id].tex));
+        }
+        function themeSelectHtml(id) {
+            const cur = currentThemeId();
+            return '<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;">Theme :<select id="' + id + '" aria-label="Theme du panneau" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                Object.keys(themes()).map((k) => '<option value="' + k + '"' + (k === cur ? ' selected' : '') + '>' + themes()[k].label + '</option>').join('') + '</select></label>';
+        }
+        function bindThemeSelect(container, id) {
+            const sel = container.querySelector('#' + id);
+            if (sel) sel.addEventListener('change', () => { GM_setValue('theme', sel.value); document.querySelectorAll('.vc-th-host').forEach(applyTheme); });
         }
         function toggleButtonsHtml(prefix, autoNext, autoOpen) {
             ensureVcStyles();
@@ -2264,6 +2341,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.56', ['Themes du panneau (Reglages > Plus > Theme) : Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue, ou Actuel. Une couleur d\'accent par theme ; le lecteur et le panneau du site suivent le meme theme.']],
             ['6.55', ['Reglages ouvert par defaut (Fin intro / Debut outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
             ['6.54', ['Correctif : la 6.53 ne se lancait pas (erreur de syntaxe).']],
             ['6.53', ['Nom de la serie et numero d\'episode un peu plus petits.']],
@@ -2418,6 +2496,7 @@
 
             const topbar = document.createElement('div');
             topbar.style.cssText = 'position:absolute;top:52px;left:10px;z-index:10;display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.6);padding:10px;border-radius:8px;font-family:Arial,sans-serif;color:#eee;font-size:12px;max-width:220px;max-height:calc(100vh - 70px);overflow-y:auto;';
+            applyTheme(topbar);
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
             const B = BTN_STYLE;
             const SELECT = 'width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;';
@@ -2450,6 +2529,7 @@
                     '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
                     collapsibleSection('plus', 'Plus',
                         '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
+                        themeSelectHtml('ed-theme-select') +
                         '<div class="vc-pair"><button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
                         '<button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button></div>' +
                         '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' +
@@ -2524,6 +2604,7 @@
             topbar.querySelector('#ed-set-outro-btn').addEventListener('click', () => promptIntroOutro('outroStart'));
             topbar.querySelector('#ed-set-outroend-btn').addEventListener('click', () => promptIntroOutro('outroEnd'));
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
+            bindThemeSelect(topbar, 'ed-theme-select');
             topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
             topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
@@ -4061,6 +4142,7 @@
                 panel = document.createElement('div');
                 panel.id = 'ep-panel';
                 panel.style.cssText = 'position:fixed;top:104px;left:10px;z-index:999998;background:#15151f;color:#eee;padding:12px;font-family:Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border-radius:8px;display:flex;flex-direction:column;gap:8px;width:260px;max-height:calc(100vh - 120px);overflow-y:auto;';
+                applyTheme(panel);
                 document.body.appendChild(panel);
             }
 
@@ -4112,6 +4194,7 @@
                 '<div style="display:flex;gap:4px;"><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button></div>' +
                 collapsibleSection('plus', 'Plus',
                     '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
+                    themeSelectHtml('ep-theme-select') +
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
                     (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
                     prevOpen.plus, true),
@@ -4214,6 +4297,7 @@
             });
             const settingsBtn = panel.querySelector('#ep-settings-btn');
             if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
+            bindThemeSelect(panel, 'ep-theme-select');
             const checkUpdateBtn = panel.querySelector('#ep-check-update-btn');
             if (checkUpdateBtn) checkUpdateBtn.addEventListener('click', openScriptUpdatePage);
 

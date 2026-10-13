@@ -989,3 +989,17 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Demande utilisateur : Reglages ouvert par defaut (lecteur : toujours a l'ouverture ; panneau du site : sauf si referme, prevOpen.reglages !== false).
   "Afficher l'etat AniSkip" deplace dans Reglages > Plus, en bouton bascule .vc-track (vert si actif). Plus sans retrait (meme largeur que les sections).
 - Teste Playwright (anime-sama Psyren) : Reglages ouvert, case dans Plus, tous les elements 98x29 (paires) ou 200x29, pas d'erreur du script.
+
+## v6.56 (2026-10-13) - themes
+- Demande utilisateur (apres l'atelier design/atelier.html) : themes Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue
+  (+ Actuel par defaut). Liste "Theme" dans Reglages > Plus (lecteur et panneau du site), GM `theme` (ajoute a BACKUP_PREFS).
+- applyTheme(el) : classes vc-th-host / vc-th-<id> / vc-thm sur le topbar du lecteur et #ep-panel (APRES panel.style.cssText, sinon --vc-tex efface).
+  themeCss() dans ensureVcStyles : variables --vc-* par theme + surcharges !important (styles en ligne) ; boutons "background:#03d0fc"
+  = accent ; textes color:#03d0fc = --vc-acct (accent texte, rouge clair pour le carbone dont l'accent #b71c1c est illisible en texte).
+  themes() est une fonction (pas de const : ensureVcStyles peut tourner avant).
+- Photos : themes/metal.jpg (titane brosse), pierre-noire.jpg (ardoise), pierre-bleue.jpg (metall-chernyy), 300x900, tirees du NAS
+  (background/). @resource + @grant GM_getResourceURL ; repli sur l'URL raw GitHub. Carbone (motif CSS) et verre (backdrop-filter) sans image.
+  Pierre bleue : cartes des sites en noir 60 % et voile 60 % (demande utilisateur, lisibilite).
+- Les couleurs d'etat (a rattraper orange, vert, violet) ne changent pas. Fenetres (fiche, historique, configuration) pas themees.
+- Teste Playwright (anime-sama Psyren, shim GM_getResourceURL avec les vraies images) : 6 themes sur le lecteur, panneau du site
+  en pierre bleue, pas d'erreur du script. Pas teste : vrai @resource Tampermonkey (necessite le push des images), CSP d'autres sites.
