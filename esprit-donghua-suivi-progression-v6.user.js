@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.52
+// @version      6.53
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2264,6 +2264,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.53', ['Nom de la serie et numero d'episode un peu plus petits.']],
             ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein ecran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Verifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein ecran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
             ['6.51', ['Clavier : Echap ferme les fenetres (fiche, reglages, historique, suivi) ; cases Suivre, vignettes YouTube, lignes du resume et bouton Fiche utilisables au clavier (Tab, Entree).', 'Lecteurs d\'ecran : champs et listes etiquetes, statut et compte a rebours annonces.']],
             ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).', 'Sauvegarde complete : en plus de la progression et de l\'historique, le fichier garde les series abandonnees / en attente, les reglages intro/outro, les chaines YouTube, les sites ajoutes, les reprises et les preferences (restaures a l\'import, sans ecraser ceux deja presents).']],
@@ -2421,9 +2422,9 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
-                '<div style="position:relative;flex-shrink:0;"><div id="ed-current-name" style="padding:0 24px;text-align:center;font-size:16px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
+                '<div style="position:relative;flex-shrink:0;"><div id="ed-current-name" style="padding:0 24px;text-align:center;font-size:14px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
                 '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>' +
-                '<div id="ed-current-ep" style="font-size:17px;font-weight:bold;text-align:center;"></div>' +
+                '<div id="ed-current-ep" style="font-size:15px;font-weight:bold;text-align:center;"></div>' +
                 '<div id="ed-status" role="status" aria-live="polite" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
                 '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
@@ -4076,9 +4077,9 @@
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="position:relative;flex-shrink:0;"><div style="padding:0 24px;text-align:center;font-size:16px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>' +
+                html += '<div style="position:relative;flex-shrink:0;"><div style="padding:0 24px;text-align:center;font-size:14px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>' +
                     '<button id="ep-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>';
-                html += '<div style="font-size:17px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
+                html += '<div style="font-size:15px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div>';
             }
