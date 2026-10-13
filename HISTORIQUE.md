@@ -1015,3 +1015,18 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Teste Playwright (anime-sama Psyren) : lecteur et panneau du site, Actuel / Metallique / Pierre noire, Plus ouvert, nom long sur 2 lignes,
   ✕ Nouveautes (disparait, GM ecrit), 2560x1310 -> zoom 1,25 et panneau dans l'ecran. Pas teste : 4K reel, zoom Windows.
 - tests/recette.html : test "Echap une fenetre a la fois" retire (impossible d'ouvrir 2 fenetres), section 5 (v6.57) ajoutee.
+
+## v6.58 (2026-10-13) - lisibilite (design/lisibilite.html, 12 pistes retenues)
+- Mesures (scratchpad contrast.py) : textures 7,4-10,8:1 (gene = grain fin, pas contraste), verre 2,6-3,0:1 (echec), orange/vert 1,5:1.
+- themeCss() reecrit : regles communes a .vc-th-host (Actuel compris) : Segoe UI 12 px 600 ; summary = titre niveau 3 (sans fond,
+  filet, couleur dim / accent ouvert) ; boutons et .vc-track height 29 px ; champs #101216/#ececec ; cibles >= 24 px (.vc-ver,
+  .vc-news-x, liens de sites, Fiche) ; focus = contour blanc + halo sombre ; Actuel : texte cyan adouci #5fd3ec.
+  Themes : bline transparent (plus de liseres), plaques .95, acct desature, dim, card opaque ; verre fume .62 +
+  prefers-reduced-transparency ; textures regenerees floutees (1,3 px) et contraste .72 (8-29 Ko).
+- Cartes des sites : "N suivis" + pastille icone+mot (● N a rattraper orange / ✓ a jour gris-bleu).
+- Panneau discret (GM panelAutoHide, BACKUP_PREFS) : #ed-topbar.vc-faded apres 4 s, reveil par mousemove du calque ou
+  message 'activity' de l'iframe ; :hover / :focus-within le garde visible.
+- PIEGE (aussi present en 6.57, corrige ici) : la regle generale `button:not(...):not(.vc-ver)` etait plus specifique que celle
+  du bouton principal -> Plein ecran perdait l'accent dans les themes. Regle primaire = `button[style*=...][style]:not(.vc-ver)`.
+- Teste Playwright (anime-sama Psyren, 1920x950) : 6 themes, tous les boutons/titres a 29 px, Plein ecran en accent, panneau
+  sans defilement, panneau discret (vc-faded apres 4,4 s), panneau du site. Pas teste : reveil reel via l'iframe sibnet.

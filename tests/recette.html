@@ -60,7 +60,7 @@ textarea{width:100%;min-height:38px;background:var(--ink);color:var(--text);bord
 <body>
 <div class="wrap">
 <header>
-  <h1>Recette <b>Vidéo Continuum</b> v6.51 → v6.57</h1>
+  <h1>Recette <b>Vidéo Continuum</b> v6.51 → v6.58</h1>
   <p class="intro">Tout ce qui a changé aujourd'hui et qui n'a pas encore été vérifié en vrai chez toi : le clavier (v6.51), le panneau compact (v6.52 à v6.55) et les thèmes (v6.56). Chaque fiche dit pourquoi on teste, quoi faire, ce que tu dois voir, et quoi noter si ça rate.</p>
   <div class="how">
     <div><b>Comment faire.</b> Garde cette page dans un onglet, anime-sama (ou un autre site) dans un autre. Pour chaque fiche : fais les étapes, puis clique <b>OK</b>, <b>KO</b> ou <b>Pas testé</b>. Si c'est KO, écris en deux mots ce que tu as vu à la place.</div>
@@ -269,6 +269,48 @@ const SECTIONS = [
       exp: "Panneau agrandi (environ ×1,25 en 1440p) et toujours entièrement visible ; identique en 1080p.",
       fail: "Note la résolution, le zoom Windows et ce qui dépasse." },
   ]},
+  { t: "6. Lisibilité", v: "v6.58", n: "Les 12 pistes du dossier lisibilité. Passe par chaque thème.", tests: [
+    { id: "58-police", v: "6.58", h: "Police Segoe UI 12 px",
+      why: "Arial 11 px en gras empâtait les lettres.",
+      steps: ["Regarde les boutons et les titres de sections."],
+      exp: "Texte un peu plus grand et plus fin, tout à la même hauteur (29 px), rien sur deux lignes.",
+      fail: "Note le bouton coupé ou plus haut que les autres." },
+    { id: "58-sections", v: "6.58", h: "Titres de sections en simples intitulés",
+      why: "Trois niveaux : action principale pleine, boutons, titres de sections sans fond.",
+      steps: ["Ouvre et ferme Sources, Réglages, Plus, Sauvegarde."],
+      exp: "Les titres n'ont plus de fond : une flèche, le mot, un filet dessous. Ouverts, ils prennent la couleur du thème.",
+      fail: "Dis si on ne voit plus que c'est cliquable." },
+    { id: "58-plaques", v: "6.58", h: "Textures douces, plaques pleines",
+      why: "Le grain de la pierre passait sous les lettres.",
+      steps: ["Thèmes Pierre noire, Pierre bleue, Métallique."],
+      exp: "Texture visible mais floutée, boutons sur plaques pleines sans liseré ; texte net.",
+      fail: "Note le thème encore gênant." },
+    { id: "58-verre", v: "6.58", h: "Verre fumé",
+      why: "Le verre était illisible sur une scène claire.",
+      steps: ["Thème Verre trempé, sur une scène lumineuse."],
+      exp: "On devine la vidéo derrière, plus sombre qu'avant ; texte lisible même sur un plan clair.",
+      fail: "Note la scène où ça ne se lit pas." },
+    { id: "58-etats", v: "6.58", h: "Cartes des sites : icône + mot",
+      why: "Orange et vert se confondaient.",
+      steps: ["Regarde les cartes des sites en bas."],
+      exp: "« N suivis » à gauche, pastille « ● 2 à rattraper » (orange) ou « ✓ à jour » (gris-bleu) à droite.",
+      fail: "Note ce qui s'affiche." },
+    { id: "58-focus", v: "6.58", h: "Contour clavier",
+      why: "Le contour cyan disparaissait sur certains thèmes.",
+      steps: ["Avec Tab, parcours quelques boutons sur Verre trempé et Pierre bleue."],
+      exp: "Contour blanc avec halo sombre, visible partout.",
+      fail: "Note le thème où il manque." },
+    { id: "58-discret", v: "6.58", h: "Panneau discret en lecture",
+      why: "Le panneau captait l'œil pendant tout l'épisode.",
+      steps: ["Réglages → Plus → <span class=ui>Panneau discret en lecture</span>.", "Ne touche plus à la souris pendant 5 s.", "Bouge la souris sur la vidéo, puis sur le panneau."],
+      exp: "Le panneau devient presque transparent après 4 s, revient dès que la souris bouge sur la vidéo ou survole le panneau.",
+      fail: "Note s'il ne revient pas en bougeant sur la vidéo (dis sur quel site)." },
+    { id: "58-cibles", v: "6.58", h: "Petits boutons plus faciles à viser",
+      why: "✕, version et liens des sites faisaient 14-18 px.",
+      steps: ["Clique la ✕ de Nouveautés, le « v6.58 ↻ » et un lien de site en visant le bord."],
+      exp: "Les clics passent sans viser au pixel près.",
+      fail: "Note celui qui reste difficile." },
+  ]},
   { t: "4. Rien de cassé", n: "Les fonctions de base, à vérifier une fois en passant.", tests: [
     { id: "nr-suite", v: "—", h: "Lecture continue",
       why: "La fonction principale ; les boutons ont bougé.",
@@ -334,7 +376,7 @@ counts();
 const msg = document.getElementById("msg");
 document.getElementById("copy").addEventListener("click", async () => {
   const L = { ok: "OK", ko: "KO", skip: "pas teste" };
-  const lines = ["Recette Video Continuum v6.57 - " + new Date().toLocaleString("fr-FR")];
+  const lines = ["Recette Video Continuum v6.58 - " + new Date().toLocaleString("fr-FR")];
   SECTIONS.forEach((s) => {
     lines.push("", "== " + s.t);
     s.tests.forEach((t) => { const r = state[t.id] || {}; lines.push("- [" + (L[r.st] || "non fait") + "] " + t.h + (r.note ? " : " + r.note.replace(/\s+/g, " ") : "")); });

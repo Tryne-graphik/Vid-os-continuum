@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.57
+// @version      6.58
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2051,7 +2051,7 @@
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
-        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme'];
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2212,7 +2212,7 @@
             st.textContent = '.vc-track{position:relative;display:block;text-align:center;padding:5px 4px;border-radius:4px;font-size:11px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
                 '.vc-track.vc-small{flex:1;white-space:nowrap;}.vc-pair>.vc-track{flex:1;min-width:0;}' +
                 '.vc-trio{display:flex;flex-wrap:wrap;gap:4px;}.vc-trio>button{flex:1;min-width:0;padding:6px 2px!important;}.vc-trio>details{flex:0 0 auto;}.vc-trio>details[open]{flex-basis:100%;order:1;}' +
-                '.vc-grp{font-size:10px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#8a8a99;margin-top:2px;}' +
+                '.vc-grp{font-size:10px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#8a8a99;margin-top:8px;}' +
                 '.vc-ver{background:none!important;border:none!important;box-shadow:none!important;color:#ffd400!important;font:bold 12px Arial,sans-serif;cursor:pointer;padding:0;}.vc-ver:hover{text-decoration:underline;}' +
                 '.vc-th-host>*{flex-shrink:0;}details[data-sec="nouveautes"]>summary{position:relative;padding-right:22px!important;}.vc-news-x{position:absolute;right:5px;top:50%;transform:translateY(-50%);padding:0 3px;color:#aaa;cursor:pointer;}.vc-news-x:hover,.vc-news-x:focus-visible{color:#fff;}' +
                 '.vc-pair{display:flex;flex-wrap:wrap;gap:4px;}.vc-pair>details{flex:1 1 40%;min-width:0;}.vc-pair>details[open]{flex-basis:100%;order:1;}.vc-pair>button{flex:1;min-width:0;padding:6px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
@@ -2228,49 +2228,72 @@
         // fonction (pas de const) : ensureVcStyles peut tourner avant cette ligne.
         function themes() { return {
             actuel: { label: 'Actuel' },
+            // v6.58 (dossier lisibilite) : plaques opaques sans liseré (bline transparent), accent texte desature (acct),
+            // dim = titres de sections (niveau 3), card = plaque des cartes de sites.
             metal: { label: 'Metallique', tex: ['vcMetal', 'metal.jpg'], v: {
-                text: '#e4f1ff', acc: '#7fd6ff', onacc: '#000', btn: 'linear-gradient(#4a4f55,#2b2f33)', bline: '#6d737a',
-                bsh: 'inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.6)', sec: 'linear-gradient(#3c4146,#26292d)', field: '#101214',
-                card: 'rgba(0,0,0,.35)', on: 'linear-gradient(#2f6b3a,#1d4a26)', onl: '#6fcf7f', edge: '#8a9097',
+                text: '#e4f1ff', dim: '#a9b8c6', acc: '#7fd6ff', acct: '#9fdcff', onacc: '#06121a', btn: 'linear-gradient(#454a50,#2e3236)', bline: 'transparent',
+                bsh: 'inset 0 1px 0 rgba(255,255,255,.22),0 1px 2px rgba(0,0,0,.6)', field: '#101216', card: 'rgba(16,18,20,.94)',
+                on: 'linear-gradient(#2f6b3a,#1d4a26)', onl: '#6fcf7f', edge: '#8a9097',
                 bg: 'linear-gradient(90deg,rgba(15,17,19,.55),rgba(15,17,19,.35)),var(--vc-tex,none) center/cover,#2a2d30' } },
             carbone: { label: 'Fibre de carbone', v: {
-                text: '#f6e4e2', acc: '#b71c1c', acct: '#ef5350', onacc: '#fff', btn: '#1b1d20', bline: '#2c2f33', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
-                sec: '#232529', field: '#0a0a0b', card: 'rgba(183,28,28,.10)', on: '#3a1412', onl: '#c62828', edge: '#000',
+                text: '#f6e4e2', dim: '#b9a9a7', acc: '#b71c1c', acct: '#ef7a70', onacc: '#fff', btn: '#1d1f23', bline: 'transparent', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                field: '#101114', card: 'rgba(22,22,24,.94)', on: '#3a1412', onl: '#c62828', edge: '#000',
                 bg: 'linear-gradient(27deg,#151515 5px,transparent 5px) 0 5px/20px 20px,linear-gradient(207deg,#151515 5px,transparent 5px) 10px 0/20px 20px,' +
                     'linear-gradient(27deg,#222 5px,transparent 5px) 0 10px/20px 20px,linear-gradient(207deg,#222 5px,transparent 5px) 10px 5px/20px 20px,' +
                     'linear-gradient(90deg,#1b1b1b 10px,transparent 10px) 0 0/20px 20px,linear-gradient(#1d1d1d 25%,#1a1a1a 25%,#1a1a1a 50%,transparent 50%,transparent 75%,#242424 75%,#242424) 0 0/20px 20px,#131313' } },
+            // verre fume : 3,0:1 -> au-dessus de 4,5:1 sur scene claire (teinte 30 % -> 62 %)
             verre: { label: 'Verre trempe', glass: true, v: {
-                text: '#fff', acc: '#7ee0ff', onacc: '#000', btn: 'rgba(255,255,255,.10)', bline: 'rgba(255,255,255,.22)', bsh: 'inset 0 1px 0 rgba(255,255,255,.25)',
-                sec: 'rgba(255,255,255,.14)', field: 'rgba(0,0,0,.35)', card: 'rgba(255,255,255,.08)', on: 'rgba(76,175,80,.35)', onl: 'rgba(140,230,150,.8)',
-                edge: 'rgba(255,255,255,.35)', bg: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 40%,rgba(255,255,255,.10)),rgba(20,30,40,.30)' } },
+                text: '#fff', dim: '#c9d6e2', acc: '#7ee0ff', acct: '#9fe6ff', onacc: '#06121a', btn: 'rgba(255,255,255,.12)', bline: 'transparent', bsh: 'inset 0 1px 0 rgba(255,255,255,.18)',
+                field: 'rgba(0,0,0,.45)', card: 'rgba(8,12,18,.55)', on: 'rgba(76,175,80,.45)', onl: 'rgba(140,230,150,.85)',
+                edge: 'rgba(255,255,255,.3)', bg: 'linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.02) 40%,rgba(255,255,255,.05)),rgba(12,18,26,.62)' } },
             'pierre-noire': { label: 'Pierre noire', tex: ['vcPierreNoire', 'pierre-noire.jpg'], v: {
-                text: '#f5e7c6', acc: '#d6a849', onacc: '#000', btn: 'rgba(28,26,24,.88)', bline: 'rgba(214,168,73,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.05)',
-                sec: 'rgba(38,34,30,.9)', field: 'rgba(0,0,0,.6)', card: 'rgba(214,168,73,.08)', on: 'rgba(214,168,73,.18)', onl: '#d6a849', edge: '#3a332a',
-                bg: 'linear-gradient(rgba(10,10,10,.45),rgba(10,10,10,.45)),var(--vc-tex,none) center/cover,#1a1918' } },
+                text: '#f5e7c6', dim: '#c9b892', acc: '#d6a849', acct: '#ddb86a', onacc: '#140f05', btn: 'rgba(30,28,25,.95)', bline: 'transparent', bsh: 'inset 0 1px 0 rgba(255,255,255,.05)',
+                field: 'rgba(12,11,10,.95)', card: 'rgba(24,22,20,.94)', on: 'rgba(214,168,73,.22)', onl: '#d6a849', edge: '#3a332a',
+                bg: 'linear-gradient(rgba(10,10,10,.4),rgba(10,10,10,.4)),var(--vc-tex,none) center/cover,#1a1918' } },
             'pierre-bleue': { label: 'Pierre bleue', tex: ['vcPierreBleue', 'pierre-bleue.jpg'], v: {
-                text: '#d6f5fb', acc: '#3cc8e0', onacc: '#000', btn: 'rgba(14,30,38,.85)', bline: 'rgba(60,200,224,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
-                sec: 'rgba(20,42,52,.9)', field: 'rgba(0,8,12,.65)', card: 'rgba(0,0,0,.6)', on: 'rgba(60,200,224,.18)', onl: '#3cc8e0', edge: '#1d3a46',
-                bg: 'linear-gradient(rgba(5,14,18,.6),rgba(5,14,18,.6)),var(--vc-tex,none) center/cover,#0d1a20' } },
+                text: '#d6f5fb', dim: '#9fc6cf', acc: '#3cc8e0', acct: '#7fd5e2', onacc: '#04161b', btn: 'rgba(14,30,38,.95)', bline: 'transparent', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                field: 'rgba(6,14,18,.95)', card: 'rgba(6,14,18,.94)', on: 'rgba(60,200,224,.22)', onl: '#3cc8e0', edge: '#1d3a46',
+                bg: 'linear-gradient(rgba(5,14,18,.45),rgba(5,14,18,.45)),var(--vc-tex,none) center/cover,#0d1a20' } },
         }; }
         function themeCss() {
-            const T = '.vc-thm';
-            return Object.keys(themes()).filter((k) => themes()[k].v).map((k) => '.vc-th-' + k + '{' +
+            const H = '.vc-th-host', T = '.vc-thm';
+            // Regles communes a tous les themes, Actuel compris (pistes 01, 05, 08, 09, 10).
+            const common =
+                H + '{font-family:"Segoe UI",system-ui,Arial,sans-serif!important;}' +
+                H + ' button,' + H + ' summary,' + H + ' select,' + H + ' input,' + H + ' textarea,' + H + ' label{font-family:inherit!important;font-size:12px!important;}' +
+                H + ' button,' + H + ' summary,' + H + ' .vc-track{font-weight:600!important;}' +
+                H + ' button:not(.vc-ver):not(#ed-info-btn):not(#ep-info-btn),' + H + ' .vc-track{height:29px;box-sizing:border-box;}' +
+                H + ' .vc-track{line-height:17px;}' +
+                H + ' summary{background:transparent!important;border:none!important;border-bottom:1px solid rgba(255,255,255,.14)!important;border-radius:0!important;box-shadow:none!important;' +
+                    'letter-spacing:.02em;color:#a3a9b5!important;padding:6px 4px!important;line-height:16px;height:29px;box-sizing:border-box;}' +
+                H + ' details[open]>summary{color:#fff!important;border-bottom-color:rgba(255,255,255,.4)!important;}' +
+                H + ' select,' + H + ' input[type=number],' + H + ' textarea{background:#101216!important;color:#ececec!important;border:1px solid #2a2e36!important;}' +
+                H + ' button[style*="color:#fff"]:not(.vc-ver){color:#ececec!important;}' +
+                H + ' .vc-open-link{font-size:11px!important;padding:6px 4px!important;}' +
+                '#ed-info-btn,#ep-info-btn{min-height:24px;}.vc-ver{padding:5px 2px!important;}.vc-news-x{padding:5px 7px!important;}' +
+                H + ' :focus-visible,' + H + ' .vc-track:has(input:focus-visible){outline:2px solid #fff!important;outline-offset:1px!important;box-shadow:0 0 0 4px rgba(0,0,0,.85)!important;}' +
+                '.vc-th-actuel [style*="color:#03d0fc"]{color:#5fd3ec!important;}' +
+                '#ed-topbar{transition:opacity .4s;}#ed-topbar.vc-faded:not(:hover):not(:focus-within){opacity:.12;}' +
+                '@media (prefers-reduced-motion:reduce){#ed-topbar{transition:none;}}';
+            return common + Object.keys(themes()).filter((k) => themes()[k].v).map((k) => '.vc-th-' + k + '{' +
                 Object.keys(themes()[k].v).map((n) => '--vc-' + n + ':' + themes()[k].v[n] + ';').join('') + '}').join('') +
                 T + '{background:var(--vc-bg)!important;color:var(--vc-text)!important;box-shadow:inset -1px 0 0 var(--vc-edge),0 2px 8px rgba(0,0,0,.5)!important;}' +
-                '.vc-th-verre{backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);}' +
+                '.vc-th-verre{backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);}' +
+                '@media (prefers-reduced-transparency:reduce){.vc-th-verre{background:#141b24!important;backdrop-filter:none;-webkit-backdrop-filter:none;}}' +
                 T + ' button:not([id$="delete-btn"]):not(.vc-ver){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
-                T + ' button[style*="background:#03d0fc"]{background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
-                T + ' summary{background:var(--vc-sec)!important;border:1px solid var(--vc-bline);box-shadow:var(--vc-bsh);}' +
-                T + ' select,' + T + ' input[type=number],' + T + ' textarea{background:var(--vc-field)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;}' +
+                T + ' button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
+                T + ' #ed-info-btn,' + T + ' #ep-info-btn{border-color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ' select,' + T + ' input[type=number],' + T + ' textarea{background:var(--vc-field)!important;color:var(--vc-text)!important;border:1px solid rgba(255,255,255,.10)!important;}' +
                 T + ' .vc-track{background:var(--vc-btn)!important;color:var(--vc-text)!important;border-color:var(--vc-bline)!important;box-shadow:var(--vc-bsh);}' +
                 T + ' .vc-track:has(input:checked){background:var(--vc-on)!important;border-color:var(--vc-onl)!important;color:#fff!important;}' +
                 T + ' .ep-summary-line{background:var(--vc-card)!important;border-color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' [style*="color:#03d0fc"]{color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' [style*="background:#03d0fc"]:not(button){background:var(--vc-acc)!important;}' +
-                T + ' .vc-open-link{background:var(--vc-field)!important;border-color:var(--vc-bline)!important;}' +
-                T + ' summary,' + T + ' label,' + T + ' [style*="color:#fff"],' + T + ' [style*="color:#eee"],' + T + ' [style*="color:#ccc"]{color:var(--vc-text)!important;}' +
-                T + ',' + T + ' *{text-shadow:0 1px 2px rgba(0,0,0,.85);}' + T + ' button[style*="background:#03d0fc"]{text-shadow:none;}' +
-                T + ' button,' + T + ' select,' + T + ' label,' + T + ' .vc-grp{font-weight:bold;}' +
+                T + ' .vc-open-link{background:var(--vc-field)!important;border-color:rgba(255,255,255,.10)!important;}' +
+                T + ' label,' + T + ' [style*="color:#fff"],' + T + ' [style*="color:#eee"],' + T + ' [style*="color:#ccc"]{color:var(--vc-text)!important;}' +
+                T + ' summary{color:var(--vc-dim)!important;border-bottom-color:rgba(255,255,255,.12)!important;}' +
+                T + ' details[open]>summary{color:var(--vc-acct,var(--vc-acc))!important;border-bottom-color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ',' + T + ' *{text-shadow:0 1px 2px rgba(0,0,0,.85);}' + T + ' button[style*="background:#03d0fc"],' + T + ' [style*="color:#1a1000"]{text-shadow:none;}' +
                 T + ' .vc-grp{color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' button.vc-ver{color:#ffd400!important;}';
         }
@@ -2370,6 +2393,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.58', ['Lisibilite (12 pistes) : police Segoe UI 12 px demi-gras ; boutons sur plaques pleines et textures adoucies ; verre trempe fume (texte lisible sur scene claire) ; titres de sections en simples intitules ; couleurs d\'accent adoucies ; plus de noir ni de blanc purs.', 'Cartes des sites : etat avec icone et mot (● 2 a rattraper, ✓ a jour). Zones de clic d\'au moins 24 px, contour clavier visible sur tous les themes.', 'Option "Panneau discret en lecture" (Reglages > Plus > Affichage) : le panneau s\'efface apres 4 s sans souris et revient au survol.']],
             ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Debut outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
             ['6.56', ['Themes du panneau (Reglages > Plus > Theme) : Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue, ou Actuel. Une couleur d\'accent par theme ; le lecteur et le panneau du site suivent le meme theme.']],
             ['6.55', ['Reglages ouvert par defaut (Fin intro / Debut outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
@@ -2566,7 +2590,7 @@
                 '<div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
                 '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>' +
                 '<select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
-                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
+                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier nouveaux episodes</button>' +
                 toggleButtonsHtml('ed-', false, false) +
                 '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
                     '<div class="vc-trio"><button id="ed-set-intro-btn" style="' + B + '">Fin intro</button><button id="ed-set-outro-btn" style="' + B + '">Debut outro</button>' +
@@ -2577,6 +2601,7 @@
                         groupLabel('Affichage') +
                         themeSelectHtml('ed-theme-select') +
                         '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>' +
+                        '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
                         '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
                         '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Supprimer la serie selectionnee de la progression">Supprimer</button></div>', false, true) + '</div>', true) +
@@ -2597,6 +2622,9 @@
                 '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 siteLinksHtml() + openModeSelectHtml();
             overlay.appendChild(topbar);
+            topbar.id = 'ed-topbar';
+            overlay.addEventListener('mousemove', panelWake);
+            panelWake();
 
             toggleBtn.addEventListener('click', () => {
                 const hidden = topbar.style.display === 'none';
@@ -2651,6 +2679,7 @@
             topbar.querySelector('#ed-set-outroend-btn').addEventListener('click', () => promptIntroOutro('outroEnd'));
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             bindThemeSelect(topbar, 'ed-theme-select');
+            topbar.querySelector('#ed-autohide-cb').addEventListener('change', (ev) => { GM_setValue('panelAutoHide', ev.target.checked); panelWake(); });
             topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
             const edUpd = topbar.querySelector('#ed-check-update-btn');
             if (edUpd) edUpd.addEventListener('click', openScriptUpdatePage);
@@ -2679,7 +2708,7 @@
             topbar.querySelector('#ed-check-new-btn').addEventListener('click', (ev) => {
                 const btn = ev.currentTarget;
                 btn.disabled = true; btn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Verifier les nouveaux episodes'; });
+                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Verifier nouveaux episodes'; });
             });
 
             seriesSelectEl.addEventListener('change', () => { if (seriesSelectEl.value) location.href = seriesSelectEl.value; });
@@ -2746,6 +2775,16 @@
         }
 
         let navHideTimer = null;
+        // Panneau discret (v6.58) : 4 s sans souris -> 12 % d'opacite ; revient au survol, au focus,
+        // ou a un mouvement dans le lecteur (message 'activity' de l'iframe).
+        let panelFadeTimer = null;
+        function panelWake() {
+            const tb = document.getElementById('ed-topbar');
+            if (!tb) return;
+            tb.classList.remove('vc-faded');
+            clearTimeout(panelFadeTimer);
+            if (GM_getValue('panelAutoHide', false)) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+        }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
             const show = (el, on) => { el.style.opacity = on ? '1' : '0'; el.style.pointerEvents = on ? 'auto' : 'none'; };
@@ -2956,7 +2995,7 @@
                 outroSignalSent = true;
                 triggerNextEpisode('fin reelle de la video');
             }
-            if (type === 'activity') showNavButtons();
+            if (type === 'activity') { showNavButtons(); panelWake(); }
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
@@ -3877,11 +3916,13 @@
                 // tres en retard (ex. 139 ep.) noyait le total. Detail par
                 // anime dans la fenetre de suivi.
                 const nbBehind = entries.filter((e) => isBehind(e.key)).length;
-                const newText = !lastNewEpisodesCheckAt ? 'verification...' : (nbBehind ? nbBehind + ' a rattraper' : 'a jour');
-                const color = nbBehind > 0 ? '#ffb300' : '#4caf50';
-                return '<div class="ep-summary-line" role="button" tabindex="0" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(3,208,252,.12);border:1px solid #03d0fc;border-radius:6px;padding:7px 9px;font-size:12px;">' +
+                // Etat = icone + mot (jamais la couleur seule, WCAG 1.4.1) ; seul "a rattraper" reste colore.
+                const chip = !lastNewEpisodesCheckAt ? '<span style="font-size:11px;color:#aaa;">verification...</span>'
+                    : nbBehind ? '<span style="font-size:11px;font-weight:bold;background:#ffb300;color:#1a1000;border-radius:9px;padding:1px 7px;white-space:nowrap;">&#9679; ' + nbBehind + ' a rattraper</span>'
+                    : '<span style="font-size:11px;color:#9fb4c8;border:1px solid #3a4652;border-radius:9px;padding:0 7px;white-space:nowrap;">&#10003; a jour</span>';
+                return '<div class="ep-summary-line" role="button" tabindex="0" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(3,208,252,.45);border-radius:6px;padding:7px 9px;font-size:12px;display:flex;flex-direction:column;gap:3px;">' +
                     '<div style="font-weight:bold;color:#03d0fc;">' + s.label + ' &#9656;</div>' +
-                    '<div style="color:' + color + ';">' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + ' &middot; ' + newText + '</div></div>';
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;"><span style="color:#ccc;">' + entries.length + ' suivi' + (entries.length > 1 ? 's' : '') + '</span>' + chip + '</div></div>';
             }).join('');
             return (lines || (onlyBehind ? '<div style="font-size:12px;color:#4caf50;text-align:center;">Tout est à jour</div>' : '')) + renderDuplicatesHtml();
         }
@@ -4234,7 +4275,7 @@
                 html += '</select>';
             }
 
-            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
+            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier nouveaux episodes</button>';
             html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
 
             html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
@@ -4297,7 +4338,7 @@
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
                 checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Verifier les nouveaux episodes'; });
+                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Verifier nouveaux episodes'; });
             });
 
             const exportBtn = panel.querySelector('#ep-export-panel');
