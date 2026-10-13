@@ -1003,3 +1003,15 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Les couleurs d'etat (a rattraper orange, vert, violet) ne changent pas. Fenetres (fiche, historique, configuration) pas themees.
 - Teste Playwright (anime-sama Psyren, shim GM_getResourceURL avec les vraies images) : 6 themes sur le lecteur, panneau du site
   en pierre bleue, pas d'erreur du script. Pas teste : vrai @resource Tampermonkey (necessite le push des images), CSP d'autres sites.
+
+## v6.57 (2026-10-13) - retours de recette (tests/recette.html)
+- Recette utilisateur v6.51-v6.56 : tout OK (clavier, panneau, themes, non-regression), remarques d'ergonomie -> 9 points :
+  nom sur 2 lignes (-webkit-line-clamp:2) ; "ℹ Fiche" sur la ligne de l'episode ; version du titre cliquable (versionButtonHtml,
+  classe .vc-ver exclue des surcharges de theme) -> openScriptUpdatePage ; "↻ Verifier les nouveaux episodes" pleine ligne ;
+  Reglages = .vc-trio (Fin intro | Debut outro | Plus, Plus ouvert en pleine largeur) ; Plus en groupes (groupLabel : Intro / outro,
+  Affichage, Page) ; ✕ sur Nouveautes (GM newsHiddenFor = version, section non rendue) ; themes : texte teinte par theme + gras +
+  text-shadow ; applyScale (zoom = innerHeight/1050 borne 1..1,6, max-height divise par le zoom, resize).
+- Piege : .vc-th-host>*{flex-shrink:0} sinon les boutons en enfant direct du panneau s'ecrasent quand le contenu depasse.
+- Teste Playwright (anime-sama Psyren) : lecteur et panneau du site, Actuel / Metallique / Pierre noire, Plus ouvert, nom long sur 2 lignes,
+  ✕ Nouveautes (disparait, GM ecrit), 2560x1310 -> zoom 1,25 et panneau dans l'ecran. Pas teste : 4K reel, zoom Windows.
+- tests/recette.html : test "Echap une fenetre a la fois" retire (impossible d'ouvrir 2 fenetres), section 5 (v6.57) ajoutee.

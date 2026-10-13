@@ -60,7 +60,7 @@ textarea{width:100%;min-height:38px;background:var(--ink);color:var(--text);bord
 <body>
 <div class="wrap">
 <header>
-  <h1>Recette <b>Vidéo Continuum</b> v6.51 → v6.56</h1>
+  <h1>Recette <b>Vidéo Continuum</b> v6.51 → v6.57</h1>
   <p class="intro">Tout ce qui a changé aujourd'hui et qui n'a pas encore été vérifié en vrai chez toi : le clavier (v6.51), le panneau compact (v6.52 à v6.55) et les thèmes (v6.56). Chaque fiche dit pourquoi on teste, quoi faire, ce que tu dois voir, et quoi noter si ça rate.</p>
   <div class="how">
     <div><b>Comment faire.</b> Garde cette page dans un onglet, anime-sama (ou un autre site) dans un autre. Pour chaque fiche : fais les étapes, puis clique <b>OK</b>, <b>KO</b> ou <b>Pas testé</b>. Si c'est KO, écris en deux mots ce que tu as vu à la place.</div>
@@ -112,11 +112,6 @@ const SECTIONS = [
       steps: ["En bas du panneau, clique la carte d'un site (ex. <span class=ui>Anime-Sama ▸</span>).", "Appuie sur <kbd>Échap</kbd>."],
       exp: "La fenêtre de suivi se ferme.",
       fail: "Note si elle reste ouverte." },
-    { id: "esc-pile", v: "6.51", h: "Échap ne ferme qu'une fenêtre à la fois",
-      why: "Si deux fenêtres sont ouvertes l'une sur l'autre, la première pression doit fermer celle du dessus seulement.",
-      steps: ["Ouvre <span class=ui>Historique</span>, puis la fiche <span class=ui>ℹ</span> par-dessus (si possible).", "Appuie une fois sur <kbd>Échap</kbd>, puis une deuxième fois."],
-      exp: "1re pression : la fenêtre du dessus se ferme. 2e : la suivante.",
-      fail: "Note si les deux se ferment d'un coup. Si tu n'arrives pas à empiler deux fenêtres, mets « Pas testé »." },
     { id: "tab-cases", v: "6.51", h: "Tab atteint les boutons Suivre, Lect. continue, Lecteur auto",
       why: "Ces boutons sont en fait des cases à cocher cachées ; avant, le clavier les sautait.",
       steps: ["Clique dans une zone vide du panneau.", "Appuie plusieurs fois sur <kbd>Tab</kbd>.", "Quand <span class=ui>Suivre</span> a un contour bleu, appuie sur <kbd>Espace</kbd>.", "Rappuie sur <kbd>Espace</kbd> pour revenir comme avant.", "Continue avec <kbd>Tab</kbd> jusqu'à <span class=ui>Lect. continue</span> et <span class=ui>Lecteur auto</span>."],
@@ -227,6 +222,53 @@ const SECTIONS = [
       exp: "Panneau gris foncé d'avant, boutons Suivre / Lect. continue verts quand actifs, accent cyan.",
       fail: "Note un reste de l'ancien thème." },
   ]},
+  { t: "5. Retours de recette", v: "v6.57", n: "Les 9 changements demandés après la première recette.", tests: [
+    { id: "57-nom", v: "6.57", h: "Nom long sur 2 lignes",
+      why: "Le nom était coupé sur une seule ligne.",
+      steps: ["Ouvre une série au nom long (plus de 30 lettres)."],
+      exp: "Le nom tient sur 2 lignes, centré ; au-delà, « … » en fin de 2e ligne. Le nom complet s'affiche au survol.",
+      fail: "Note la série et ce qui s'affiche." },
+    { id: "57-fiche", v: "6.57", h: "Bouton « ℹ Fiche » sur la ligne de l'épisode",
+      why: "Le petit ℹ à côté du nom n'était pas assez visible.",
+      steps: ["Regarde la ligne « Episode X / Y ».", "Clique <span class=ui>ℹ Fiche</span>, puis <kbd>Échap</kbd>."],
+      exp: "Le bouton est à droite du numéro d'épisode, encadré ; la fiche s'ouvre et se ferme.",
+      fail: "Note s'il chevauche le numéro." },
+    { id: "57-version", v: "6.57", h: "Version cliquable",
+      why: "Le bouton Vérifier MAJ était caché dans Nouveautés.",
+      steps: ["Survole « v6.57 ↻ » à côté de « Vidéo Continuum ».", "Clique dessus."],
+      exp: "Une bulle explique le bouton ; le clic ouvre la page d'installation, où Tampermonkey dit si une version plus récente existe.",
+      fail: "Note si rien ne se passe." },
+    { id: "57-verif", v: "6.57", h: "« ↻ Vérifier les nouveaux épisodes » en pleine ligne",
+      why: "L'icône seule ne disait pas à quoi elle servait.",
+      steps: ["Clique le bouton sous la liste des séries."],
+      exp: "« Recherche... » (panneau du site) puis retour au libellé ; compteurs à jour.",
+      fail: "Note s'il reste bloqué." },
+    { id: "57-reglages", v: "6.57", h: "Réglages : Fin intro | Début outro | Plus",
+      why: "Plus était sur une ligne à part.",
+      steps: ["Regarde la section Réglages fermée puis ouvre <span class=ui>Plus</span>."],
+      exp: "Les 3 sur une ligne ; Plus ouvert passe en pleine largeur dessous.",
+      fail: "Note ce qui déborde." },
+    { id: "57-plus", v: "6.57", h: "Plus rangé en 3 groupes",
+      why: "Tout ouvert, c'était confus.",
+      steps: ["Ouvre Plus."],
+      exp: "Groupes titrés : INTRO / OUTRO (Début intro, Fin outro, Configuration de toutes les séries), AFFICHAGE (Thème, état AniSkip), PAGE (Recharger, Supprimer).",
+      fail: "Dis ce qui reste confus." },
+    { id: "57-croix", v: "6.57", h: "✕ sur Nouveautés",
+      why: "Masquer Nouveautés une fois lue.",
+      steps: ["Clique la ✕ à droite de « Nouveautes ».", "Recharge la page."],
+      exp: "Nouveautés disparaît du lecteur et du panneau, et ne revient qu'à la prochaine version.",
+      fail: "Note si elle revient tout de suite." },
+    { id: "57-lisible", v: "6.57", h: "Thèmes plus lisibles",
+      why: "Texte peu lisible sur Métallique, Carbone, Pierre noire, Pierre bleue.",
+      steps: ["Passe par les 4 thèmes (n'oublie pas Fibre de carbone, pas testé la dernière fois)."],
+      exp: "Texte en semi-gras, teinté (bleuté, rosé, crème, turquoise clair), avec une fine ombre : lisible sur la texture.",
+      fail: "Note le thème et l'endroit encore difficile à lire." },
+    { id: "57-grand", v: "6.57", h: "Grand écran",
+      why: "Compact en 1080p, trop petit sur grand écran.",
+      steps: ["Si tu as un écran 1440p ou 4K, ouvre le lecteur dessus (sinon « Pas testé »).", "Sur l'écran 1080p, vérifie que rien n'a changé."],
+      exp: "Panneau agrandi (environ ×1,25 en 1440p) et toujours entièrement visible ; identique en 1080p.",
+      fail: "Note la résolution, le zoom Windows et ce qui dépasse." },
+  ]},
   { t: "4. Rien de cassé", n: "Les fonctions de base, à vérifier une fois en passant.", tests: [
     { id: "nr-suite", v: "—", h: "Lecture continue",
       why: "La fonction principale ; les boutons ont bougé.",
@@ -292,7 +334,7 @@ counts();
 const msg = document.getElementById("msg");
 document.getElementById("copy").addEventListener("click", async () => {
   const L = { ok: "OK", ko: "KO", skip: "pas teste" };
-  const lines = ["Recette Video Continuum v6.56 - " + new Date().toLocaleString("fr-FR")];
+  const lines = ["Recette Video Continuum v6.57 - " + new Date().toLocaleString("fr-FR")];
   SECTIONS.forEach((s) => {
     lines.push("", "== " + s.t);
     s.tests.forEach((t) => { const r = state[t.id] || {}; lines.push("- [" + (L[r.st] || "non fait") + "] " + t.h + (r.note ? " : " + r.note.replace(/\s+/g, " ") : "")); });

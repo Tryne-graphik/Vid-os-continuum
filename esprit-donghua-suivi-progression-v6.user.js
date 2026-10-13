@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.56
+// @version      6.57
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2211,6 +2211,10 @@
             st.id = 'vc-styles';
             st.textContent = '.vc-track{position:relative;display:block;text-align:center;padding:5px 4px;border-radius:4px;font-size:11px;font-weight:bold;cursor:pointer;background:#333;color:#ddd;border:1px solid #555;}' +
                 '.vc-track.vc-small{flex:1;white-space:nowrap;}.vc-pair>.vc-track{flex:1;min-width:0;}' +
+                '.vc-trio{display:flex;flex-wrap:wrap;gap:4px;}.vc-trio>button{flex:1;min-width:0;padding:6px 2px!important;}.vc-trio>details{flex:0 0 auto;}.vc-trio>details[open]{flex-basis:100%;order:1;}' +
+                '.vc-grp{font-size:10px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#8a8a99;margin-top:2px;}' +
+                '.vc-ver{background:none!important;border:none!important;box-shadow:none!important;color:#ffd400!important;font:bold 12px Arial,sans-serif;cursor:pointer;padding:0;}.vc-ver:hover{text-decoration:underline;}' +
+                '.vc-th-host>*{flex-shrink:0;}details[data-sec="nouveautes"]>summary{position:relative;padding-right:22px!important;}.vc-news-x{position:absolute;right:5px;top:50%;transform:translateY(-50%);padding:0 3px;color:#aaa;cursor:pointer;}.vc-news-x:hover,.vc-news-x:focus-visible{color:#fff;}' +
                 '.vc-pair{display:flex;flex-wrap:wrap;gap:4px;}.vc-pair>details{flex:1 1 40%;min-width:0;}.vc-pair>details[open]{flex-basis:100%;order:1;}.vc-pair>button{flex:1;min-width:0;padding:6px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
                 '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
                 '.vc-track input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}.vc-track:has(input:focus-visible){outline:2px solid #03d0fc;outline-offset:2px;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}' +
@@ -2225,12 +2229,12 @@
         function themes() { return {
             actuel: { label: 'Actuel' },
             metal: { label: 'Metallique', tex: ['vcMetal', 'metal.jpg'], v: {
-                text: '#f1f3f5', acc: '#7fd6ff', onacc: '#000', btn: 'linear-gradient(#4a4f55,#2b2f33)', bline: '#6d737a',
+                text: '#e4f1ff', acc: '#7fd6ff', onacc: '#000', btn: 'linear-gradient(#4a4f55,#2b2f33)', bline: '#6d737a',
                 bsh: 'inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.6)', sec: 'linear-gradient(#3c4146,#26292d)', field: '#101214',
                 card: 'rgba(0,0,0,.35)', on: 'linear-gradient(#2f6b3a,#1d4a26)', onl: '#6fcf7f', edge: '#8a9097',
                 bg: 'linear-gradient(90deg,rgba(15,17,19,.55),rgba(15,17,19,.35)),var(--vc-tex,none) center/cover,#2a2d30' } },
             carbone: { label: 'Fibre de carbone', v: {
-                text: '#eceff1', acc: '#b71c1c', acct: '#ef5350', onacc: '#fff', btn: '#1b1d20', bline: '#2c2f33', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                text: '#f6e4e2', acc: '#b71c1c', acct: '#ef5350', onacc: '#fff', btn: '#1b1d20', bline: '#2c2f33', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
                 sec: '#232529', field: '#0a0a0b', card: 'rgba(183,28,28,.10)', on: '#3a1412', onl: '#c62828', edge: '#000',
                 bg: 'linear-gradient(27deg,#151515 5px,transparent 5px) 0 5px/20px 20px,linear-gradient(207deg,#151515 5px,transparent 5px) 10px 0/20px 20px,' +
                     'linear-gradient(27deg,#222 5px,transparent 5px) 0 10px/20px 20px,linear-gradient(207deg,#222 5px,transparent 5px) 10px 5px/20px 20px,' +
@@ -2240,11 +2244,11 @@
                 sec: 'rgba(255,255,255,.14)', field: 'rgba(0,0,0,.35)', card: 'rgba(255,255,255,.08)', on: 'rgba(76,175,80,.35)', onl: 'rgba(140,230,150,.8)',
                 edge: 'rgba(255,255,255,.35)', bg: 'linear-gradient(160deg,rgba(255,255,255,.16),rgba(255,255,255,.04) 40%,rgba(255,255,255,.10)),rgba(20,30,40,.30)' } },
             'pierre-noire': { label: 'Pierre noire', tex: ['vcPierreNoire', 'pierre-noire.jpg'], v: {
-                text: '#efe9df', acc: '#d6a849', onacc: '#000', btn: 'rgba(28,26,24,.88)', bline: 'rgba(214,168,73,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.05)',
+                text: '#f5e7c6', acc: '#d6a849', onacc: '#000', btn: 'rgba(28,26,24,.88)', bline: 'rgba(214,168,73,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.05)',
                 sec: 'rgba(38,34,30,.9)', field: 'rgba(0,0,0,.6)', card: 'rgba(214,168,73,.08)', on: 'rgba(214,168,73,.18)', onl: '#d6a849', edge: '#3a332a',
                 bg: 'linear-gradient(rgba(10,10,10,.45),rgba(10,10,10,.45)),var(--vc-tex,none) center/cover,#1a1918' } },
             'pierre-bleue': { label: 'Pierre bleue', tex: ['vcPierreBleue', 'pierre-bleue.jpg'], v: {
-                text: '#e3f1f7', acc: '#3cc8e0', onacc: '#000', btn: 'rgba(14,30,38,.85)', bline: 'rgba(60,200,224,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
+                text: '#d6f5fb', acc: '#3cc8e0', onacc: '#000', btn: 'rgba(14,30,38,.85)', bline: 'rgba(60,200,224,.35)', bsh: 'inset 0 1px 0 rgba(255,255,255,.06)',
                 sec: 'rgba(20,42,52,.9)', field: 'rgba(0,8,12,.65)', card: 'rgba(0,0,0,.6)', on: 'rgba(60,200,224,.18)', onl: '#3cc8e0', edge: '#1d3a46',
                 bg: 'linear-gradient(rgba(5,14,18,.6),rgba(5,14,18,.6)),var(--vc-tex,none) center/cover,#0d1a20' } },
         }; }
@@ -2254,7 +2258,7 @@
                 Object.keys(themes()[k].v).map((n) => '--vc-' + n + ':' + themes()[k].v[n] + ';').join('') + '}').join('') +
                 T + '{background:var(--vc-bg)!important;color:var(--vc-text)!important;box-shadow:inset -1px 0 0 var(--vc-edge),0 2px 8px rgba(0,0,0,.5)!important;}' +
                 '.vc-th-verre{backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);}' +
-                T + ' button:not([id$="delete-btn"]){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
+                T + ' button:not([id$="delete-btn"]):not(.vc-ver){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
                 T + ' button[style*="background:#03d0fc"]{background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
                 T + ' summary{background:var(--vc-sec)!important;border:1px solid var(--vc-bline);box-shadow:var(--vc-bsh);}' +
                 T + ' select,' + T + ' input[type=number],' + T + ' textarea{background:var(--vc-field)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;}' +
@@ -2263,7 +2267,12 @@
                 T + ' .ep-summary-line{background:var(--vc-card)!important;border-color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' [style*="color:#03d0fc"]{color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' [style*="background:#03d0fc"]:not(button){background:var(--vc-acc)!important;}' +
-                T + ' .vc-open-link{background:var(--vc-field)!important;border-color:var(--vc-bline)!important;}';
+                T + ' .vc-open-link{background:var(--vc-field)!important;border-color:var(--vc-bline)!important;}' +
+                T + ' summary,' + T + ' label,' + T + ' [style*="color:#fff"],' + T + ' [style*="color:#eee"],' + T + ' [style*="color:#ccc"]{color:var(--vc-text)!important;}' +
+                T + ',' + T + ' *{text-shadow:0 1px 2px rgba(0,0,0,.85);}' + T + ' button[style*="background:#03d0fc"]{text-shadow:none;}' +
+                T + ' button,' + T + ' select,' + T + ' label,' + T + ' .vc-grp{font-weight:bold;}' +
+                T + ' .vc-grp{color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ' button.vc-ver{color:#ffd400!important;}';
         }
         function currentThemeId() { const t = GM_getValue('theme', 'actuel'); return themes()[t] ? t : 'actuel'; }
         function themeTexUrl(tex) {
@@ -2274,11 +2283,31 @@
         function applyTheme(el) {
             if (!el) return;
             ensureVcStyles();
+            bindScaleOnResize();
             const id = currentThemeId();
             el.classList.add('vc-th-host');
             Object.keys(themes()).forEach((k) => el.classList.toggle('vc-th-' + k, k === id));
             el.classList.toggle('vc-thm', id !== 'actuel');
             el.style.setProperty('--vc-tex', themeTexUrl(themes()[id].tex));
+            applyScale(el);
+        }
+        // Grand ecran : panneau compact en 1080p (fenetre ~950 px de haut), agrandi au-dela
+        // (x1,25 en 1440p, plafonne a x1,6). max-height divise par le zoom pour rester dans l'ecran.
+        function applyScale(el) {
+            const z = Math.round(Math.max(1, Math.min(1.6, window.innerHeight / 1050)) * 100) / 100;
+            const off = el.id === 'ep-panel' ? 120 : 70;
+            el.style.zoom = z === 1 ? '' : String(z);
+            el.style.maxHeight = 'calc((100vh - ' + off + 'px) / ' + z + ')';
+        }
+        let vcScaleBound = false;
+        function bindScaleOnResize() {
+            if (vcScaleBound) return;
+            vcScaleBound = true;
+            window.addEventListener('resize', () => document.querySelectorAll('.vc-th-host').forEach(applyScale));
+        }
+        function groupLabel(t) { return '<div class="vc-grp">' + t + '</div>'; }
+        function versionButtonHtml(prefix, v) {
+            return '<button id="' + prefix + '-version-btn" class="vc-ver" title="Verifier les mises a jour : ouvre la page d\'installation, Tampermonkey indique si une version plus recente existe">v' + v + ' &#8635;</button>';
         }
         function themeSelectHtml(id) {
             const cur = currentThemeId();
@@ -2341,6 +2370,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Debut outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
             ['6.56', ['Themes du panneau (Reglages > Plus > Theme) : Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue, ou Actuel. Une couleur d\'accent par theme ; le lecteur et le panneau du site suivent le meme theme.']],
             ['6.55', ['Reglages ouvert par defaut (Fin intro / Debut outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
             ['6.54', ['Correctif : la 6.53 ne se lancait pas (erreur de syntaxe).']],
@@ -2414,16 +2444,29 @@
         ];
         function currentScriptVersion() { return (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?'; }
         function newsSectionHtml(prevOpen, prefix) {
+            if (GM_getValue('newsHiddenFor', '') === currentScriptVersion()) return '';
             const unseen = GM_getValue('lastSeenVersion', '') !== currentScriptVersion();
             const body = CHANGELOG.map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
                 items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('') +
                 '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
-            return collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen);
+            return collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : '') +
+                '<span class="vc-news-x" role="button" tabindex="0" title="Masquer jusqu\'a la prochaine version" aria-label="Masquer les nouveautes">&#10005;</span>', body, prevOpen === undefined ? unseen : prevOpen);
         }
         function bindNewsSection(container) {
             const d = container.querySelector('details[data-sec="nouveautes"]');
             // clic sur le titre seulement : 'toggle' part aussi a l'affichage d'un encart deja ouvert.
             if (d) d.querySelector('summary').addEventListener('click', () => GM_setValue('lastSeenVersion', currentScriptVersion()));
+            const x = d && d.querySelector('.vc-news-x');
+            const hide = (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                GM_setValue('newsHiddenFor', currentScriptVersion());
+                GM_setValue('lastSeenVersion', currentScriptVersion());
+                document.querySelectorAll('details[data-sec="nouveautes"]').forEach((n) => n.remove());
+            };
+            if (x) {
+                x.addEventListener('click', hide);
+                x.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') hide(ev); });
+            }
         }
 
         function bindIncidentSection(container, prefix) {
@@ -2502,10 +2545,10 @@
             const SELECT = 'width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;';
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
-                '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>' +
-                '<div style="position:relative;flex-shrink:0;"><div id="ed-current-name" style="padding:0 24px;text-align:center;font-size:14px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>' +
-                '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>' +
-                '<div id="ed-current-ep" style="font-size:15px;font-weight:bold;text-align:center;"></div>' +
+                '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum ' + versionButtonHtml('ed', scriptVersion) + '</div>' +
+                '<div id="ed-current-name" style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;"></div>' +
+                '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;"><div id="ed-current-ep" style="font-size:15px;font-weight:bold;text-align:center;"></div>' +
+                '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;">&#8505; Fiche</button></div>' +
                 '<div id="ed-status" role="status" aria-live="polite" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
                 '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
@@ -2522,18 +2565,21 @@
                 '</div>' +
                 '<div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
                 '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>' +
-                '<div style="display:flex;gap:4px;"><select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'width:0;flex:1;font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
-                '<button id="ed-check-new-btn" title="Verifier les nouveaux episodes" aria-label="Verifier les nouveaux episodes" style="' + BTN_STYLE + 'padding:6px 9px;">&#8635;</button></div>' +
+                '<select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
+                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>' +
                 toggleButtonsHtml('ed-', false, false) +
                 '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
-                    '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
+                    '<div class="vc-trio"><button id="ed-set-intro-btn" style="' + B + '">Fin intro</button><button id="ed-set-outro-btn" style="' + B + '">Debut outro</button>' +
                     collapsibleSection('plus', 'Plus',
-                        '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
+                        groupLabel('Intro / outro') +
+                        '<div class="vc-pair"><button id="ed-set-introstart-btn" style="' + B + '">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + '">Fin outro</button></div>' +
+                        '<button id="ed-settings-btn" style="' + B + '">Configuration de toutes les series</button>' +
+                        groupLabel('Affichage') +
                         themeSelectHtml('ed-theme-select') +
-                        '<div class="vc-pair"><button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
-                        '<button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button></div>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' +
-                        '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>', false, true), true) +
+                        '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>' +
+                        groupLabel('Page') +
+                        '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Supprimer la serie selectionnee de la progression">Supprimer</button></div>', false, true) + '</div>', true) +
                 collapsibleSection('youtube', 'Sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
                     '<div class="vc-pair"><button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">YouTube</button>' +
@@ -2606,7 +2652,9 @@
             topbar.querySelector('#ed-settings-btn').addEventListener('click', openSettingsModal);
             bindThemeSelect(topbar, 'ed-theme-select');
             topbar.querySelector('#ed-info-btn').addEventListener('click', () => { if (currentEpisode) openSeriesInfo(currentEpisode); });
-            topbar.querySelector('#ed-check-update-btn').addEventListener('click', openScriptUpdatePage);
+            const edUpd = topbar.querySelector('#ed-check-update-btn');
+            if (edUpd) edUpd.addEventListener('click', openScriptUpdatePage);
+            topbar.querySelector('#ed-version-btn').addEventListener('click', openScriptUpdatePage);
             topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
             topbar.querySelector('#ed-aniskip-cb').addEventListener('change', (ev) => { GM_setValue('aniskipShown', ev.target.checked); renderAniSkipStatus(); });
             bindIncidentSection(topbar, 'ed');
@@ -2631,7 +2679,7 @@
             topbar.querySelector('#ed-check-new-btn').addEventListener('click', (ev) => {
                 const btn = ev.currentTarget;
                 btn.disabled = true; btn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻'; });
+                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Verifier les nouveaux episodes'; });
             });
 
             seriesSelectEl.addEventListener('change', () => { if (seriesSelectEl.value) location.href = seriesSelectEl.value; });
@@ -4157,24 +4205,23 @@
             panel.querySelectorAll('details[data-sec]').forEach((d) => { prevOpen[d.getAttribute('data-sec')] = d.open; });
             const CHECK = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
 
-            let html = '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum <span style="font-size:12px;color:#ffd400;">v' + scriptVersion + '</span></div>';
+            let html = '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum ' + versionButtonHtml('ep', scriptVersion) + '</div>';
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="position:relative;flex-shrink:0;"><div style="padding:0 24px;text-align:center;font-size:14px;font-weight:bold;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>' +
-                    '<button id="ep-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." aria-label="Fiche de l\'anime" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc55;padding:2px 7px;border-radius:4px;cursor:pointer;font-size:11px;position:absolute;right:0;top:50%;transform:translateY(-50%);">&#8505;</button></div>';
-                html += '<div style="font-size:15px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>';
+                html += '<div style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
+                html += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;"><div style="font-size:15px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>' +
+                    '<button id="ep-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;">&#8505; Fiche</button></div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Ouvrir le lecteur</button>';
                 html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div>';
             }
 
             html += '<div class="vc-pair">' + (currentEpisode && currentEpisode.seriesName ? trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode))) : '') +
                 '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>';
-            html += '<div style="display:flex;gap:4px;">';
             if (entries.length === 0) {
-                html += '<div style="flex:1;font-size:12px;color:#aaa;">Aucun anime suivi.</div>';
+                html += '<div style="font-size:12px;color:#aaa;">Aucun anime suivi.</div>';
             } else {
-                html += '<select id="ep-select" aria-label="Choisir un anime" style="width:0;flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">';
+                html += '<select id="ep-select" aria-label="Choisir un anime" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">';
                 html += '<option value="">-- Choisir un anime --</option>';
                 entries.forEach((e) => {
                     const label = buildSeriesOptionLabel(e);
@@ -4187,17 +4234,19 @@
                 html += '</select>';
             }
 
-            html += '<button id="ep-check-new" title="Verifier les nouveaux episodes" aria-label="Verifier les nouveaux episodes" style="' + BTN_STYLE + 'padding:6px 9px;">&#8635;</button></div>';
+            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier les nouveaux episodes</button>';
             html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
 
             html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
-                '<div style="display:flex;gap:4px;"><button id="ep-set-intro" style="' + BTN_STYLE + 'flex:1;">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + 'flex:1;">Debut outro</button></div>' +
+                '<div class="vc-trio"><button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + '">Debut outro</button>' +
                 collapsibleSection('plus', 'Plus',
-                    '<div style="display:flex;gap:4px;"><button id="ep-set-introstart" style="' + BTN_STYLE + 'flex:1;">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + 'flex:1;">Fin outro</button></div>' +
+                    groupLabel('Intro / outro') +
+                    '<div class="vc-pair"><button id="ep-set-introstart" style="' + BTN_STYLE + '">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + '">Fin outro</button></div>' +
+                    '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration de toutes les series</button>' +
+                    groupLabel('Affichage') +
                     themeSelectHtml('ep-theme-select') +
-                    '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
-                    (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
-                    prevOpen.plus, true),
+                    (entries.length ? groupLabel('Page') + '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
+                    prevOpen.plus, true) + '</div>',
                 prevOpen.reglages !== false);
             if (currentEpisode && currentEpisode.seriesName) {
                 html += collapsibleSection('youtube', 'Sources',
@@ -4247,8 +4296,8 @@
             bindNewsSection(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
-                checkNewBtn.disabled = true; checkNewBtn.textContent = '…';
-                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻'; });
+                checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';
+                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Verifier les nouveaux episodes'; });
             });
 
             const exportBtn = panel.querySelector('#ep-export-panel');
@@ -4298,6 +4347,8 @@
             const settingsBtn = panel.querySelector('#ep-settings-btn');
             if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
             bindThemeSelect(panel, 'ep-theme-select');
+            const versionBtn = panel.querySelector('#ep-version-btn');
+            if (versionBtn) versionBtn.addEventListener('click', openScriptUpdatePage);
             const checkUpdateBtn = panel.querySelector('#ep-check-update-btn');
             if (checkUpdateBtn) checkUpdateBtn.addEventListener('click', openScriptUpdatePage);
 
