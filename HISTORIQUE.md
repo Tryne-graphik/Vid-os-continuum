@@ -1030,3 +1030,21 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   du bouton principal -> Plein ecran perdait l'accent dans les themes. Regle primaire = `button[style*=...][style]:not(.vc-ver)`.
 - Teste Playwright (anime-sama Psyren, 1920x950) : 6 themes, tous les boutons/titres a 29 px, Plein ecran en accent, panneau
   sans defilement, panneau discret (vc-faded apres 4,4 s), panneau du site. Pas teste : reveil reel via l'iframe sibnet.
+- Campagne de recette avant production (2026-10-13, toujours v6.58, non poussee avant) :
+  * Fonctionnel multi-sites (harnais Playwright, theme Pierre noire) : anime-sama episode + accueil, esprit-donghua, animoflix, odysee
+    -> panneaux construits, theme applique, tout a 29 px, aucune erreur du script ; fr.wikipedia : rien d'injecte. Erreurs vues =
+    celles des sites (aclib d'anime-sama ; "Unexpected token '<'" d'esprit-donghua, presente aussi sans le script).
+  * Ecrans 1366x657 / 1920x950 / 2560x1310 / 3840x1990 : BUG corrige - en zoom le bas du panneau sortait de l'ecran (max-height =
+    100vh / z - off, et non (100vh - off) / z). 1366x768 : le panneau defile meme a l'etat par defaut (limite connue).
+  * Clavier : Echap ferme fiche, historique, configuration sans fermer le lecteur ; focus atteint les bascules.
+  * Accessibilite axe-core 4.10 (WCAG 2.2 AA) sur Actuel / Pierre bleue / Verre : nested-interactive (✕ dans le summary,
+    regression 6.57) -> ✕ sortie du summary (.vc-news-wrap) ; target-size -> ✕ 24x24. Resultat final : 0 violation.
+  * Donnees : export contient theme / panelAutoHide / aniskipShown ; import piege (XSS dans theme, types faux) : rien execute,
+    mais les types n'etaient pas verifies ("oui" texte activait le panneau discret) -> validImportedPref (booleens stricts,
+    theme connu, openMode connu) et lecture stricte panelAutoHide === true. Rejoue : 4 valeurs rejetees, progression importee.
+  * Performance (rAF 4 s, longtask) : 120 img/s, 0 tache longue sur Actuel, Verre, Pierre bleue (video du harnais a 2 % :
+    charge reelle du flou en lecture non mesuree).
+  * Revue de code : diff limite a l'interface (aucune ligne de lecture/suivi modifiee hors balisage) ; 86 identifiants interroges
+    tous presents ; un seul ecouteur global ajoute (resize, une fois). Revue deleguee (DeepSeek, Gemini) indisponible.
+  * Non teste : Firefox / Violentmonkey (zoom CSS FF >= 126, :has FF >= 121), vrai @resource Tampermonkey avant push, lecture
+    continue et saut d'intro en vrai (code non modifie), licences des textures metal et pierre-bleue (origine inconnue).

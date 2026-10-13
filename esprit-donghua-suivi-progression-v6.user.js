@@ -2088,11 +2088,18 @@
             });
             BACKUP_PREFS.forEach((k) => {
                 const v = data[k];
-                if (GM_getValue(k, undefined) === undefined && (typeof v === 'boolean' || (typeof v === 'string' && v.length <= 50))) { GM_setValue(k, v); restored++; }
+                if (GM_getValue(k, undefined) === undefined && validImportedPref(k, v)) { GM_setValue(k, v); restored++; }
             });
             // Sites ajoutes restaures : connus tout de suite (sinon leurs animes seraient ignores ci-apres).
             Object.keys(loadCustomSites()).forEach((h) => { if (!SITES.some((x) => x.id === 'custom:' + h)) SITES.push(makeGenericSite(h)); });
             return restored;
+        }
+        // Type attendu par preference (recette 6.58 : "oui" texte activait le panneau discret).
+        function validImportedPref(k, v) {
+            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide'].includes(k)) return typeof v === 'boolean';
+            if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
+            if (k === 'openMode') return OPEN_MODES.some((m) => m[0] === v);
+            return typeof v === 'string' && v.length <= 50;
         }
         function mergeImportedHistory(html) {
             const el = new DOMParser().parseFromString(html, 'text/html').getElementById('ed-history-backup');
@@ -2214,7 +2221,7 @@
                 '.vc-trio{display:flex;flex-wrap:wrap;gap:4px;}.vc-trio>button{flex:1;min-width:0;padding:6px 2px!important;}.vc-trio>details{flex:0 0 auto;}.vc-trio>details[open]{flex-basis:100%;order:1;}' +
                 '.vc-grp{font-size:10px;font-weight:bold;letter-spacing:.08em;text-transform:uppercase;color:#8a8a99;margin-top:8px;}' +
                 '.vc-ver{background:none!important;border:none!important;box-shadow:none!important;color:#ffd400!important;font:bold 12px Arial,sans-serif;cursor:pointer;padding:0;}.vc-ver:hover{text-decoration:underline;}' +
-                '.vc-th-host>*{flex-shrink:0;}details[data-sec="nouveautes"]>summary{position:relative;padding-right:22px!important;}.vc-news-x{position:absolute;right:5px;top:50%;transform:translateY(-50%);padding:0 3px;color:#aaa;cursor:pointer;}.vc-news-x:hover,.vc-news-x:focus-visible{color:#fff;}' +
+                '.vc-th-host>*{flex-shrink:0;}details[data-sec="nouveautes"]>summary{padding-right:24px!important;}.vc-news-wrap{position:relative;}.vc-pair>.vc-news-wrap{flex:1 1 40%;min-width:0;}.vc-pair>.vc-news-wrap:has(details[open]){flex-basis:100%;order:1;}.vc-news-x{position:absolute;right:4px;top:16px;transform:translateY(-50%);padding:0 3px;color:#aaa;cursor:pointer;}.vc-news-x:hover,.vc-news-x:focus-visible{color:#fff;}' +
                 '.vc-pair{display:flex;flex-wrap:wrap;gap:4px;}.vc-pair>details{flex:1 1 40%;min-width:0;}.vc-pair>details[open]{flex-basis:100%;order:1;}.vc-pair>button{flex:1;min-width:0;padding:6px 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
                 '.vc-track:has(input:checked){background:#2e7d32;color:#fff;border-color:#4caf50;}' +
                 '.vc-track input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}.vc-track:has(input:focus-visible){outline:2px solid #03d0fc;outline-offset:2px;}.vc-track .on{display:none;}.vc-track:has(input:checked) .on{display:inline;}.vc-track:has(input:checked) .off{display:none;}' +
@@ -2270,7 +2277,7 @@
                 H + ' select,' + H + ' input[type=number],' + H + ' textarea{background:#101216!important;color:#ececec!important;border:1px solid #2a2e36!important;}' +
                 H + ' button[style*="color:#fff"]:not(.vc-ver){color:#ececec!important;}' +
                 H + ' .vc-open-link{font-size:11px!important;padding:6px 4px!important;}' +
-                '#ed-info-btn,#ep-info-btn{min-height:24px;}.vc-ver{padding:5px 2px!important;}.vc-news-x{padding:5px 7px!important;}' +
+                '#ed-info-btn,#ep-info-btn{min-height:24px;}.vc-ver{padding:5px 2px!important;}.vc-news-x{min-width:24px;min-height:24px;padding:0!important;display:flex;align-items:center;justify-content:center;}' +
                 H + ' :focus-visible,' + H + ' .vc-track:has(input:focus-visible){outline:2px solid #fff!important;outline-offset:1px!important;box-shadow:0 0 0 4px rgba(0,0,0,.85)!important;}' +
                 '.vc-th-actuel [style*="color:#03d0fc"]{color:#5fd3ec!important;}' +
                 '#ed-topbar{transition:opacity .4s;}#ed-topbar.vc-faded:not(:hover):not(:focus-within){opacity:.12;}' +
@@ -2315,12 +2322,14 @@
             applyScale(el);
         }
         // Grand ecran : panneau compact en 1080p (fenetre ~950 px de haut), agrandi au-dela
-        // (x1,25 en 1440p, plafonne a x1,6). max-height divise par le zoom pour rester dans l'ecran.
+        // (x1,25 en 1440p, plafonne a x1,6).
         function applyScale(el) {
             const z = Math.round(Math.max(1, Math.min(1.6, window.innerHeight / 1050)) * 100) / 100;
             const off = el.id === 'ep-panel' ? 120 : 70;
             el.style.zoom = z === 1 ? '' : String(z);
-            el.style.maxHeight = 'calc((100vh - ' + off + 'px) / ' + z + ')';
+            // le zoom agrandit aussi le decalage du haut (top) : hauteur max = 100vh / z - off,
+            // sinon le bas du panneau sortait de l'ecran en 1440p / 4K (recette 6.58).
+            el.style.maxHeight = 'calc(100vh / ' + z + ' - ' + off + 'px)';
         }
         let vcScaleBound = false;
         function bindScaleOnResize() {
@@ -2473,19 +2482,20 @@
             const body = CHANGELOG.map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
                 items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('') +
                 '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
-            return collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : '') +
-                '<span class="vc-news-x" role="button" tabindex="0" title="Masquer jusqu\'a la prochaine version" aria-label="Masquer les nouveautes">&#10005;</span>', body, prevOpen === undefined ? unseen : prevOpen);
+            // ✕ hors du <summary> (axe : pas d'element interactif dans un autre) ; le conteneur devient l'element de la paire.
+            return '<div class="vc-news-wrap">' + collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen) +
+                '<span class="vc-news-x" role="button" tabindex="0" title="Masquer jusqu\'a la prochaine version" aria-label="Masquer les nouveautes">&#10005;</span></div>';
         }
         function bindNewsSection(container) {
             const d = container.querySelector('details[data-sec="nouveautes"]');
             // clic sur le titre seulement : 'toggle' part aussi a l'affichage d'un encart deja ouvert.
             if (d) d.querySelector('summary').addEventListener('click', () => GM_setValue('lastSeenVersion', currentScriptVersion()));
-            const x = d && d.querySelector('.vc-news-x');
+            const x = container.querySelector('.vc-news-x');
             const hide = (ev) => {
                 ev.preventDefault(); ev.stopPropagation();
                 GM_setValue('newsHiddenFor', currentScriptVersion());
                 GM_setValue('lastSeenVersion', currentScriptVersion());
-                document.querySelectorAll('details[data-sec="nouveautes"]').forEach((n) => n.remove());
+                document.querySelectorAll('.vc-news-wrap').forEach((n) => n.remove());
             };
             if (x) {
                 x.addEventListener('click', hide);
@@ -2601,7 +2611,7 @@
                         groupLabel('Affichage') +
                         themeSelectHtml('ed-theme-select') +
                         '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>' +
-                        '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
+                        '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) === true ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
                         '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
                         '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Supprimer la serie selectionnee de la progression">Supprimer</button></div>', false, true) + '</div>', true) +
@@ -2783,7 +2793,7 @@
             if (!tb) return;
             tb.classList.remove('vc-faded');
             clearTimeout(panelFadeTimer);
-            if (GM_getValue('panelAutoHide', false)) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+            if (GM_getValue('panelAutoHide', false) === true) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
         }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
