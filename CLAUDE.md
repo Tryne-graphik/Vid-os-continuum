@@ -18,6 +18,7 @@ Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7
 ## A chaque version
 - Monter `@version` ET ajouter une entree en tete de `CHANGELOG` (encart "Nouveautes").
 - Chaines JS entre apostrophes : echapper `\'` (les patchs via bash/python perdent souvent l'echappement -> `node --check`).
+- Publier : `node --check f && git commit ... && git push` en UNE seule chaine (v6.53 poussee cassee sinon).
 - Ajouter une section a la fin de `HISTORIQUE.md` (ce qui a ete teste / pas teste).
 
 ## YouTube (v6.27 -> v6.38)

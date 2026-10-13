@@ -984,3 +984,8 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## v6.54 (2026-10-13)
 - Correctif de la 6.53 (apostrophe echappee), node --check OK avant le commit. Lecon : toujours chainer check && commit && push.
+
+## v6.55 (2026-10-13)
+- Demande utilisateur : Reglages ouvert par defaut (lecteur : toujours a l'ouverture ; panneau du site : sauf si referme, prevOpen.reglages !== false).
+  "Afficher l'etat AniSkip" deplace dans Reglages > Plus, en bouton bascule .vc-track (vert si actif). Plus sans retrait (meme largeur que les sections).
+- Teste Playwright (anime-sama Psyren) : Reglages ouvert, case dans Plus, tous les elements 98x29 (paires) ou 200x29, pas d'erreur du script.

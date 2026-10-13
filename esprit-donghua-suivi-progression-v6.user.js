@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.54
+// @version      6.55
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2195,7 +2195,7 @@
 
         function collapsibleSection(key, title, innerHtml, open, sub) {
             // sub : sous-menu (decale et plus clair, ex. Reglages > Plus).
-            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;' + (sub ? 'margin-left:10px;' : '') + '">' +
+            return '<details data-sec="' + key + '"' + (open ? ' open' : '') + ' style="padding-top:2px;' + '' + '">' +
                 '<summary style="cursor:pointer;font-size:11px;font-weight:bold;color:#eee;background:' + (sub ? '#4a4a58' : '#3a3a46') + ';padding:6px 8px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</summary>' +
                 '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">' + innerHtml + '</div></details>';
         }
@@ -2264,6 +2264,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.55', ['Reglages ouvert par defaut (Fin intro / Debut outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
             ['6.54', ['Correctif : la 6.53 ne se lancait pas (erreur de syntaxe).']],
             ['6.53', ['Nom de la serie et numero d\'episode un peu plus petits.']],
             ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein ecran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Verifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein ecran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
@@ -2446,13 +2447,13 @@
                 '<button id="ed-check-new-btn" title="Verifier les nouveaux episodes" aria-label="Verifier les nouveaux episodes" style="' + BTN_STYLE + 'padding:6px 9px;">&#8635;</button></div>' +
                 toggleButtonsHtml('ed-', false, false) +
                 '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
-                    '<label style="font-size:11px;color:#ccc;cursor:pointer;"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '> Afficher l\'etat AniSkip</label>' +
                     '<div style="display:flex;gap:4px;"><button id="ed-set-intro-btn" style="' + B + 'flex:1;">Fin intro</button><button id="ed-set-outro-btn" style="' + B + 'flex:1;">Debut outro</button></div>' +
                     collapsibleSection('plus', 'Plus',
                         '<div style="display:flex;gap:4px;"><button id="ed-set-introstart-btn" style="' + B + 'flex:1;">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + 'flex:1;">Fin outro</button></div>' +
                         '<div class="vc-pair"><button id="ed-settings-btn" style="' + B + '">Configuration</button>' +
                         '<button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button></div>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>', false, true)) +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' +
+                        '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>', false, true), true) +
                 collapsibleSection('youtube', 'Sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
                     '<div class="vc-pair"><button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">YouTube</button>' +
@@ -4114,7 +4115,7 @@
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration</button>' +
                     (entries.length ? '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
                     prevOpen.plus, true),
-                prevOpen.reglages);
+                prevOpen.reglages !== false);
             if (currentEpisode && currentEpisode.seriesName) {
                 html += collapsibleSection('youtube', 'Sources',
                     (currentEpisode.site === 'esprit-donghua' ? '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>' : '') +
