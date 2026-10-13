@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Recette Vidéo Continuum</title>
+<style>
+/* Cahier de recette : une colonne de fiches de test, barre d'avancement collee en haut. */
+:root{
+  --ink:#101114; --slab:#191b20; --slab2:#20232a; --rule:#2e323b; --text:#e8eaee; --dim:#9aa1ad;
+  --acc:#03d0fc; --ok:#4caf50; --ko:#ef5350; --skip:#ffb300;
+  --f:"Segoe UI","Bahnschrift",system-ui,sans-serif; --fc:"Bahnschrift","Arial Narrow","Segoe UI",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--text);font:15px/1.55 var(--f);padding:0 16px 80px}
+.wrap{max-width:900px;margin:0 auto}
+header{padding-block:32px 16px;display:grid;gap:8px}
+h1{margin:0;font:600 30px/1.1 var(--fc);letter-spacing:.02em}
+h1 b{color:var(--acc)}
+.intro{margin:0;color:var(--dim);max-width:70ch}
+.how{background:var(--slab);border:1px solid var(--rule);padding:14px 16px;display:grid;gap:6px;font-size:14px}
+.how b{color:var(--acc)}
+.bar{position:sticky;top:0;z-index:5;background:rgba(16,17,20,.95);backdrop-filter:blur(6px);padding:10px 0;border-bottom:1px solid var(--rule);display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center}
+.track{flex:1 1 220px;height:8px;background:var(--slab2);display:flex;overflow:hidden;border-radius:4px}
+.track i{display:block;height:100%}
+.counts{font:600 14px var(--fc);display:flex;gap:12px;font-variant-numeric:tabular-nums}
+.counts .o{color:var(--ok)}.counts .k{color:var(--ko)}.counts .s{color:var(--skip)}.counts .r{color:var(--dim)}
+.btn{background:var(--slab2);color:var(--text);border:1px solid var(--rule);padding:8px 14px;font:600 13px var(--fc);letter-spacing:.04em;cursor:pointer;border-radius:4px}
+.btn.main{background:var(--acc);color:#001018;border-color:var(--acc)}
+.btn:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#msg{font-size:13px;color:var(--dim)}
+h2{font:600 20px var(--fc);margin:28px 0 4px;display:flex;gap:10px;align-items:baseline}
+h2 small{font:500 13px var(--f);color:var(--dim)}
+.sec-note{margin:0 0 12px;color:var(--dim);font-size:14px}
+.t{background:var(--slab);border:1px solid var(--rule);border-left:4px solid var(--rule);margin:10px 0;padding:14px 16px;display:grid;gap:8px}
+.t[data-st=ok]{border-left-color:var(--ok)}.t[data-st=ko]{border-left-color:var(--ko)}.t[data-st=skip]{border-left-color:var(--skip)}
+.t h3{margin:0;font:600 16px var(--fc);display:flex;gap:10px;align-items:baseline}
+.t h3 code{font:600 12px Consolas,monospace;color:var(--acc);background:var(--slab2);padding:1px 6px;border-radius:3px}
+.t p{margin:0}
+.lbl{font:600 11px var(--fc);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-top:2px}
+ol{margin:0;padding-left:22px;display:grid;gap:3px}
+.exp{background:rgba(76,175,80,.08);border:1px solid rgba(76,175,80,.3);padding:8px 10px;font-size:14px}
+.fail{background:rgba(239,83,80,.07);border:1px solid rgba(239,83,80,.25);padding:8px 10px;font-size:14px}
+kbd{font:600 12px Consolas,monospace;background:#2a2e36;border:1px solid #444;border-bottom-width:2px;padding:0 5px;border-radius:3px}
+.ui{color:#fff;font-weight:600;background:#2a2e36;padding:0 5px;border-radius:3px;white-space:nowrap}
+.res{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.res label{position:relative}
+.res input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.res span{display:inline-block;padding:5px 12px;border:1px solid var(--rule);border-radius:4px;font:600 13px var(--fc);cursor:pointer}
+.res input:checked+span.ok{background:var(--ok);border-color:var(--ok);color:#03140a}
+.res input:checked+span.ko{background:var(--ko);border-color:var(--ko);color:#1a0505}
+.res input:checked+span.skip{background:var(--skip);border-color:var(--skip);color:#1a1000}
+.res input:focus-visible+span{outline:2px solid var(--acc);outline-offset:2px}
+textarea{width:100%;min-height:38px;background:var(--ink);color:var(--text);border:1px solid var(--rule);padding:6px 8px;font:14px var(--f);resize:vertical}
+#rapport{width:100%;min-height:160px;display:none;margin-top:8px;font:12px Consolas,monospace}
+@media (max-width:600px){h1{font-size:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <h1>Recette <b>Vidéo Continuum</b> v6.51 → v6.56</h1>
+  <p class="intro">Tout ce qui a changé aujourd'hui et qui n'a pas encore été vérifié en vrai chez toi : le clavier (v6.51), le panneau compact (v6.52 à v6.55) et les thèmes (v6.56). Chaque fiche dit pourquoi on teste, quoi faire, ce que tu dois voir, et quoi noter si ça rate.</p>
+  <div class="how">
+    <div><b>Comment faire.</b> Garde cette page dans un onglet, anime-sama (ou un autre site) dans un autre. Pour chaque fiche : fais les étapes, puis clique <b>OK</b>, <b>KO</b> ou <b>Pas testé</b>. Si c'est KO, écris en deux mots ce que tu as vu à la place.</div>
+    <div><b>Tes réponses restent dans ce navigateur</b> : tu peux fermer la page et revenir plus tard.</div>
+    <div><b>À la fin</b>, clique <b>Copier le rapport</b> et colle-le dans le terminal (<kbd>Ctrl</kbd>+<kbd>V</kbd>).</div>
+  </div>
+</header>
+
+<div class="bar" role="region" aria-label="Avancement">
+  <div class="track" aria-hidden="true"><i id="b-ok" style="background:var(--ok)"></i><i id="b-ko" style="background:var(--ko)"></i><i id="b-skip" style="background:var(--skip)"></i></div>
+  <div class="counts" aria-live="polite"><span class="o" id="c-ok">0 OK</span><span class="k" id="c-ko">0 KO</span><span class="s" id="c-skip">0 pas testé</span><span class="r" id="c-rest">0 restant</span></div>
+  <button class="btn main" id="copy" type="button">Copier le rapport</button>
+  <button class="btn" id="reset" type="button">Tout effacer</button>
+  <span id="msg"></span>
+  <textarea id="rapport" readonly aria-label="Rapport à copier"></textarea>
+</div>
+
+<main id="tests"></main>
+</div>
+
+<script>
+// Chaque test : id, titre, version, pourquoi, etapes, attendu, si ca rate.
+const SECTIONS = [
+  { t: "0. Mise à jour", n: "À faire en premier, sinon tout le reste teste l'ancienne version.", tests: [
+    { id: "maj", v: "6.56", h: "Le script est bien en 6.56",
+      why: "Tampermonkey ne prend la nouvelle version qu'à sa prochaine vérification ; il faut aussi qu'il télécharge les 3 images des thèmes.",
+      steps: ["Clique l'icône Tampermonkey → <span class=ui>Tableau de bord</span>.", "Sur la ligne « Anime Tracker Continuum (v6) », regarde la colonne Version.", "Si ce n'est pas 6.56 : menu Tampermonkey → <span class=ui>Rechercher des mises à jour</span>, accepte la mise à jour.", "Recharge l'onglet anime-sama (<kbd>F5</kbd>)."],
+      exp: "Version 6.56. En haut du panneau : « Vidéo Continuum v6.56 ». Dans <span class=ui>Nouveautes</span>, une entrée 6.56 sur les thèmes.",
+      fail: "Note la version affichée. Si Tampermonkey parle d'une ressource introuvable, dis-le : ce sont les images des thèmes." },
+  ]},
+  { t: "1. Clavier", v: "v6.51", n: "Jamais testé en vrai. Utilise le clavier seul, sans la souris, sauf pour ouvrir les fenêtres.", tests: [
+    { id: "esc-fiche", v: "6.51", h: "Échap ferme la fiche de l'anime",
+      why: "Avant, il fallait viser la petite croix. Échap doit fermer la fenêtre du dessus, et seulement elle.",
+      steps: ["Ouvre un épisode (le lecteur plein écran s'affiche).", "Clique le petit bouton <span class=ui>ℹ</span> à droite du nom de la série.", "Appuie sur <kbd>Échap</kbd>."],
+      exp: "La fiche (synopsis, genres, note) se ferme. Le lecteur reste ouvert et la vidéo continue.",
+      fail: "Note si rien ne se passe, ou si Échap ferme aussi le lecteur ou sort du plein écran." },
+    { id: "esc-config", v: "6.51", h: "Échap ferme la Configuration",
+      why: "Même règle pour la grande fenêtre des réglages intro/outro.",
+      steps: ["Dans le panneau : <span class=ui>Reglages</span> → <span class=ui>Plus</span> → <span class=ui>Configuration</span>.", "Appuie sur <kbd>Échap</kbd>."],
+      exp: "La fenêtre « Reglages intro/outro des animes suivis » se ferme sans rien enregistrer.",
+      fail: "Note si elle reste ouverte." },
+    { id: "esc-histo", v: "6.51", h: "Échap ferme l'Historique",
+      why: "Même règle.",
+      steps: ["Clique <span class=ui>Historique</span>.", "Appuie sur <kbd>Échap</kbd>."],
+      exp: "La fenêtre Historique se ferme.",
+      fail: "Note si elle reste ouverte." },
+    { id: "esc-suivi", v: "6.51", h: "Échap ferme la fenêtre de suivi d'un site",
+      why: "C'est la fenêtre qui s'ouvre quand on clique une carte « Anime-Sama ▸ … à rattraper ».",
+      steps: ["En bas du panneau, clique la carte d'un site (ex. <span class=ui>Anime-Sama ▸</span>).", "Appuie sur <kbd>Échap</kbd>."],
+      exp: "La fenêtre de suivi se ferme.",
+      fail: "Note si elle reste ouverte." },
+    { id: "esc-pile", v: "6.51", h: "Échap ne ferme qu'une fenêtre à la fois",
+      why: "Si deux fenêtres sont ouvertes l'une sur l'autre, la première pression doit fermer celle du dessus seulement.",
+      steps: ["Ouvre <span class=ui>Historique</span>, puis la fiche <span class=ui>ℹ</span> par-dessus (si possible).", "Appuie une fois sur <kbd>Échap</kbd>, puis une deuxième fois."],
+      exp: "1re pression : la fenêtre du dessus se ferme. 2e : la suivante.",
+      fail: "Note si les deux se ferment d'un coup. Si tu n'arrives pas à empiler deux fenêtres, mets « Pas testé »." },
+    { id: "tab-cases", v: "6.51", h: "Tab atteint les boutons Suivre, Lect. continue, Lecteur auto",
+      why: "Ces boutons sont en fait des cases à cocher cachées ; avant, le clavier les sautait.",
+      steps: ["Clique dans une zone vide du panneau.", "Appuie plusieurs fois sur <kbd>Tab</kbd>.", "Quand <span class=ui>Suivre</span> a un contour bleu, appuie sur <kbd>Espace</kbd>.", "Rappuie sur <kbd>Espace</kbd> pour revenir comme avant.", "Continue avec <kbd>Tab</kbd> jusqu'à <span class=ui>Lect. continue</span> et <span class=ui>Lecteur auto</span>."],
+      exp: "Un contour bleu entoure le bouton qui a le focus. Espace le coche/décoche (couleur « actif » puis normale).",
+      fail: "Note le bouton jamais atteint, ou l'absence de contour visible." },
+    { id: "enter-yt", v: "6.51", h: "Entrée choisit une vignette YouTube",
+      why: "Les vignettes de recherche YouTube étaient cliquables à la souris seulement.",
+      steps: ["<span class=ui>Sources</span> → <span class=ui>YouTube</span>.", "Attends les vignettes, puis va dessus avec <kbd>Tab</kbd>.", "Appuie sur <kbd>Entrée</kbd> sur une vignette.", "Ensuite <span class=ui>Source du site</span> pour revenir."],
+      exp: "Entrée fait la même chose qu'un clic : la vidéo YouTube se charge.",
+      fail: "Note si la vignette n'a pas de contour au focus, ou si Entrée ne fait rien." },
+    { id: "enter-carte", v: "6.51", h: "Entrée ouvre une carte de site",
+      why: "Même correction pour les cartes « à rattraper ».",
+      steps: ["Va avec <kbd>Tab</kbd> sur une carte de site en bas du panneau.", "Appuie sur <kbd>Entrée</kbd>."],
+      exp: "La fenêtre de suivi de ce site s'ouvre.",
+      fail: "Note si rien ne se passe." },
+  ]},
+  { t: "2. Panneau compact", v: "v6.52 → v6.55", n: "Sur ton écran 1080p, lecteur ouvert.", tests: [
+    { id: "tient", v: "6.52", h: "Tout le panneau tient à l'écran",
+      why: "C'était le point de départ : en 1080p la liste des sites était coupée en bas.",
+      steps: ["Ouvre un épisode, panneau visible, toutes les sections fermées sauf Réglages (ouvert d'office).", "Regarde le bas du panneau."],
+      exp: "On voit jusqu'à « Ouvrir dans : » sans barre de défilement.",
+      fail: "Note ce qui est coupé et si tu as un zoom navigateur différent de 100 %." },
+    { id: "tailles", v: "6.52", h: "Tous les boutons ont la même hauteur",
+      why: "« Suivre cet anime » était bien plus gros que les autres.",
+      steps: ["Compare d'un coup d'œil : Plein écran, Fermer, ◀ ▶ Aller, Suivre, Historique, Lect. continue, Lecteur auto, et les titres de sections."],
+      exp: "Même hauteur partout. Les textes tiennent sur une ligne (au pire avec « … »).",
+      fail: "Note le bouton qui dépasse ou un texte sur deux lignes." },
+    { id: "nom-ep", v: "6.53", h: "Nom de série et numéro d'épisode",
+      why: "Taille réduite deux fois à ta demande (14 px et 15 px), nom centré.",
+      steps: ["Regarde le haut du panneau avec une série au nom long (ex. un titre de plus de 25 lettres)."],
+      exp: "Nom centré, coupé avec « … » s'il est trop long, le ℹ reste à droite sans chevaucher le texte. Le nom complet s'affiche au survol.",
+      fail: "Note si le ℹ chevauche le nom ou si le nom passe sur deux lignes." },
+    { id: "nav", v: "6.52", h: "◀ N° Aller ▶",
+      why: "Les 4 commandes de navigation sont maintenant sur une ligne.",
+      steps: ["Clique ▶ (épisode suivant), puis ◀.", "Tape un numéro dans « N° ép. » puis <span class=ui>Aller</span>.", "Retape un numéro et appuie sur <kbd>Entrée</kbd>."],
+      exp: "Chaque action ouvre le bon épisode.",
+      fail: "Note laquelle ne marche pas." },
+    { id: "verif", v: "6.52", h: "↻ à côté de la liste des séries",
+      why: "Le bouton « Vérifier les nouveaux épisodes » est devenu une icône ↻.",
+      steps: ["Survole ↻ : une bulle doit dire « Verifier les nouveaux episodes ».", "Clique ↻."],
+      exp: "Le bouton affiche « … » le temps de la vérification puis redevient ↻. Les compteurs « à rattraper » se mettent à jour.",
+      fail: "Note s'il reste bloqué sur « … »." },
+    { id: "reglages", v: "6.55", h: "Réglages ouvert d'office",
+      why: "Fin intro / Début outro doivent être visibles sans clic.",
+      steps: ["Ferme puis rouvre le lecteur (ou passe à l'épisode suivant)."],
+      exp: "La section Réglages est ouverte, avec Fin intro et Début outro. Plus est fermé dessous.",
+      fail: "Note si Réglages est fermé." },
+    { id: "aniskip", v: "6.55", h: "État AniSkip : masqué, puis court",
+      why: "La longue ligne AniSkip est masquée par défaut ; on peut l'afficher en version courte.",
+      steps: ["Vérifie qu'aucune ligne AniSkip n'apparaît sous l'épisode.", "<span class=ui>Reglages</span> → <span class=ui>Plus</span> → bouton <span class=ui>Afficher l'etat AniSkip</span> (il devient « actif »).", "Survole le texte « AniSkip ✓ » ou « ✗ ».", "Reclique le bouton pour le masquer."],
+      exp: "« AniSkip ✓ » (vert) si des temps sont trouvés, « ✗ » (rouge) sinon, « … » pendant la recherche, avec « Changer » à côté. Le survol donne le détail.",
+      fail: "Note ce qui s'affiche et sur quelle série." },
+    { id: "paires", v: "6.52", h: "Sections par deux",
+      why: "Sources | Sauvegarde, Nouveautés | Signaler, Légende… s'ouvrent en pleine largeur dessous.",
+      steps: ["Ouvre <span class=ui>Signaler</span>.", "Puis ouvre <span class=ui>Nouveautes</span>."],
+      exp: "La section ouverte passe en pleine largeur sous sa voisine, le formulaire n'est pas écrasé. <span class=ui>Verifier MAJ</span> est en bas de Nouveautés.",
+      fail: "Note la section qui s'ouvre mal." },
+    { id: "export", v: "6.52", h: "Exporter | Importer",
+      why: "Les deux boutons sont maintenant côte à côte ; il faut vérifier qu'ils marchent toujours.",
+      steps: ["<span class=ui>Sauvegarde</span> → <span class=ui>Exporter</span>.", "Ne réimporte pas (inutile) : vérifie juste que le fichier est créé."],
+      exp: "Un fichier de sauvegarde est enregistré (ou ton fichier de sauvegarde choisi est mis à jour).",
+      fail: "Note le message affiché." },
+  ]},
+  { t: "3. Thèmes", v: "v6.56", n: "Réglages → Plus → Thème. Teste-les un par un, vidéo en cours.", tests: [
+    { id: "th-liste", v: "6.56", h: "La liste Thème est là",
+      why: "Nouveau réglage.",
+      steps: ["<span class=ui>Reglages</span> → <span class=ui>Plus</span>.", "Ouvre la liste <span class=ui>Theme</span>."],
+      exp: "6 choix : Actuel, Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue. « Actuel » est sélectionné.",
+      fail: "Note ce qui manque." },
+    { id: "th-metal", v: "6.56", h: "Métallique",
+      why: "Utilise ta photo de titane brossé (chargée par Tampermonkey).",
+      steps: ["Choisis <span class=ui>Metallique</span>."],
+      exp: "Fond titane brossé gris, boutons en relief métal, accent bleu glacier (bouton Plein écran bleu clair). Le changement est immédiat, sans recharger.",
+      fail: "Si le fond est gris uni sans rayures : l'image n'a pas été chargée, dis-le (c'est le point le plus important de ce test)." },
+    { id: "th-carbone", v: "6.56", h: "Fibre de carbone",
+      why: "Trame dessinée en CSS, accent rouge sombre, textes en rouge plus clair.",
+      steps: ["Choisis <span class=ui>Fibre de carbone</span>."],
+      exp: "Trame carbone fine visible, Plein écran rouge sombre avec texte blanc, titre « Vidéo Continuum » rouge lisible.",
+      fail: "Note un texte illisible." },
+    { id: "th-verre", v: "6.56", h: "Verre trempé (et fluidité)",
+      why: "Le flou de la vidéo derrière le panneau demande plus de calcul : à surveiller sur une vidéo 1080p.",
+      steps: ["Choisis <span class=ui>Verre trempe</span>.", "Laisse tourner la vidéo 1 minute, panneau ouvert."],
+      exp: "On devine la vidéo floutée derrière le panneau. La vidéo reste fluide.",
+      fail: "Note toute saccade ou ralentissement (et si ça disparaît en repassant sur un autre thème)." },
+    { id: "th-pnoire", v: "6.56", h: "Pierre noire",
+      why: "Ta photo d'ardoise, accent or.",
+      steps: ["Choisis <span class=ui>Pierre noire</span>."],
+      exp: "Fond ardoise texturée, liserés or, Plein écran doré.",
+      fail: "Fond noir uni = image non chargée, dis-le." },
+    { id: "th-pbleue", v: "6.56", h: "Pierre bleue : cartes lisibles",
+      why: "Tu avais du mal à lire les cartes « à rattraper » : fond noir à 60 % ajouté, et texture assombrie.",
+      steps: ["Choisis <span class=ui>Pierre bleue</span>.", "Regarde les cartes de sites en bas et le titre en haut."],
+      exp: "Texture minérale bleu-noir, accent turquoise. Les cartes « X suivis · Y à rattraper » se lisent sans effort.",
+      fail: "Note ce qui reste difficile à lire." },
+    { id: "th-panneau", v: "6.56", h: "Le panneau du site suit le thème",
+      why: "Le thème doit s'appliquer au lecteur ET au panneau de la page.",
+      steps: ["Thème choisi (ex. Pierre noire), clique <span class=ui>Fermer</span> sur le lecteur.", "Regarde le panneau à gauche de la page."],
+      exp: "Même thème sur le panneau de la page.",
+      fail: "Note le thème affiché à la place." },
+    { id: "th-garde", v: "6.56", h: "Le thème est gardé",
+      why: "Le choix est enregistré et suit la sauvegarde.",
+      steps: ["Recharge la page (<kbd>F5</kbd>).", "Va sur un autre site géré (Esprit Donghua ou Animoflix)."],
+      exp: "Le thème choisi est toujours là, partout.",
+      fail: "Note le site où il revient à « Actuel »." },
+    { id: "th-actuel", v: "6.56", h: "Retour à Actuel",
+      why: "Vérifier qu'on retrouve exactement l'ancien look.",
+      steps: ["Choisis <span class=ui>Actuel</span>."],
+      exp: "Panneau gris foncé d'avant, boutons Suivre / Lect. continue verts quand actifs, accent cyan.",
+      fail: "Note un reste de l'ancien thème." },
+  ]},
+  { t: "4. Rien de cassé", n: "Les fonctions de base, à vérifier une fois en passant.", tests: [
+    { id: "nr-suite", v: "—", h: "Lecture continue",
+      why: "La fonction principale ; les boutons ont bougé.",
+      steps: ["<span class=ui>Lect. continue</span> actif.", "Avance la vidéo à 10 secondes de la fin."],
+      exp: "L'épisode suivant démarre tout seul.",
+      fail: "Note ce qui se passe à la fin." },
+    { id: "nr-intro", v: "—", h: "Saut d'intro",
+      why: "Réglages a été réorganisé.",
+      steps: ["Sur une série avec intro réglée (ou AniSkip ✓), lance un épisode depuis le début."],
+      exp: "L'intro est sautée comme avant.",
+      fail: "Note la série." },
+    { id: "nr-suivi", v: "—", h: "Suivre / ne plus suivre",
+      why: "Le bouton Suivre a été raccourci.",
+      steps: ["Sur une série non suivie, clique <span class=ui>Suivre</span> (devient « ★ Suivi »).", "Reclique pour annuler si tu ne veux pas la suivre."],
+      exp: "La série apparaît (puis disparaît) dans la liste des séries et les compteurs.",
+      fail: "Note ce qui ne se met pas à jour." },
+  ]},
+];
+
+const KEY = "vc-recette-656";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { state = {}; }
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+const all = SECTIONS.flatMap((s) => s.tests);
+
+const main = document.getElementById("tests");
+main.innerHTML = SECTIONS.map((s) => `<h2>${s.t}${s.v ? ` <small>${s.v}</small>` : ""}</h2><p class="sec-note">${s.n}</p>` +
+  s.tests.map((t) => `<article class="t" id="t-${t.id}" data-st="${(state[t.id] || {}).st || ""}">
+    <h3>${t.h} <code>${t.v}</code></h3>
+    <div class="lbl">Pourquoi</div><p>${t.why}</p>
+    <div class="lbl">Étapes</div><ol>${t.steps.map((x) => `<li>${x}</li>`).join("")}</ol>
+    <div class="exp"><b>Tu dois voir :</b> ${t.exp}</div>
+    <div class="fail"><b>Si ça rate :</b> ${t.fail}</div>
+    <div class="res" role="radiogroup" aria-label="Résultat : ${t.h}">
+      ${[["ok", "OK"], ["ko", "KO"], ["skip", "Pas testé"]].map(([v, l]) => `<label><input type="radio" name="r-${t.id}" id="r-${t.id}-${v}" value="${v}"${(state[t.id] || {}).st === v ? " checked" : ""}><span class="${v}">${l}</span></label>`).join("")}
+    </div>
+    <textarea id="n-${t.id}" aria-label="Note : ${t.h}" placeholder="Ce que tu as vu (surtout si KO)">${((state[t.id] || {}).note || "").replace(/</g, "&lt;")}</textarea>
+  </article>`).join("")).join("");
+
+function counts() {
+  const c = { ok: 0, ko: 0, skip: 0 };
+  all.forEach((t) => { const s = (state[t.id] || {}).st; if (c[s] !== undefined) c[s]++; });
+  const rest = all.length - c.ok - c.ko - c.skip;
+  ["ok", "ko", "skip"].forEach((k) => { document.getElementById("b-" + k).style.width = (c[k] / all.length * 100) + "%"; });
+  document.getElementById("c-ok").textContent = c.ok + " OK";
+  document.getElementById("c-ko").textContent = c.ko + " KO";
+  document.getElementById("c-skip").textContent = c.skip + " pas testé";
+  document.getElementById("c-rest").textContent = rest + " restant" + (rest > 1 ? "s" : "");
+}
+main.addEventListener("change", (e) => {
+  const m = /^r-(.+)$/.exec(e.target.name || ""); if (!m) return;
+  state[m[1]] = Object.assign({}, state[m[1]], { st: e.target.value });
+  document.getElementById("t-" + m[1]).dataset.st = e.target.value;
+  save(); counts();
+});
+main.addEventListener("input", (e) => {
+  const m = /^n-(.+)$/.exec(e.target.id || ""); if (!m) return;
+  state[m[1]] = Object.assign({}, state[m[1]], { note: e.target.value.slice(0, 1000) });
+  save();
+});
+counts();
+
+const msg = document.getElementById("msg");
+document.getElementById("copy").addEventListener("click", async () => {
+  const L = { ok: "OK", ko: "KO", skip: "pas teste" };
+  const lines = ["Recette Video Continuum v6.56 - " + new Date().toLocaleString("fr-FR")];
+  SECTIONS.forEach((s) => {
+    lines.push("", "== " + s.t);
+    s.tests.forEach((t) => { const r = state[t.id] || {}; lines.push("- [" + (L[r.st] || "non fait") + "] " + t.h + (r.note ? " : " + r.note.replace(/\s+/g, " ") : "")); });
+  });
+  const txt = lines.join("\n");
+  const ta = document.getElementById("rapport");
+  try { await navigator.clipboard.writeText(txt); ta.style.display = "none"; msg.textContent = "Copié. Colle-le dans le terminal."; }
+  catch (err) { ta.value = txt; ta.style.display = "block"; ta.focus(); ta.select(); msg.textContent = "Copie refusée : le texte est sélectionné ci-dessous, fais Ctrl+C."; }
+});
+let armed = false;
+document.getElementById("reset").addEventListener("click", (e) => {
+  if (!armed) { armed = true; e.target.textContent = "Confirmer l'effacement"; msg.textContent = "Reclique pour tout effacer."; setTimeout(() => { armed = false; e.target.textContent = "Tout effacer"; }, 4000); return; }
+  state = {}; save(); location.reload();
+});
+</script>
+</body>
+</html>
