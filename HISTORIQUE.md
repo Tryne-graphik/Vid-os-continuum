@@ -1048,3 +1048,12 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
     tous presents ; un seul ecouteur global ajoute (resize, une fois). Revue deleguee (DeepSeek, Gemini) indisponible.
   * Non teste : Firefox / Violentmonkey (zoom CSS FF >= 126, :has FF >= 121), vrai @resource Tampermonkey avant push, lecture
     continue et saut d'intro en vrai (code non modifie), licences des textures metal et pierre-bleue (origine inconnue).
+- POUSSEE le 2026-10-13 (c2d2b8d) : script 6.58 + textures adoucies servis par GitHub (verifie).
+
+## Suite (point de reprise)
+- Utilisateur : installer la 6.58, verifier textures (Metallique / Pierres floutees, pas unies) et panneau discret sur vraie video,
+  puis tests/recette.html parties 5 et 6 (copier le rapport dans le terminal).
+- v6.59 prevue : menu "Personnaliser" (fond, couleur d'accent avec pipette, police parmi 6-7 polices Windows) ; en attente :
+  livrer Cinzel avec le script ou non (question posee, pas de reponse).
+- A trancher : licences des textures metal.jpg et pierre-bleue.jpg (origine inconnue, publiques sur GitHub) ; 1366x768 defile.
+- design/ (atelier, lisibilite, planches, aperçus, qa) reste local (.gitignore) : images personnelles du NAS.
