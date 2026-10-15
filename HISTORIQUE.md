@@ -1057,3 +1057,22 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   livrer Cinzel avec le script ou non (question posee, pas de reponse).
 - A trancher : licences des textures metal.jpg et pierre-bleue.jpg (origine inconnue, publiques sur GitHub) ; 1366x768 defile.
 - design/ (atelier, lisibilite, planches, aperçus, qa) reste local (.gitignore) : images personnelles du NAS.
+
+## v6.59 (2026-10-15, non poussee)
+- Vignettes : cadre de couleur 5 px + halo (calque .ep-thumb-frame dans l'hote de l'icone) en plus de l'icone, agrandie 24 -> 28 px.
+  Choisi apres comparaison sur la vraie page (design/qa/vignettes-A-cadre / B-filtre / C-estomper.png) : le voile colore
+  denaturait les affiches (jaune = sepia, cyan invisible sur affiche bleue).
+- Option "Estomper les series suivies" (panneau du site seulement, GM dimTracked) : classe vc-dim-tracked sur <html>,
+  img[data-vc-st] grisee .35, nette au survol ; le cadre (calque separe) reste net.
+- Reglages > Plus > Affichage > Personnaliser (les deux panneaux) : accent (input color natif, pipette incluse ; variables
+  --vc-acc/--vc-acct/--vc-onacc en ligne sur l'hote + classe vc-cacc pour Actuel ; accent texte eclairci jusqu'a 4,5:1),
+  police (6 polices Windows, --vc-font), Titres en Cinzel (summary + .vc-grp seulement, choix utilisateur), Reinitialiser
+  (accent / police / Cinzel, garde le theme). Prefs accentColor, fontFamily, titleCinzel, dimTracked dans BACKUP_PREFS +
+  validImportedPref (hex strict, police connue, booleens).
+- Cinzel : themes/cinzel.woff2 (15 Ko, latin, Google Fonts) + OFL-Cinzel.txt, @resource vcCinzel, repli URL brute.
+- Teste Playwright (esprit-donghua accueil, 1920x950, theme Pierre noire, accent #ff8800, Georgia, Cinzel) : cadres aux
+  bonnes couleurs (ici / attente / ailleurs / exclu), estompage, Cinzel chargee (document.fonts.check), accent sur titres,
+  aucune erreur du script. Captures design/qa/v659-*.png.
+- Pas teste : panneau du lecteur (ed-) en vrai (meme code), import d'une sauvegarde avec les nouvelles prefs, vrai @resource
+  Tampermonkey pour la police (CSP font-src d'un site pourrait la bloquer -> repli police du texte), anime-sama / animoflix
+  (cadre dans l'hote de l'icone, en bas a droite).

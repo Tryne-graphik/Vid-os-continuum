@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.58
+// @version      6.59
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -18,6 +18,7 @@
 // @resource     vcMetal https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/metal.jpg
 // @resource     vcPierreNoire https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/pierre-noire.jpg
 // @resource     vcPierreBleue https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/pierre-bleue.jpg
+// @resource     vcCinzel https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/themes/cinzel.woff2
 // @connect      esprit-donghua.xyz
 // @connect      animoflix.to
 // @connect      anime-sama.to
@@ -2051,7 +2052,8 @@
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
-        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide'];
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide',
+            'accentColor', 'fontFamily', 'titleCinzel', 'dimTracked'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2096,8 +2098,10 @@
         }
         // Type attendu par preference (recette 6.58 : "oui" texte activait le panneau discret).
         function validImportedPref(k, v) {
-            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide'].includes(k)) return typeof v === 'boolean';
+            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
             if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
+            if (k === 'accentColor') return typeof v === 'string' && /^(#[0-9a-f]{6})?$/i.test(v);
+            if (k === 'fontFamily') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(vcFonts(), v);
             if (k === 'openMode') return OPEN_MODES.some((m) => m[0] === v);
             return typeof v === 'string' && v.length <= 50;
         }
@@ -2266,7 +2270,7 @@
             const H = '.vc-th-host', T = '.vc-thm';
             // Regles communes a tous les themes, Actuel compris (pistes 01, 05, 08, 09, 10).
             const common =
-                H + '{font-family:"Segoe UI",system-ui,Arial,sans-serif!important;}' +
+                H + '{font-family:var(--vc-font,"Segoe UI"),system-ui,Arial,sans-serif!important;}' +
                 H + ' button,' + H + ' summary,' + H + ' select,' + H + ' input,' + H + ' textarea,' + H + ' label{font-family:inherit!important;font-size:12px!important;}' +
                 H + ' button,' + H + ' summary,' + H + ' .vc-track{font-weight:600!important;}' +
                 H + ' button:not(.vc-ver):not(#ed-info-btn):not(#ep-info-btn),' + H + ' .vc-track{height:29px;box-sizing:border-box;}' +
@@ -2302,8 +2306,34 @@
                 T + ' details[open]>summary{color:var(--vc-acct,var(--vc-acc))!important;border-bottom-color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ',' + T + ' *{text-shadow:0 1px 2px rgba(0,0,0,.85);}' + T + ' button[style*="background:#03d0fc"],' + T + ' [style*="color:#1a1000"]{text-shadow:none;}' +
                 T + ' .vc-grp{color:var(--vc-acct,var(--vc-acc))!important;}' +
-                T + ' button.vc-ver{color:#ffd400!important;}';
+                T + ' button.vc-ver{color:#ffd400!important;}' +
+                // v6.59 Personnaliser : accent choisi (variables en ligne sur l'hote, voir applyTheme), aussi pour Actuel.
+                '.vc-cacc button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-acc)!important;color:var(--vc-onacc)!important;}' +
+                '.vc-cacc [style*="color:#03d0fc"],.vc-cacc .vc-grp,.vc-cacc details[open]>summary{color:var(--vc-acct)!important;}' +
+                '.vc-cacc [style*="background:#03d0fc"]:not(button){background:var(--vc-acc)!important;}' +
+                '@font-face{font-family:"VC Cinzel";src:' + themeTexUrl(['vcCinzel', 'cinzel.woff2']) + ' format("woff2");font-weight:400 900;font-display:swap;}' +
+                '.vc-cinzel summary,.vc-cinzel .vc-grp{font-family:"VC Cinzel",var(--vc-font,"Segoe UI"),serif!important;letter-spacing:.06em!important;}' +
+                // Vignettes : option "Estomper les series suivies" (le cadre .ep-thumb-frame reste net).
+                '.vc-dim-tracked img[data-vc-st]{opacity:.35;filter:grayscale(.85);transition:opacity .2s,filter .2s;}' +
+                '.vc-dim-tracked a:hover img[data-vc-st]{opacity:1;filter:none;}';
         }
+        // ---- Personnaliser (v6.59) : couleur d'accent, police du texte, Cinzel (livree, OFL) pour les titres.
+        function vcFonts() { return { segoe: 'Segoe UI', calibri: 'Calibri', cambria: 'Cambria', georgia: 'Georgia', verdana: 'Verdana', consolas: 'Consolas' }; }
+        function currentFont() { const f = GM_getValue('fontFamily', 'segoe'); return vcFonts()[f] ? f : 'segoe'; }
+        function currentAccent() { const a = GM_getValue('accentColor', ''); return /^#[0-9a-f]{6}$/i.test(a) ? a : ''; }
+        function hexRgb(h) { return [1, 3, 5].map((i) => parseInt(h.substr(i, 2), 16)); }
+        function rgbHex(c) { return '#' + c.map((v) => ('0' + v.toString(16)).slice(-2)).join(''); }
+        function relLum(c) {
+            const l = c.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+            return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+        }
+        // Accent en texte : eclairci jusqu'a 4,5:1 sur plaque sombre (#15151f).
+        function accentText(h) {
+            let c = hexRgb(h);
+            for (let i = 0; i < 12 && (relLum(c) + 0.05) / 0.058 < 4.5; i++) c = c.map((v) => Math.round(v + (255 - v) * 0.2));
+            return rgbHex(c);
+        }
+        function themeAccent() { const v = themes()[currentThemeId()].v; return v ? v.acc : '#03d0fc'; }
         function currentThemeId() { const t = GM_getValue('theme', 'actuel'); return themes()[t] ? t : 'actuel'; }
         function themeTexUrl(tex) {
             if (!tex) return 'none';
@@ -2319,6 +2349,16 @@
             Object.keys(themes()).forEach((k) => el.classList.toggle('vc-th-' + k, k === id));
             el.classList.toggle('vc-thm', id !== 'actuel');
             el.style.setProperty('--vc-tex', themeTexUrl(themes()[id].tex));
+            const acc = currentAccent();
+            el.classList.toggle('vc-cacc', !!acc);
+            ['acc', 'acct', 'onacc'].forEach((n) => el.style.removeProperty('--vc-' + n));
+            if (acc) {
+                el.style.setProperty('--vc-acc', acc);
+                el.style.setProperty('--vc-acct', accentText(acc));
+                el.style.setProperty('--vc-onacc', relLum(hexRgb(acc)) > 0.18 ? '#000' : '#fff');
+            }
+            el.style.setProperty('--vc-font', '"' + vcFonts()[currentFont()] + '"');
+            el.classList.toggle('vc-cinzel', GM_getValue('titleCinzel', false) === true);
             applyScale(el);
         }
         // Grand ecran : panneau compact en 1080p (fenetre ~950 px de haut), agrandi au-dela
@@ -2348,7 +2388,37 @@
         }
         function bindThemeSelect(container, id) {
             const sel = container.querySelector('#' + id);
-            if (sel) sel.addEventListener('change', () => { GM_setValue('theme', sel.value); document.querySelectorAll('.vc-th-host').forEach(applyTheme); });
+            if (sel) sel.addEventListener('change', () => { GM_setValue('theme', sel.value); document.querySelectorAll('.vc-th-host').forEach(applyTheme); syncAccentInput(container, id); });
+            bindCustomize(container, id.replace('-theme-select', ''));
+        }
+        function customizeHtml(prefix, open) {
+            const f = currentFont(), F = vcFonts();
+            const row = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
+            return collapsibleSection('perso', 'Personnaliser',
+                '<label style="' + row + '">Accent :<input type="color" id="' + prefix + '-accent" value="' + (currentAccent() || themeAccent()) + '" aria-label="Couleur d\'accent (pipette dans le selecteur)" style="flex:1;height:26px;padding:0 2px;border:none;background:none;cursor:pointer;"></label>' +
+                '<label style="' + row + '">Police :<select id="' + prefix + '-font" aria-label="Police du panneau" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                Object.keys(F).map((k) => '<option value="' + k + '"' + (k === f ? ' selected' : '') + ' style="font-family:\'' + F[k] + '\';">' + F[k] + '</option>').join('') + '</select></label>' +
+                '<label class="vc-track" title="Titres des sections en Cinzel (capitales gravees)"><input type="checkbox" id="' + prefix + '-cinzel"' + (GM_getValue('titleCinzel', false) === true ? ' checked' : '') + '><span class="off">Titres en Cinzel</span><span class="on">&#10003; Titres en Cinzel</span></label>' +
+                '<button id="' + prefix + '-perso-reset" title="Revenir a l\'accent et a la police du theme" style="' + BTN_STYLE + '">Reinitialiser</button>', open, true);
+        }
+        function syncAccentInput(container, id) {
+            const inp = container.querySelector('#' + id.replace('-theme-select', '') + '-accent');
+            if (inp && !currentAccent()) inp.value = themeAccent();
+        }
+        function bindCustomize(container, prefix) {
+            const q = (s) => container.querySelector('#' + prefix + s);
+            const all = () => document.querySelectorAll('.vc-th-host').forEach(applyTheme);
+            const acc = q('-accent'), font = q('-font'), cz = q('-cinzel'), reset = q('-perso-reset');
+            if (acc) acc.addEventListener('input', () => { GM_setValue('accentColor', acc.value); all(); });
+            if (font) font.addEventListener('change', () => { GM_setValue('fontFamily', font.value); all(); });
+            if (cz) cz.addEventListener('change', () => { GM_setValue('titleCinzel', cz.checked); all(); });
+            if (reset) reset.addEventListener('click', () => {
+                GM_setValue('accentColor', ''); GM_setValue('fontFamily', 'segoe'); GM_setValue('titleCinzel', false);
+                if (acc) acc.value = themeAccent();
+                if (font) font.value = 'segoe';
+                if (cz) cz.checked = false;
+                all();
+            });
         }
         function toggleButtonsHtml(prefix, autoNext, autoOpen) {
             ensureVcStyles();
@@ -2402,6 +2472,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les series suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
             ['6.58', ['Lisibilite (12 pistes) : police Segoe UI 12 px demi-gras ; boutons sur plaques pleines et textures adoucies ; verre trempe fume (texte lisible sur scene claire) ; titres de sections en simples intitules ; couleurs d\'accent adoucies ; plus de noir ni de blanc purs.', 'Cartes des sites : etat avec icone et mot (● 2 a rattraper, ✓ a jour). Zones de clic d\'au moins 24 px, contour clavier visible sur tous les themes.', 'Option "Panneau discret en lecture" (Reglages > Plus > Affichage) : le panneau s\'efface apres 4 s sans souris et revient au survol.']],
             ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Debut outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
             ['6.56', ['Themes du panneau (Reglages > Plus > Theme) : Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue, ou Actuel. Une couleur d\'accent par theme ; le lecteur et le panneau du site suivent le meme theme.']],
@@ -2609,7 +2680,7 @@
                         '<div class="vc-pair"><button id="ed-set-introstart-btn" style="' + B + '">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + '">Fin outro</button></div>' +
                         '<button id="ed-settings-btn" style="' + B + '">Configuration de toutes les series</button>' +
                         groupLabel('Affichage') +
-                        themeSelectHtml('ed-theme-select') +
+                        themeSelectHtml('ed-theme-select') + customizeHtml('ed', false) +
                         '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>' +
                         '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) === true ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
@@ -4295,7 +4366,8 @@
                     '<div class="vc-pair"><button id="ep-set-introstart" style="' + BTN_STYLE + '">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + '">Fin outro</button></div>' +
                     '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration de toutes les series</button>' +
                     groupLabel('Affichage') +
-                    themeSelectHtml('ep-theme-select') +
+                    themeSelectHtml('ep-theme-select') + customizeHtml('ep', prevOpen.perso) +
+                    '<label class="vc-track" title="Series deja en memoire grisees sur les pages du site (nettes au survol) : les nouveautes ressortent"><input type="checkbox" id="ep-dim-cb"' + (GM_getValue('dimTracked', false) === true ? ' checked' : '') + '><span class="off">Estomper les series suivies</span><span class="on">&#10003; Estomper les series suivies</span></label>' +
                     (entries.length ? groupLabel('Page') + '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
                     prevOpen.plus, true) + '</div>',
                 prevOpen.reglages !== false);
@@ -4398,6 +4470,8 @@
             const settingsBtn = panel.querySelector('#ep-settings-btn');
             if (settingsBtn) settingsBtn.addEventListener('click', openSettingsModal);
             bindThemeSelect(panel, 'ep-theme-select');
+            const dimCb = panel.querySelector('#ep-dim-cb');
+            if (dimCb) dimCb.addEventListener('change', () => { GM_setValue('dimTracked', dimCb.checked); refreshThumbnailBadges(); });
             const versionBtn = panel.querySelector('#ep-version-btn');
             if (versionBtn) versionBtn.addEventListener('click', openScriptUpdatePage);
             const checkUpdateBtn = panel.querySelector('#ep-check-update-btn');
@@ -4504,6 +4578,8 @@
                 .replace(/\b(vostfr|vf)\b/g, '').replace(/[^a-z0-9]/g, '')).filter((n) => n.length >= 3);
         }
         function refreshThumbnailBadges() {
+            ensureVcStyles();
+            document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
             const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3 };
@@ -4521,33 +4597,44 @@
                 // Drapeau de langue / petite image dans le meme lien (animoflix :
                 // 2e icone sur le drapeau, v6.47) -> seulement la vignette.
                 if (img.closest('.badge') || (img.offsetWidth && img.offsetWidth < 60)) {
-                    const stray = img.parentElement.querySelector(':scope > .ep-thumb-badge');
-                    if (stray) stray.remove();
+                    img.parentElement.querySelectorAll(':scope > .ep-thumb-badge, :scope > .ep-thumb-frame').forEach((n) => n.remove());
                     return;
                 }
                 const title = a.getAttribute('title') || img.getAttribute('alt') || (a.querySelector('h1,h2,h3,h4') || {}).textContent;
                 const state = nameVariants(title).map((n) => byName[n]).filter(Boolean).sort((x, y) => rank[y] - rank[x])[0];
                 const host = img.parentElement;
                 let badge = host.querySelector(':scope > .ep-thumb-badge');
-                if (!state) { if (badge) badge.remove(); return; }
+                let frame = host.querySelector(':scope > .ep-thumb-frame');
+                if (!state) { if (badge) badge.remove(); if (frame) frame.remove(); img.removeAttribute('data-vc-st'); return; }
                 if (!badge) {
                     badge = document.createElement('span');
                     badge.className = 'ep-thumb-badge';
                     // anime-sama / animoflix : etiquette "Anime" (z-index 15) en haut a gauche -> en bas a droite (v6.45-46)
-                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' || site.id === 'animoflix' ?'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:24px;height:24px;border-radius:5px;background:rgba(10,10,18,.8);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
+                    badge.style.cssText = 'position:absolute;' + (site.id === 'anime-sama' || site.id === 'animoflix' ?'bottom:6px;right:6px;z-index:16;' : 'top:6px;left:6px;z-index:5;') + 'width:28px;height:28px;border-radius:5px;background:rgba(10,10,18,.85);box-shadow:0 1px 4px rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;pointer-events:auto;';
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
                     host.appendChild(badge);
                 }
+                // Cadre de couleur (v6.59, l'icone seule etait trop discrete) : calque a part,
+                // il reste net quand l'option "Estomper les series suivies" grise l'image.
+                if (!frame) {
+                    frame = document.createElement('span');
+                    frame.className = 'ep-thumb-frame';
+                    frame.style.cssText = 'position:absolute;inset:0;z-index:4;pointer-events:none;box-sizing:border-box;border-radius:3px;';
+                    host.insertBefore(frame, badge);
+                }
                 if (badge.getAttribute('data-state') === state) return;
                 badge.setAttribute('data-state', state);
-                badge.innerHTML = badgeSvg(state, 20);
+                img.setAttribute('data-vc-st', state);
+                frame.style.border = '5px solid ' + badgeInfo(state)[0];
+                frame.style.boxShadow = '0 0 12px 1px ' + badgeInfo(state)[0];
+                badge.innerHTML = badgeSvg(state, 22);
                 badge.title = badgeInfo(state)[1];
             });
         }
         refreshThumbnailBadges();
         let badgeTimer = null;
         new MutationObserver((muts) => {
-            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge')))) return;
+            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge,.ep-thumb-frame')))) return;
             clearTimeout(badgeTimer); badgeTimer = setTimeout(refreshThumbnailBadges, 400);
         }).observe(document.body, { childList: true, subtree: true });
 

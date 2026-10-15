@@ -16,3 +16,9 @@ Tampermonkey télécharge tout seul les textures avec le script (`@resource`) : 
 Les couleurs d'état ne changent pas d'un thème à l'autre : orange = épisodes à rattraper, vert = suivi / actif, violet = saison finie en attente.
 
 **Verre trempé** floute la vidéo en continu : sur une machine modeste, si la lecture saccade, choisis un autre thème.
+
+## Police Cinzel (titres, option « Titres en Cinzel »)
+
+`cinzel.woff2` : Cinzel (graisse 600, caractères latins), © The Cinzel Project Authors,
+sous licence SIL Open Font License 1.1 — texte complet dans [`OFL-Cinzel.txt`](OFL-Cinzel.txt).
+Livrée avec le script via `@resource`, comme les textures.
