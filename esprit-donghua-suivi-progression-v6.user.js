@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.60
+// @version      6.61
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2485,6 +2485,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.61', ['Bouton "ℹ Fiche" sur toutes les vignettes (Esprit Donghua, Animoflix, sites ajoutes) : synopsis, genres et note par-dessus la page, sans lancer l\'episode.', 'Anime-Sama : le bouton Fiche des vignettes ouvre aussi la fiche sur place (lien "Page de l\'anime" dedans).', 'Une fiche deja ouverte se reaffiche tout de suite ; rien n\'est enregistre pour les series non suivies.']],
             ['6.60', ['Personnaliser : "Accent" devient "Couleur", avec un bouton Appliquer (la couleur ne change plus pendant le choix).', 'Nouvelle liste "Appliquer a" : cadre du panneau (par defaut), titres des sections, cases cochees, ou tout.']],
             ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les series suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
             ['6.58', ['Lisibilite (12 pistes) : police Segoe UI 12 px demi-gras ; boutons sur plaques pleines et textures adoucies ; verre trempe fume (texte lisible sur scene claire) ; titres de sections en simples intitules ; couleurs d\'accent adoucies ; plus de noir ni de blanc purs.', 'Cartes des sites : etat avec icone et mot (● 2 a rattraper, ✓ a jour). Zones de clic d\'au moins 24 px, contour clavier visible sur tous les themes.', 'Option "Panneau discret en lecture" (Reglages > Plus > Affichage) : le panneau s\'efface apres 4 s sans souris et revient au survol.']],
@@ -3146,12 +3147,15 @@
                 .then((res) => (JSON.parse(res.responseText).data.Page.media || []).filter((m) => m.idMal)
                     .map((m) => ({ idMal: m.idMal, title: m.title.romaji || m.title.english, year: m.seasonYear })));
         }
-        function resolveAniLink(key, info) {
-            const known = loadAniLinks()[key];
+        // noSave (v6.61, fiche d'une vignette non suivie) : correspondance gardee le temps de la visite,
+        // pas dans aniLinks (sinon la sauvegarde se remplit de series juste consultees).
+        const aniLinkMemo = {};
+        function resolveAniLink(key, info, noSave) {
+            const known = loadAniLinks()[key] || aniLinkMemo[key];
             if (known) return Promise.resolve(known);
             return anilistSearch(aniSearchQuery(info)).then((list) => {
                 const link = list[0] ? { idMal: list[0].idMal, title: list[0].title } : { idMal: null };
-                setAniLink(key, link);
+                if (noSave) aniLinkMemo[key] = link; else setAniLink(key, link);
                 return link;
             });
         }
@@ -3251,6 +3255,7 @@
                 return good.sort((a, b) => b.length - a.length)[0] || null;
             }).catch(() => null);
         }
+        const ficheCache = {}; // fiche deja chargee pendant la visite -> reaffichee sans recharger (v6.61)
         function openSeriesInfo(info) {
             const key = storageKey(info);
             const old = document.getElementById('ep-info-overlay');
@@ -3263,8 +3268,11 @@
             (overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body).appendChild(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
             const box = pop.querySelector('#ep-info-box');
-            const media = resolveAniLink(key, info).then((link) => (link && link.idMal ? anilistDetails(link.idMal) : null)).catch(() => null);
-            Promise.all([media, siteSynopsis(info)]).then(([m, frSyn]) => {
+            if (!ficheCache[key]) {
+                const media = resolveAniLink(key, info, !loadProgress()[key]).then((link) => (link && link.idMal ? anilistDetails(link.idMal) : null)).catch(() => null);
+                ficheCache[key] = Promise.all([media, siteSynopsis(info)]);
+            }
+            ficheCache[key].then(([m, frSyn]) => {
                 if (!document.body.contains(pop)) return;
                 const chip = (t, c) => '<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:10px;font-size:11px;background:' + c + ';">' + escapeHtml(t) + '</span>';
                 let html = '<div style="display:flex;gap:14px;">';
@@ -3287,6 +3295,7 @@
                 html += '<div style="margin-top:12px;"><b>Synopsis</b>' + (frSyn ? '' : (enSyn ? ' <span style="color:#888;font-size:11px;">(AniList, en anglais)</span>' : '')) +
                     '<p style="margin:4px 0 0;color:#ddd;">' + escapeHtml(frSyn || enSyn || 'Aucun synopsis trouve.') + '</p></div>';
                 html += '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">' +
+                    (info.pageUrl && /^https?:\/\//.test(info.pageUrl) ? '<a href="' + escapeHtml(info.pageUrl) + '" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;text-decoration:none;">Page de l\'anime</a>' : '') +
                     (m && /^https:\/\/anilist\.co\//.test(m.siteUrl || '') ? '<a href="' + escapeHtml(m.siteUrl) + '" target="_blank" rel="noopener" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;text-decoration:none;">Voir sur AniList</a>' : '') +
                     '<button type="button" id="ep-info-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
                 box.innerHTML = html;
@@ -4539,10 +4548,11 @@
                     const btn = document.createElement('span');
                     btn.className = 'ep-fiche-btn';
                     btn.setAttribute('role', 'button'); btn.tabIndex = 0;
-                    btn.title = 'Page de l\'anime (synopsis, genres)';
+                    btn.title = 'Fiche de l\'anime : synopsis, genres, note';
                     btn.textContent = '\u2139 Fiche';
                     btn.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:5;background:rgba(3,208,252,.9);color:#000;font:bold 11px Arial,sans-serif;padding:3px 7px;border-radius:4px;cursor:pointer;';
-                    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); location.href = m[1]; });
+                    const name = a.getAttribute('title') || (card.querySelector('h1,h2,h3,.card-title') || {}).textContent || (card.querySelector('img') || {}).alt || '';
+                    btn.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); openSeriesInfo({ site: 'anime-sama', seriesUrl: m[1], seriesName: thumbSeriesName(name), pageUrl: m[1] }); });
                     const host = card.querySelector('.card-image-container') || card;
                     if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
                     host.appendChild(btn);
@@ -4591,6 +4601,31 @@
             return [s, s.replace(/\([^)]*\)/g, ''), inside].map((n) => (n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
                 .replace(/\b(vostfr|vf)\b/g, '').replace(/[^a-z0-9]/g, '')).filter((n) => n.length >= 3);
         }
+        // Nom de serie tire du titre d'une vignette (sans "S4 E113", "E263 END"...).
+        function thumbSeriesName(t) {
+            return String(t || '').replace(/\s*[-:]?\s*(\b(s\d+\s*)?e\d+\b|(episode|épisode|ep\.?)\s*\d+).*$/i, '').replace(/\s+/g, ' ').trim();
+        }
+        // Bouton "i" sur chaque vignette (v6.61) : fiche par-dessus la page, sans lancer l'episode.
+        // Anime-Sama a deja le sien (.ep-fiche-btn). Esprit Donghua : "Ep N" en bas a gauche -> en bas a droite.
+        function addThumbInfoButton(host, a, title) {
+            if (site.id === 'anime-sama' || host.querySelector(':scope > .ep-thumb-info')) return;
+            if (!/^https?:/.test(a.href) || new URL(a.href).pathname.length <= 1) return; // logo -> accueil
+            const name = thumbSeriesName(title);
+            if (name.length < 2) return;
+            const btn = document.createElement('span');
+            btn.className = 'ep-thumb-info';
+            btn.setAttribute('role', 'button'); btn.tabIndex = 0;
+            btn.title = 'Fiche : synopsis, genres, note';
+            btn.setAttribute('aria-label', 'Fiche de ' + name);
+            btn.textContent = 'ℹ Fiche';
+            btn.style.cssText = 'position:absolute;bottom:6px;' + (site.id === 'animoflix' ? 'left:6px;' : 'right:6px;') + 'z-index:17;background:rgba(3,208,252,.92);color:#000;font:bold 11px Arial,sans-serif;padding:4px 7px;min-height:24px;box-sizing:border-box;border-radius:4px;cursor:pointer;display:flex;align-items:center;';
+            btn.addEventListener('click', (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                openSeriesInfo({ site: site.id, seriesUrl: a.href, seriesName: name, pageUrl: a.href });
+            });
+            if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+            host.appendChild(btn);
+        }
         function refreshThumbnailBadges() {
             ensureVcStyles();
             document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);
@@ -4611,12 +4646,13 @@
                 // Drapeau de langue / petite image dans le meme lien (animoflix :
                 // 2e icone sur le drapeau, v6.47) -> seulement la vignette.
                 if (img.closest('.badge') || (img.offsetWidth && img.offsetWidth < 60)) {
-                    img.parentElement.querySelectorAll(':scope > .ep-thumb-badge, :scope > .ep-thumb-frame').forEach((n) => n.remove());
+                    img.parentElement.querySelectorAll(':scope > .ep-thumb-badge, :scope > .ep-thumb-frame, :scope > .ep-thumb-info').forEach((n) => n.remove());
                     return;
                 }
                 const title = a.getAttribute('title') || img.getAttribute('alt') || (a.querySelector('h1,h2,h3,h4') || {}).textContent;
                 const state = nameVariants(title).map((n) => byName[n]).filter(Boolean).sort((x, y) => rank[y] - rank[x])[0];
                 const host = img.parentElement;
+                addThumbInfoButton(host, a, title);
                 let badge = host.querySelector(':scope > .ep-thumb-badge');
                 let frame = host.querySelector(':scope > .ep-thumb-frame');
                 if (!state) { if (badge) badge.remove(); if (frame) frame.remove(); img.removeAttribute('data-vc-st'); return; }
@@ -4648,7 +4684,7 @@
         refreshThumbnailBadges();
         let badgeTimer = null;
         new MutationObserver((muts) => {
-            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge,.ep-thumb-frame')))) return;
+            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge,.ep-thumb-frame,.ep-thumb-info')))) return;
             clearTimeout(badgeTimer); badgeTimer = setTimeout(refreshThumbnailBadges, 400);
         }).observe(document.body, { childList: true, subtree: true });
 
@@ -4672,7 +4708,7 @@
                 const top = ['ep-info-overlay', 'ep-settings-overlay', 'vc-history-overlay', 'ep-tracking-overlay']
                     .map((id) => document.getElementById(id)).find(Boolean);
                 if (top) { ev.preventDefault(); top.remove(); }
-            } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn')) {
+            } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn, .ep-thumb-info')) {
                 ev.preventDefault(); ev.target.click();
             }
         }, true);

@@ -1090,3 +1090,18 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Reinitialiser remet aussi accentTarget = cadre. accentTarget dans BACKUP_PREFS + validImportedPref.
 - Teste Playwright (esprit-donghua, Pierre noire) : rien ne change avant Appliquer ; cadre seul / cases seules / tout ;
   Reinitialiser ; aucune erreur du script. Capture design/qa/v660-cadre.png. Pas teste : panneau du lecteur (meme code).
+- POUSSEE le 2026-10-15 (bd25e34).
+
+## v6.61 (2026-10-15, non poussee)
+- Demande : acces rapide au synopsis avant de lancer une serie, sur tous les sites.
+- Bouton "ℹ Fiche" (.ep-thumb-info) sur chaque vignette (addThumbInfoButton, appele dans refreshThumbnailBadges) :
+  ouvre openSeriesInfo par-dessus la page ({ site, seriesUrl: lien, seriesName: thumbSeriesName(titre), pageUrl }).
+  Bas droite (Esprit Donghua : "Ep N" en bas a gauche), bas gauche sur Animoflix (icone de suivi en bas a droite).
+  Exclus : Anime-Sama (son .ep-fiche-btn ouvre maintenant la fiche sur place), liens vers l'accueil (logo).
+- Fiche : lien "Page de l'anime" si pageUrl ; ficheCache par cle (reaffichage immediat) ; resolveAniLink(key, info, noSave) :
+  serie non suivie -> correspondance AniList en memoire (aniLinkMemo), pas dans aniLinks / la sauvegarde.
+- Teste Playwright avec vrai reseau (GM_xmlhttpRequest via exposeFunction) sur esprit-donghua : 78 boutons, fiche de
+  Xian Ni (Renegade Immortal) chargee sans quitter la page, Echap ferme, reouverture 16 ms, aniLinks non ecrit, logo exclu.
+  Synopsis en anglais (AniList) pour une vignette d'episode : attendu. Captures design/qa/v661-*.png.
+- Pas teste : Anime-Sama et Animoflix en vrai, sites ajoutes.
+- POUSSEE le 2026-10-15.
