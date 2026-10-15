@@ -1137,3 +1137,26 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   vu/naime/retraits et libelles, cadre retire, aucune erreur. wp-emoji d'ED remplace le pouce par <img alt> (normal).
   PAS teste : export/import de seenSeries, autres sites, vrai Tampermonkey.
 - POUSSEE le 2026-10-16.
+
+## 2026-10-16 : Opera - boutons du panneau morts (pas un bug du script)
+- Symptome (Opera 136 + Tampermonkey, meme en prive) : Importer, Exporter, Historique, fenetre de suivi, Fiche ne reagissent pas ;
+  les <details> (sections) et les icones des vignettes (MutationObserver) marchent. Aucune erreur du script.
+- Console Opera : un seul #ep-panel / #ep-history-btn, getEventListeners = {} ; btn.click() ne fait rien ; GM_info absent cote page
+  (script bien isole). => les addEventListener du script ne sont pas enregistres sous Tampermonkey/Opera.
+- Moteur Opera 136 SANS Tampermonkey (Playwright, executablePath opera.exe, test664.js) : 14/14 OK, clics OK.
+- Pistes cote Opera : mode developpeur / "Autoriser les scripts utilisateur" de Tampermonkey (opera://extensions), MAJ Opera 137 en attente.
+- Test utilisateur (mini-script Tampermonkey Opera) : addEventListener KO (element ET document), onclick OK.
+
+## v6.65 (2026-10-16) : repli Opera pour addEventListener
+- Debut de l'IIFE : `fixBrokenAddEventListener` pose un clic sur un span et appelle click() ; s'il ne part pas,
+  EventTarget.prototype.addEventListener/removeEventListener -> liste par cible+type branchee sur la propriete on<type>
+  (garde l'ancien on<type>, gere once ; types sans on<type> -> natif). Force aussi window/document. Warn console si actif.
+- Limite (commentaire ponytail) : un site qui reecrit on<type> apres coup ecrase nos ecouteurs ; capture ignoree (bulle).
+- Teste (Playwright Chromium 1208, accueil ED) : normal 17/17 ; addEventListener casse simule 17/17 (Fiche, Deja vu/Pas aime,
+  Historique, fenetre de suivi, Importer -> input file). 6.64 dans la meme simulation : ECHEC (clic Fiche suit le lien).
+- PAS teste : le vrai Opera + Tampermonkey (a confirmer par l'utilisateur apres MAJ).
+- Autres navigateurs (meme test, script injecte sans gestionnaire) : Edge 17/17, Brave 17/17, Firefox (Playwright 1553) 17/17,
+  WebKit 26.6 17/17. Panne simulee : WebKit 17/17 ; Firefox 12/17 = artefact de simulation (la panne posee dans le monde
+  de la page fait poser au site son propre Node.prototype.addEventListener ; sous un vrai gestionnaire le script est isole).
+- Revue API : showSaveFilePicker/queryPermission detectes (repli telechargement), GM_getResourceURL en try, :has() (FF 121+, Safari 15.4+).
+- POUSSEE le 2026-10-16.

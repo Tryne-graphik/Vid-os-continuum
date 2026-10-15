@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.64
+// @version      6.65
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -111,6 +111,47 @@
 
 (function () {
     'use strict';
+
+    // Opera + Tampermonkey (2026-10-16) : addEventListener n'enregistre rien (boutons morts, sans erreur)
+    // alors que les proprietes onclick... marchent. Test au demarrage ; si casse, repli sur on<type>.
+    // ponytail: le repli occupe la propriete on<type> (un site qui la reecrit apres coup ecrase nos ecouteurs).
+    (function fixBrokenAddEventListener() {
+        const proto = EventTarget.prototype;
+        const nativeAdd = proto.addEventListener, nativeRemove = proto.removeEventListener;
+        let ok = false;
+        const probe = document.createElement('span');
+        nativeAdd.call(probe, 'click', () => { ok = true; });
+        probe.click();
+        if (ok) return;
+        console.warn('[AnimeTracker v6] addEventListener inactif (Opera + Tampermonkey ?) : repli sur les proprietes on<type>.');
+        const lists = new WeakMap();
+        proto.addEventListener = function (type, fn, opts) {
+            if (typeof fn !== 'function' || !(('on' + type) in this)) return nativeAdd.call(this, type, fn, opts);
+            let byType = lists.get(this);
+            if (!byType) lists.set(this, byType = {});
+            let list = byType[type];
+            if (!list) {
+                list = byType[type] = [];
+                const target = this, prev = this['on' + type];
+                this['on' + type] = function (ev) {
+                    if (typeof prev === 'function') prev.call(target, ev);
+                    list.slice().forEach((l) => {
+                        if (l.once) list.splice(list.indexOf(l), 1);
+                        l.fn.call(target, ev);
+                    });
+                };
+            }
+            if (!list.some((l) => l.fn === fn)) list.push({ fn: fn, once: !!(opts && opts.once) });
+        };
+        proto.removeEventListener = function (type, fn, opts) {
+            const list = (lists.get(this) || {})[type];
+            if (!list) return nativeRemove.call(this, type, fn, opts);
+            const i = list.findIndex((l) => l.fn === fn);
+            if (i >= 0) list.splice(i, 1);
+        };
+        // window / document peuvent etre des enveloppes du bac a sable : on les force aussi.
+        [window, document].forEach((t) => { try { t.addEventListener = proto.addEventListener; t.removeEventListener = proto.removeEventListener; } catch (e) { /* lecture seule */ } });
+    })();
 
     const isTopFrame = (window.top === window.self);
     const PLAYER_ORIGIN_ODYSEE = 'https://odysee.com';
@@ -2490,6 +2531,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.65', ['Opera (Tampermonkey) : les boutons du panneau, Importer, Historique, le suivi et les Fiches ne reagissaient pas. Corrige.']],
             ['6.64', ['Nouveau bouton "\u2713 Deja vu" dans la Fiche : icone grise (3 coches) sur les vignettes des series vues avant le script. Une serie suivie garde son icone de suivi.']],
             ['6.63', ['Nouvelle icone "Pas aime" (orange, 3 croix) sur les vignettes : bouton "\uD83D\uDC4E Pas aime" dans la Fiche, pour se souvenir d\'une serie qu\'on n\'a pas aimee (suivie ou non). Re-cliquer pour la retirer.']],
             ['6.62', ['Fiche : synopsis en francais retrouve depuis les vignettes d\'episode d\'Esprit Donghua (lu sur la page de la serie).', 'Fiche : genres et note aussi pour les series AniList sans fiche MyAnimeList (beaucoup de donghua), en essayant le nom romanise puis le nom anglais.']],
