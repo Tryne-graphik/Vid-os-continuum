@@ -1076,3 +1076,17 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Pas teste : panneau du lecteur (ed-) en vrai (meme code), import d'une sauvegarde avec les nouvelles prefs, vrai @resource
   Tampermonkey pour la police (CSP font-src d'un site pourrait la bloquer -> repli police du texte), anime-sama / animoflix
   (cadre dans l'hote de l'icone, en bas a droite).
+- POUSSEE le 2026-10-15 (0baa01a) : script 6.59 + cinzel.woff2 + OFL servis par GitHub.
+- Retour utilisateur 2026-10-15 : 6.59 installee, cadre des vignettes valide ("parfait"). Reste a confirmer : Estomper, Personnaliser.
+- Retour utilisateur 2026-10-15 : option Estomper validee. Reste : Personnaliser.
+
+## v6.60 (2026-10-15, non poussee)
+- Retour utilisateur 6.59 : l'accent "ne marchait pas" (il ne colorait que les titres de sections : trop discret).
+  Demandes : renommer Accent -> Couleur, bouton Appliquer, couleur sur le cadre du panneau ou element au choix.
+- Couleur : input color + bouton Appliquer (plus d'application en direct) ; liste "Appliquer a" (GM accentTarget) :
+  cadre du panneau (defaut, outline 2px), titres des sections, cases cochees, tout. Classes vc-ct-cadre / -titres / -cases.
+- PIEGE corrige avant livraison : la couleur ecrivait --vc-acc / --vc-acct (variables des themes) -> avec un theme, "Cadre"
+  recolorait aussi les titres. Variables dediees --vc-cc / --vc-cct / --vc-ccon.
+- Reinitialiser remet aussi accentTarget = cadre. accentTarget dans BACKUP_PREFS + validImportedPref.
+- Teste Playwright (esprit-donghua, Pierre noire) : rien ne change avant Appliquer ; cadre seul / cases seules / tout ;
+  Reinitialiser ; aucune erreur du script. Capture design/qa/v660-cadre.png. Pas teste : panneau du lecteur (meme code).

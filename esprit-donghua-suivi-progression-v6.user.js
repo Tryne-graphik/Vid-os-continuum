@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.59
+// @version      6.60
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2053,7 +2053,7 @@
         const BACKUP_SETTINGS = ['excludedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide',
-            'accentColor', 'fontFamily', 'titleCinzel', 'dimTracked'];
+            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2101,6 +2101,7 @@
             if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
             if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
             if (k === 'accentColor') return typeof v === 'string' && /^(#[0-9a-f]{6})?$/i.test(v);
+            if (k === 'accentTarget') return Object.prototype.hasOwnProperty.call(accentTargets(), v);
             if (k === 'fontFamily') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(vcFonts(), v);
             if (k === 'openMode') return OPEN_MODES.some((m) => m[0] === v);
             return typeof v === 'string' && v.length <= 50;
@@ -2307,10 +2308,13 @@
                 T + ',' + T + ' *{text-shadow:0 1px 2px rgba(0,0,0,.85);}' + T + ' button[style*="background:#03d0fc"],' + T + ' [style*="color:#1a1000"]{text-shadow:none;}' +
                 T + ' .vc-grp{color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' button.vc-ver{color:#ffd400!important;}' +
-                // v6.59 Personnaliser : accent choisi (variables en ligne sur l'hote, voir applyTheme), aussi pour Actuel.
-                '.vc-cacc button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-acc)!important;color:var(--vc-onacc)!important;}' +
-                '.vc-cacc [style*="color:#03d0fc"],.vc-cacc .vc-grp,.vc-cacc details[open]>summary{color:var(--vc-acct)!important;}' +
-                '.vc-cacc [style*="background:#03d0fc"]:not(button){background:var(--vc-acc)!important;}' +
+                // Personnaliser : couleur choisie (variables en ligne sur l'hote, voir applyTheme), aussi pour Actuel.
+                // v6.60 : appliquee a l'element choisi (classes vc-ct-cadre / -titres / -cases ; "tout" = les trois).
+                '.vc-ct-cadre{outline:2px solid var(--vc-cc)!important;outline-offset:-2px;}' +
+                '.vc-ct-titres button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-cc)!important;color:var(--vc-ccon)!important;}' +
+                '.vc-ct-titres [style*="color:#03d0fc"],.vc-ct-titres .vc-grp,.vc-ct-titres details[open]>summary{color:var(--vc-cct)!important;}' +
+                '.vc-ct-titres [style*="background:#03d0fc"]:not(button){background:var(--vc-cc)!important;}' +
+                '.vc-ct-cases .vc-track:has(input:checked){background:var(--vc-cc)!important;border-color:var(--vc-cc)!important;color:var(--vc-ccon)!important;text-shadow:none;}' +
                 '@font-face{font-family:"VC Cinzel";src:' + themeTexUrl(['vcCinzel', 'cinzel.woff2']) + ' format("woff2");font-weight:400 900;font-display:swap;}' +
                 '.vc-cinzel summary,.vc-cinzel .vc-grp{font-family:"VC Cinzel",var(--vc-font,"Segoe UI"),serif!important;letter-spacing:.06em!important;}' +
                 // Vignettes : option "Estomper les series suivies" (le cadre .ep-thumb-frame reste net).
@@ -2333,6 +2337,8 @@
             for (let i = 0; i < 12 && (relLum(c) + 0.05) / 0.058 < 4.5; i++) c = c.map((v) => Math.round(v + (255 - v) * 0.2));
             return rgbHex(c);
         }
+        function accentTargets() { return { cadre: 'Cadre du panneau', titres: 'Titres des sections', cases: 'Cases cochees', tout: 'Tout' }; }
+        function currentAccentTarget() { const t = GM_getValue('accentTarget', 'cadre'); return accentTargets()[t] ? t : 'cadre'; }
         function themeAccent() { const v = themes()[currentThemeId()].v; return v ? v.acc : '#03d0fc'; }
         function currentThemeId() { const t = GM_getValue('theme', 'actuel'); return themes()[t] ? t : 'actuel'; }
         function themeTexUrl(tex) {
@@ -2350,12 +2356,13 @@
             el.classList.toggle('vc-thm', id !== 'actuel');
             el.style.setProperty('--vc-tex', themeTexUrl(themes()[id].tex));
             const acc = currentAccent();
-            el.classList.toggle('vc-cacc', !!acc);
-            ['acc', 'acct', 'onacc'].forEach((n) => el.style.removeProperty('--vc-' + n));
+            const tg = currentAccentTarget();
+            ['cadre', 'titres', 'cases'].forEach((t) => el.classList.toggle('vc-ct-' + t, !!acc && (tg === t || tg === 'tout')));
+            ['cc', 'cct', 'ccon'].forEach((n) => el.style.removeProperty('--vc-' + n));
             if (acc) {
-                el.style.setProperty('--vc-acc', acc);
-                el.style.setProperty('--vc-acct', accentText(acc));
-                el.style.setProperty('--vc-onacc', relLum(hexRgb(acc)) > 0.18 ? '#000' : '#fff');
+                el.style.setProperty('--vc-cc', acc);
+                el.style.setProperty('--vc-cct', accentText(acc));
+                el.style.setProperty('--vc-ccon', relLum(hexRgb(acc)) > 0.18 ? '#000' : '#fff');
             }
             el.style.setProperty('--vc-font', '"' + vcFonts()[currentFont()] + '"');
             el.classList.toggle('vc-cinzel', GM_getValue('titleCinzel', false) === true);
@@ -2395,7 +2402,10 @@
             const f = currentFont(), F = vcFonts();
             const row = 'display:flex;align-items:center;gap:6px;font-size:11px;color:#ccc;';
             return collapsibleSection('perso', 'Personnaliser',
-                '<label style="' + row + '">Accent :<input type="color" id="' + prefix + '-accent" value="' + (currentAccent() || themeAccent()) + '" aria-label="Couleur d\'accent (pipette dans le selecteur)" style="flex:1;height:26px;padding:0 2px;border:none;background:none;cursor:pointer;"></label>' +
+                '<label style="' + row + '">Couleur :<input type="color" id="' + prefix + '-accent" value="' + (currentAccent() || themeAccent()) + '" aria-label="Couleur (pipette dans le selecteur)" style="flex:1;height:26px;padding:0 2px;border:none;background:none;cursor:pointer;">' +
+                '<button id="' + prefix + '-accent-apply" title="Appliquer et enregistrer la couleur choisie" style="' + BTN_STYLE + 'flex:0 0 auto;">Appliquer</button></label>' +
+                '<label style="' + row + '">Appliquer a :<select id="' + prefix + '-accent-target" aria-label="Element colore" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                Object.keys(accentTargets()).map((k) => '<option value="' + k + '"' + (k === currentAccentTarget() ? ' selected' : '') + '>' + accentTargets()[k] + '</option>').join('') + '</select></label>' +
                 '<label style="' + row + '">Police :<select id="' + prefix + '-font" aria-label="Police du panneau" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 Object.keys(F).map((k) => '<option value="' + k + '"' + (k === f ? ' selected' : '') + ' style="font-family:\'' + F[k] + '\';">' + F[k] + '</option>').join('') + '</select></label>' +
                 '<label class="vc-track" title="Titres des sections en Cinzel (capitales gravees)"><input type="checkbox" id="' + prefix + '-cinzel"' + (GM_getValue('titleCinzel', false) === true ? ' checked' : '') + '><span class="off">Titres en Cinzel</span><span class="on">&#10003; Titres en Cinzel</span></label>' +
@@ -2408,13 +2418,16 @@
         function bindCustomize(container, prefix) {
             const q = (s) => container.querySelector('#' + prefix + s);
             const all = () => document.querySelectorAll('.vc-th-host').forEach(applyTheme);
-            const acc = q('-accent'), font = q('-font'), cz = q('-cinzel'), reset = q('-perso-reset');
-            if (acc) acc.addEventListener('input', () => { GM_setValue('accentColor', acc.value); all(); });
+            const acc = q('-accent'), apply = q('-accent-apply'), tgt = q('-accent-target'), font = q('-font'), cz = q('-cinzel'), reset = q('-perso-reset');
+            // v6.60 : plus d'application en direct, bouton Appliquer (demande utilisateur).
+            if (apply && acc) apply.addEventListener('click', (ev) => { ev.preventDefault(); GM_setValue('accentColor', acc.value); all(); });
+            if (tgt) tgt.addEventListener('change', () => { GM_setValue('accentTarget', tgt.value); all(); });
             if (font) font.addEventListener('change', () => { GM_setValue('fontFamily', font.value); all(); });
             if (cz) cz.addEventListener('change', () => { GM_setValue('titleCinzel', cz.checked); all(); });
             if (reset) reset.addEventListener('click', () => {
-                GM_setValue('accentColor', ''); GM_setValue('fontFamily', 'segoe'); GM_setValue('titleCinzel', false);
+                GM_setValue('accentColor', ''); GM_setValue('accentTarget', 'cadre'); GM_setValue('fontFamily', 'segoe'); GM_setValue('titleCinzel', false);
                 if (acc) acc.value = themeAccent();
+                if (tgt) tgt.value = 'cadre';
                 if (font) font.value = 'segoe';
                 if (cz) cz.checked = false;
                 all();
@@ -2472,6 +2485,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.60', ['Personnaliser : "Accent" devient "Couleur", avec un bouton Appliquer (la couleur ne change plus pendant le choix).', 'Nouvelle liste "Appliquer a" : cadre du panneau (par defaut), titres des sections, cases cochees, ou tout.']],
             ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les series suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
             ['6.58', ['Lisibilite (12 pistes) : police Segoe UI 12 px demi-gras ; boutons sur plaques pleines et textures adoucies ; verre trempe fume (texte lisible sur scene claire) ; titres de sections en simples intitules ; couleurs d\'accent adoucies ; plus de noir ni de blanc purs.', 'Cartes des sites : etat avec icone et mot (● 2 a rattraper, ✓ a jour). Zones de clic d\'au moins 24 px, contour clavier visible sur tous les themes.', 'Option "Panneau discret en lecture" (Reglages > Plus > Affichage) : le panneau s\'efface apres 4 s sans souris et revient au survol.']],
             ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Debut outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
