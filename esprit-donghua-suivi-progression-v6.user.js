@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.63
+// @version      6.64
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1400,9 +1400,11 @@
         function loadExcludedSeries() { return GM_getValue('excludedSeries', {}); }
         function saveExcludedSeries(data) { GM_setValue('excludedSeries', data); }
         function isSeriesExcluded(key) { return !!loadExcludedSeries()[key]; }
-        // Series pas aimees (v6.63) : { nom normalise: nom affiche }, par nom (suivie ou non).
-        function loadDisliked() { return GM_getValue('dislikedSeries', {}); }
-        function dislikeKey(name) { return nameVariants(name)[0] || ''; }
+        // Marques par nom, posees depuis la Fiche (suivie ou non) : { nom normalise: nom affiche }.
+        // naime = pas aimee (v6.63), vu = deja vue avant le script (v6.64). [cle GM, bouton, couleur]
+        const NAME_MARKS = { naime: ['dislikedSeries', '\uD83D\uDC4E Pas aime', '#ff851b'], vu: ['seenSeries', '\u2713 Deja vu', '#c0c0c0'] };
+        function loadNameMark(st) { return GM_getValue(NAME_MARKS[st][0], {}); }
+        function nameMarkKey(name) { return nameVariants(name)[0] || ''; }
         // Saison finie, en attente de la suite (v6.48) : { cle: dernier ep. connu au marquage }.
         // Reste verifie ; retire tout seul quand un episode plus recent apparait.
         function loadSeasonDone() { return GM_getValue('seasonDone', {}); }
@@ -2053,7 +2055,7 @@
         }
         // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
-        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
+        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide',
             'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked'];
@@ -2488,6 +2490,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.64', ['Nouveau bouton "\u2713 Deja vu" dans la Fiche : icone grise (3 coches) sur les vignettes des series vues avant le script. Une serie suivie garde son icone de suivi.']],
             ['6.63', ['Nouvelle icone "Pas aime" (orange, 3 croix) sur les vignettes : bouton "\uD83D\uDC4E Pas aime" dans la Fiche, pour se souvenir d\'une serie qu\'on n\'a pas aimee (suivie ou non). Re-cliquer pour la retirer.']],
             ['6.62', ['Fiche : synopsis en francais retrouve depuis les vignettes d\'episode d\'Esprit Donghua (lu sur la page de la serie).', 'Fiche : genres et note aussi pour les series AniList sans fiche MyAnimeList (beaucoup de donghua), en essayant le nom romanise puis le nom anglais.']],
             ['6.61', ['Bouton "ℹ Fiche" sur toutes les vignettes (Esprit Donghua, Animoflix, sites ajoutes) : synopsis, genres et note par-dessus la page, sans lancer l\'episode.', 'Anime-Sama : le bouton Fiche des vignettes ouvre aussi la fiche sur place (lien "Page de l\'anime" dedans).', 'Une fiche deja ouverte se reaffiche tout de suite ; rien n\'est enregistre pour les series non suivies.']],
@@ -3323,23 +3326,24 @@
                 const enSyn = m && m.description ? m.description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : '';
                 html += '<div style="margin-top:12px;"><b>Synopsis</b>' + (frSyn ? '' : (enSyn ? ' <span style="color:#888;font-size:11px;">(AniList, en anglais)</span>' : '')) +
                     '<p style="margin:4px 0 0;color:#ddd;">' + escapeHtml(frSyn || enSyn || 'Aucun synopsis trouve.') + '</p></div>';
-                const dk = dislikeKey(info.seriesName);
-                html += '<div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">' +
-                    (dk ? '<button type="button" id="ep-info-dislike" title="Marque la vignette de cette serie sur les sites (pour s\'en souvenir)" style="background:#1f2a33;color:#ff851b;border:1px solid #ff851b;padding:6px 12px;border-radius:4px;cursor:pointer;"></button>' : '') +
+                const dk = nameMarkKey(info.seriesName);
+                html += '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;">' +
+                    (dk ? Object.keys(NAME_MARKS).map((st) => '<button type="button" class="ep-info-mark" data-st="' + st + '" title="Marque la vignette de cette serie sur les sites (pour s\'en souvenir)" style="background:#1f2a33;color:' + NAME_MARKS[st][2] + ';border:1px solid ' + NAME_MARKS[st][2] + ';padding:6px 12px;border-radius:4px;cursor:pointer;"></button>').join('') : '') +
                     (info.pageUrl && /^https?:\/\//.test(info.pageUrl) ? '<a href="' + escapeHtml(info.pageUrl) + '" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;text-decoration:none;">Page de l\'anime</a>' : '') +
                     (m && /^https:\/\/anilist\.co\//.test(m.siteUrl || '') ? '<a href="' + escapeHtml(m.siteUrl) + '" target="_blank" rel="noopener" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:6px 12px;border-radius:4px;text-decoration:none;">Voir sur AniList</a>' : '') +
                     '<button type="button" id="ep-info-close" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
                 box.innerHTML = html;
-                const dBtn = box.querySelector('#ep-info-dislike');
-                if (!dBtn) return;
-                const label = () => { dBtn.textContent = loadDisliked()[dk] ? 'Retirer "Pas aime"' : '\uD83D\uDC4E Pas aime'; };
-                label();
-                dBtn.addEventListener('click', () => {
-                    const all = loadDisliked();
-                    if (all[dk]) delete all[dk]; else all[dk] = displayName(info.seriesName);
-                    GM_setValue('dislikedSeries', all);
+                box.querySelectorAll('.ep-info-mark').forEach((btn) => {
+                    const st = btn.getAttribute('data-st');
+                    const label = () => { btn.textContent = loadNameMark(st)[dk] ? 'Retirer "' + NAME_MARKS[st][1].replace(/^\S+ /, '') + '"' : NAME_MARKS[st][1]; };
                     label();
-                    refreshThumbnailBadges();
+                    btn.addEventListener('click', () => {
+                        const all = loadNameMark(st);
+                        if (all[dk]) delete all[dk]; else all[dk] = displayName(info.seriesName);
+                        GM_setValue(NAME_MARKS[st][0], all);
+                        label();
+                        refreshThumbnailBadges();
+                    });
                 });
             });
         }
@@ -4618,7 +4622,8 @@
                 attente: ['#b07cff', 'Saison finie, en attente de la suite'],
                 ailleurs: ['#ffd400', 'Suivi sur un autre site'],
                 exclu: ['#ff4136', 'Abandonne (exclu du suivi)'],
-                naime: ['#ff851b', 'Pas aime (bouton dans la Fiche)']
+                naime: ['#ff851b', 'Pas aime (bouton dans la Fiche)'],
+                vu: ['#c0c0c0', 'Deja vue avant le script (bouton dans la Fiche)']
             }[state];
         }
         // Icone liste a cases (style Flaticon "lister") : cases a la couleur de
@@ -4628,14 +4633,14 @@
             const c = badgeInfo(state)[0];
             const tick = (y) => 'M3.5 ' + (y + 2.2) + 'l1.2 1.2 2-2.4';
             const cross = (y) => 'M3.7 ' + (y + 1.2) + 'l2.6 2.6M6.3 ' + (y + 1.2) + 'L3.7 ' + (y + 3.8);
-            const mark = state === 'exclu' ? cross(2) : state === 'naime' ? cross(2) + cross(9.5) + cross(17) : state === 'attente' ? tick(2.5) + tick(10) + tick(17.5) : tick(2.5);
+            const mark = state === 'exclu' ? cross(2) : state === 'naime' ? cross(2) + cross(9.5) + cross(17) : state === 'attente' || state === 'vu' ? tick(2.5) + tick(10) + tick(17.5) : tick(2.5);
             const row = (y) => '<rect x="2.5" y="' + y + '" width="5" height="5" rx=".8" stroke="' + c + '"/><rect x="10.5" y="' + (y + 1.1) + '" width="11" height="2.8" rx="1.4" stroke="#fff" stroke-width="1.3"/>';
             return '<svg width="' + px + '" height="' + px + '" viewBox="0 0 24 24" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
                 row(2) + row(9.5) + row(17) +
                 '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
         }
         function legendSectionHtml(open) {
-            return collapsibleSection('legende', 'Legende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime'].map((st) =>
+            return collapsibleSection('legende', 'Legende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu'].map((st) =>
                 '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
                 '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
         }
@@ -4682,7 +4687,7 @@
             document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
-            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4 };
+            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4, vu: 0 };
             const seasonDone = loadSeasonDone();
             const newSeasons = loadNewSeasons();
             const byName = {};
@@ -4691,7 +4696,9 @@
                 const state = excluded[k] ? 'exclu' : e.site !== site.id ? 'ailleurs' : seasonDone[k] ? 'attente' : (newEpisodes[k] || newSeasons[k]) ? 'retard' : 'ici';
                 nameVariants(e.seriesName).forEach((n) => { if (!byName[n] || rank[state] > rank[byName[n]]) byName[n] = state; });
             });
-            Object.values(loadDisliked()).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'naime'; }));
+            // "Deja vu" seulement si rien d'autre (une serie reprise garde son etat de suivi) ; "Pas aime" passe devant tout.
+            Object.values(loadNameMark('vu')).forEach((name) => nameVariants(name).forEach((n) => { if (!byName[n]) byName[n] = 'vu'; }));
+            Object.values(loadNameMark('naime')).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'naime'; }));
             document.querySelectorAll('a[href] img').forEach((img) => {
                 const a = img.closest('a');
                 if (a.closest('[id^="ep-"],[id^="ed-"]')) return;

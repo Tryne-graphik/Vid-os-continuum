@@ -1126,3 +1126,14 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Bouton "👎 Pas aime" / "Retirer" dans la Fiche (`openSeriesInfo`, donc depuis le bouton ℹ des vignettes) -> `refreshThumbnailBadges`.
 - Etat `naime` : orange #ff851b, 3 croix, rang 4 (passe devant suivi/exclu). Ajoute a la legende.
 - Teste : `node --check` seulement. PAS teste sur les sites.
+- POUSSEE le 2026-10-16 (d0fba68).
+- Retour utilisateur 2026-10-16 : bouton Pas aime OK sur Esprit Donghua, vignettes OK sur Anime-Sama. Animoflix et myfluneo OK aussi (meme jour).
+
+## v6.64 (2026-10-16) : bouton "Deja vu"
+- `NAME_MARKS` generalise la marque par nom de la 6.63 : naime (`dislikedSeries`) + vu (`seenSeries`, dans BACKUP_SETTINGS).
+- Fiche : un bouton par marque (classe `.ep-info-mark`), bascule + "Retirer ...".
+- Etat `vu` : gris #c0c0c0, 3 coches, rang 0 (pose seulement si aucun etat de suivi) ; naime passe toujours devant.
+- Teste (Playwright, accueil Esprit Donghua, shim GM sur localStorage, Chromium 1208) : 14/14 - naime 6.63 conserve, suivie+vu reste ici,
+  vu/naime/retraits et libelles, cadre retire, aucune erreur. wp-emoji d'ED remplace le pouce par <img alt> (normal).
+  PAS teste : export/import de seenSeries, autres sites, vrai Tampermonkey.
+- POUSSEE le 2026-10-16.
