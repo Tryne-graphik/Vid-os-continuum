@@ -1119,3 +1119,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Teste (vrai reseau) : Daqian Town (synopsis FR, pas d'AniList), Wanmei Shijie (26 ep, FR), Xian Ni (FR + AniList),
   clic sur un clone du carrousel : reste sur la page ; aniLinks non ecrit ; aucune erreur du script.
 - POUSSEE le 2026-10-15.
+- Retour utilisateur 2026-10-15 : 6.62 installee, synopsis des fiches OK sur Esprit Donghua.
+
+## v6.63 (2026-10-16) : vignette "Pas aime"
+- GM `dislikedSeries` { nom normalise (nameVariants[0]) : nom affiche }, dans BACKUP_SETTINGS. Par nom : marche pour une serie jamais suivie.
+- Bouton "👎 Pas aime" / "Retirer" dans la Fiche (`openSeriesInfo`, donc depuis le bouton ℹ des vignettes) -> `refreshThumbnailBadges`.
+- Etat `naime` : orange #ff851b, 3 croix, rang 4 (passe devant suivi/exclu). Ajoute a la legende.
+- Teste : `node --check` seulement. PAS teste sur les sites.
