@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.61
+// @version      6.62
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2485,6 +2485,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.62', ['Fiche : synopsis en francais retrouve depuis les vignettes d\'episode d\'Esprit Donghua (lu sur la page de la serie).', 'Fiche : genres et note aussi pour les series AniList sans fiche MyAnimeList (beaucoup de donghua), en essayant le nom romanise puis le nom anglais.']],
             ['6.61', ['Bouton "ℹ Fiche" sur toutes les vignettes (Esprit Donghua, Animoflix, sites ajoutes) : synopsis, genres et note par-dessus la page, sans lancer l\'episode.', 'Anime-Sama : le bouton Fiche des vignettes ouvre aussi la fiche sur place (lien "Page de l\'anime" dedans).', 'Une fiche deja ouverte se reaffiche tout de suite ; rien n\'est enregistre pour les series non suivies.']],
             ['6.60', ['Personnaliser : "Accent" devient "Couleur", avec un bouton Appliquer (la couleur ne change plus pendant le choix).', 'Nouvelle liste "Appliquer a" : cadre du panneau (par defaut), titres des sections, cases cochees, ou tout.']],
             ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les series suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
@@ -3147,15 +3148,12 @@
                 .then((res) => (JSON.parse(res.responseText).data.Page.media || []).filter((m) => m.idMal)
                     .map((m) => ({ idMal: m.idMal, title: m.title.romaji || m.title.english, year: m.seasonYear })));
         }
-        // noSave (v6.61, fiche d'une vignette non suivie) : correspondance gardee le temps de la visite,
-        // pas dans aniLinks (sinon la sauvegarde se remplit de series juste consultees).
-        const aniLinkMemo = {};
-        function resolveAniLink(key, info, noSave) {
-            const known = loadAniLinks()[key] || aniLinkMemo[key];
+        function resolveAniLink(key, info) {
+            const known = loadAniLinks()[key];
             if (known) return Promise.resolve(known);
             return anilistSearch(aniSearchQuery(info)).then((list) => {
                 const link = list[0] ? { idMal: list[0].idMal, title: list[0].title } : { idMal: null };
-                if (noSave) aniLinkMemo[key] = link; else setAniLink(key, link);
+                setAniLink(key, link);
                 return link;
             });
         }
@@ -3234,17 +3232,27 @@
             'Mahou Shoujo': 'Magical girl', 'Mecha': 'Mecha', 'Music': 'Musique', 'Mystery': 'Mystere', 'Psychological': 'Psychologique', 'Romance': 'Romance',
             'Sci-Fi': 'Science-fiction', 'Slice of Life': 'Tranche de vie', 'Sports': 'Sport', 'Supernatural': 'Surnaturel', 'Thriller': 'Thriller' };
         const STATUS_FR = { FINISHED: 'Termine', RELEASING: 'En cours de diffusion', NOT_YET_RELEASED: 'Pas encore sorti', CANCELLED: 'Annule', HIATUS: 'En pause' };
-        function anilistDetails(idMal) {
-            const query = 'query($id:Int){Media(idMal:$id,type:ANIME){siteUrl episodes status averageScore seasonYear genres description(asHtml:false) coverImage{large} title{romaji english} tags{name rank isMediaSpoiler isGeneralSpoiler} nextAiringEpisode{episode timeUntilAiring}}}';
-            return gmRequest({ method: 'POST', url: 'https://graphql.anilist.co', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.stringify({ query: query, variables: { id: idMal } }), anonymous: true, timeout: 15000 })
+        // sel = { idMal } ou { id } (id AniList : beaucoup de donghua n'ont pas d'id MAL, ex. Wanmei Shijie, v6.62).
+        function anilistDetails(sel) {
+            const query = 'query($id:Int,$mal:Int){Media(id:$id,idMal:$mal,type:ANIME){siteUrl episodes status averageScore seasonYear genres description(asHtml:false) coverImage{large} title{romaji english} tags{name rank isMediaSpoiler isGeneralSpoiler} nextAiringEpisode{episode timeUntilAiring}}}';
+            return gmRequest({ method: 'POST', url: 'https://graphql.anilist.co', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.stringify({ query: query, variables: { id: sel.id || undefined, mal: sel.idMal || undefined } }), anonymous: true, timeout: 15000 })
                 .then((res) => JSON.parse(res.responseText).data.Media);
+        }
+        // Premier id AniList trouve en essayant le nom romanise puis le nom anglais (entre parentheses) :
+        // "Perfect World" seul tombait sur un special d'1 episode au lieu de Wanmei Shijie.
+        function anilistFindId(name) {
+            const names = [String(name || '').replace(/\([^)]*\)/g, '').trim(), displayName(name)].filter((n, i, a) => n && a.indexOf(n) === i);
+            const query = 'query($q:String){Page(perPage:1){media(search:$q,type:ANIME){id}}}';
+            const tryNext = (i) => i >= names.length ? Promise.resolve(null) :
+                gmRequest({ method: 'POST', url: 'https://graphql.anilist.co', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, data: JSON.stringify({ query: query, variables: { q: names[i] } }), anonymous: true, timeout: 15000 })
+                    .then((res) => { const m = (JSON.parse(res.responseText).data.Page.media || [])[0]; return m ? m.id : tryNext(i + 1); });
+            return tryNext(0);
         }
         function siteSynopsis(info) {
             const slug = ((info.seriesUrl || '').match(/anime-sama\.to\/catalogue\/([^/]+)/) || [])[1];
             const url = slug ? 'https://anime-sama.to/catalogue/' + slug + '/' : info.seriesUrl;
             if (!url) return Promise.resolve(null);
-            return fetchPageHtml(url).then((html) => {
-                const doc = new DOMParser().parseFromString(html, 'text/html');
+            const fromDoc = (doc) => {
                 const cands = [];
                 const el = doc.querySelector('#synopsisText, .synopsis-content, .anime-synopsis p, .full-text, [itemprop="description"]');
                 if (el) cands.push(el.textContent);
@@ -3253,6 +3261,18 @@
                 // Le plus long qui ne ressemble pas a un texte publicitaire du site.
                 const good = cands.map((t) => String(t).replace(/\s+/g, ' ').trim()).filter((t) => t.length >= 80 && !(t.length < 220 && /streaming|regarder|gratuit|t[e\u00e9]l[e\u00e9]charg/i.test(t)));
                 return good.sort((a, b) => b.length - a.length)[0] || null;
+            };
+            return fetchPageHtml(url).then((html) => {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const found = fromDoc(doc);
+                if (found) return found;
+                // Esprit Donghua (v6.62) : les vignettes menent a un episode, le synopsis est sur la page de la serie.
+                const epSlug = (url.match(/^https?:\/\/[^/]+\/([^/?#]+)/) || [])[1] || '';
+                const serie = Array.from(doc.querySelectorAll('a[href*="/anime/"]')).map((a) => a.href)
+                    .map((h) => [h, (h.match(/\/anime\/([^/?#]+)\/?$/) || [])[1] || ''])
+                    .filter(([, sl]) => sl.length >= 3 && epSlug.indexOf(sl) === 0).sort((x, y) => y[1].length - x[1].length)[0];
+                if (!serie) return null;
+                return fetchPageHtml(serie[0]).then((h2) => fromDoc(new DOMParser().parseFromString(h2, 'text/html')));
             }).catch(() => null);
         }
         const ficheCache = {}; // fiche deja chargee pendant la visite -> reaffichee sans recharger (v6.61)
@@ -3269,7 +3289,12 @@
             pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
             const box = pop.querySelector('#ep-info-box');
             if (!ficheCache[key]) {
-                const media = resolveAniLink(key, info, !loadProgress()[key]).then((link) => (link && link.idMal ? anilistDetails(link.idMal) : null)).catch(() => null);
+                // Serie suivie : meme anime qu'AniSkip (modifiable). Sinon recherche directe par nom romanise
+                // (la recherche AniSkip, anglais + id MAL obligatoire, donnait un special pour Wanmei Shijie).
+                const byName = () => anilistFindId(info.seriesName).then((id) => (id ? anilistDetails({ id: id }) : null));
+                const media = (loadProgress()[key]
+                    ? resolveAniLink(key, info).then((link) => (link && link.idMal ? anilistDetails({ idMal: link.idMal }) : byName()))
+                    : byName()).catch(() => null);
                 ficheCache[key] = Promise.all([media, siteSynopsis(info)]);
             }
             ficheCache[key].then(([m, frSyn]) => {
@@ -4619,13 +4644,20 @@
             btn.setAttribute('aria-label', 'Fiche de ' + name);
             btn.textContent = 'ℹ Fiche';
             btn.style.cssText = 'position:absolute;bottom:6px;' + (site.id === 'animoflix' ? 'left:6px;' : 'right:6px;') + 'z-index:17;background:rgba(3,208,252,.92);color:#000;font:bold 11px Arial,sans-serif;padding:4px 7px;min-height:24px;box-sizing:border-box;border-radius:4px;cursor:pointer;display:flex;align-items:center;';
-            btn.addEventListener('click', (ev) => {
-                ev.preventDefault(); ev.stopPropagation();
-                openSeriesInfo({ site: site.id, seriesUrl: a.href, seriesName: name, pageUrl: a.href });
-            });
+            btn.setAttribute('data-vc-name', name);
             if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
             host.appendChild(btn);
         }
+        // Clic delegue (v6.62) : les carrousels (owl.carousel d'Esprit Donghua) clonent les vignettes sans
+        // les ecouteurs -> le bouton d'une copie ouvrait la page de la serie. Capture : avant le lien et le site.
+        document.addEventListener('click', (ev) => {
+            const b = ev.target && ev.target.closest && ev.target.closest('.ep-thumb-info');
+            if (!b) return;
+            ev.preventDefault(); ev.stopPropagation();
+            const a = b.closest('a[href]') || (b.parentElement && b.parentElement.querySelector('a[href]'));
+            const url = a ? a.href : '';
+            openSeriesInfo({ site: site.id, seriesUrl: url, seriesName: b.getAttribute('data-vc-name') || '', pageUrl: url });
+        }, true);
         function refreshThumbnailBadges() {
             ensureVcStyles();
             document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);

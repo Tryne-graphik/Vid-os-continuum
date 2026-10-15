@@ -1105,3 +1105,17 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   Synopsis en anglais (AniList) pour une vignette d'episode : attendu. Captures design/qa/v661-*.png.
 - Pas teste : Anime-Sama et Animoflix en vrai, sites ajoutes.
 - POUSSEE le 2026-10-15.
+
+## v6.62 (2026-10-15, non poussee)
+- Retour 6.61 : fiche "Aucun synopsis trouve" sur Esprit Donghua (ex. Daqian Xiaozhen).
+- Causes : (1) la vignette mene a un episode, sans synopsis ; il est sur /anime/<slug>/ (itemprop=description).
+  (2) Daqian Town absent d'AniList ; Wanmei Shijie y est mais sans id MAL (anilistDetails exigeait idMal).
+  (3) PIEGE owl.carousel : les vignettes clonees gardent le bouton mais pas l'ecouteur -> le clic ouvrait la page.
+- siteSynopsis : si rien sur la page, suit le lien /anime/<slug>/ dont le slug prefixe celui de l'episode.
+- anilistDetails({ id } | { idMal }) ; anilistFindId(nom) : nom romanise puis anglais (l'anglais "Perfect World" donnait
+  un special d'1 episode). Serie suivie : meme anime qu'AniSkip ; non suivie : anilistFindId direct, rien d'enregistre
+  (aniLinkMemo / noSave de la 6.61 supprimes, devenus inutiles).
+- Bouton Fiche : clic delegue sur document (capture), data-vc-name sur le bouton -> marche sur les clones.
+- Teste (vrai reseau) : Daqian Town (synopsis FR, pas d'AniList), Wanmei Shijie (26 ep, FR), Xian Ni (FR + AniList),
+  clic sur un clone du carrousel : reste sur la page ; aniLinks non ecrit ; aucune erreur du script.
+- POUSSEE le 2026-10-15.
