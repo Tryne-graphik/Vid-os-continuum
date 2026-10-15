@@ -1160,3 +1160,11 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   de la page fait poser au site son propre Node.prototype.addEventListener ; sous un vrai gestionnaire le script est isole).
 - Revue API : showSaveFilePicker/queryPermission detectes (repli telechargement), GM_getResourceURL en try, :has() (FF 121+, Safari 15.4+).
 - POUSSEE le 2026-10-16.
+
+## v6.66 (2026-10-16) : panneau memorise, Nouveautes fermees
+- GM `panelHidden` (BACKUP_PREFS) : pose a la creation du panneau et par le bouton ☰/✕ ; icone = ✕ panneau ouvert, ☰ masque.
+- Nouveautes : `newsSectionHtml` ouvre seulement si l'utilisateur l'avait ouverte (prevOpen) ; le (!) jaune reste tant que non vue.
+- Teste (Playwright, accueil ED) : Edge + Firefox 7/7 (etat initial, masque -> recharge -> masque, rouvert -> recharge -> ouvert,
+  Nouveautes fermees avec (!)). Test 6.65 sur Edge : normal 17/17, panne simulee 17/17.
+- NB : `playwright install firefox webkit` a supprime chromium-1208 (cache Playwright) -> tests Chromium via msedge.exe.
+- 6.66 PAS POUSSEE (modifs dans le fichier, non commitees) : attendre le OK de l utilisateur.

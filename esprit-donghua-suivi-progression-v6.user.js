@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.65
+// @version      6.66
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2098,7 +2098,7 @@
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
-        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide',
+        const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelAutoHide', 'panelHidden',
             'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked'];
         function collectBackupSettings() {
             const out = {};
@@ -2144,7 +2144,7 @@
         }
         // Type attendu par preference (recette 6.58 : "oui" texte activait le panneau discret).
         function validImportedPref(k, v) {
-            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
+            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'panelHidden', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
             if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
             if (k === 'accentColor') return typeof v === 'string' && /^(#[0-9a-f]{6})?$/i.test(v);
             if (k === 'accentTarget') return Object.prototype.hasOwnProperty.call(accentTargets(), v);
@@ -2531,6 +2531,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['6.66', ['Le panneau reste ferme (ou ouvert) d\'une page a l\'autre : il ne reapparait plus a chaque rechargement.', 'Nouveautes fermees par defaut : le (!) jaune signale une nouvelle version, a ouvrir si besoin.']],
             ['6.65', ['Opera (Tampermonkey) : les boutons du panneau, Importer, Historique, le suivi et les Fiches ne reagissaient pas. Corrige.']],
             ['6.64', ['Nouveau bouton "\u2713 Deja vu" dans la Fiche : icone grise (3 coches) sur les vignettes des series vues avant le script. Une serie suivie garde son icone de suivi.']],
             ['6.63', ['Nouvelle icone "Pas aime" (orange, 3 croix) sur les vignettes : bouton "\uD83D\uDC4E Pas aime" dans la Fiche, pour se souvenir d\'une serie qu\'on n\'a pas aimee (suivie ou non). Re-cliquer pour la retirer.']],
@@ -2619,7 +2620,7 @@
                 items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('') +
                 '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
             // ✕ hors du <summary> (axe : pas d'element interactif dans un autre) ; le conteneur devient l'element de la paire.
-            return '<div class="vc-news-wrap">' + collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, prevOpen === undefined ? unseen : prevOpen) +
+            return '<div class="vc-news-wrap">' + collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, !!prevOpen) +
                 '<span class="vc-news-x" role="button" tabindex="0" title="Masquer jusqu\'a la prochaine version" aria-label="Masquer les nouveautes">&#10005;</span></div>';
         }
         function bindNewsSection(container) {
@@ -4358,7 +4359,7 @@
             toggleBtn.type = 'button';
             toggleBtn.title = 'Afficher/masquer le panneau de progression';
             toggleBtn.style.cssText = 'position:fixed;top:60px;left:10px;z-index:999999;background:#15151f;color:#eee;border:none;border-radius:6px;width:34px;height:34px;cursor:pointer;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,.4);';
-            toggleBtn.innerHTML = '<span id="ep-toggle-icon">☰</span>' +
+            toggleBtn.innerHTML = '<span id="ep-toggle-icon">' + (GM_getValue('panelHidden', false) === true ? '☰' : '✕') + '</span>' +
                 '<span id="ep-toggle-badge" style="position:absolute;top:-6px;right:-6px;background:#ffb300;color:#000;font-size:10px;font-weight:bold;min-width:16px;height:16px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px;line-height:1;"></span>';
             document.body.appendChild(toggleBtn);
             toggleBtn.addEventListener('click', () => {
@@ -4366,6 +4367,7 @@
                 if (!panelEl) return;
                 const hidden = panelEl.style.display === 'none';
                 panelEl.style.display = hidden ? 'flex' : 'none';
+                GM_setValue('panelHidden', !hidden);
                 toggleBtn.querySelector('#ep-toggle-icon').textContent = hidden ? '✕' : '☰';
             });
             return toggleBtn;
@@ -4424,6 +4426,7 @@
                 panel.id = 'ep-panel';
                 panel.style.cssText = 'position:fixed;top:104px;left:10px;z-index:999998;background:#15151f;color:#eee;padding:12px;font-family:Arial,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);border-radius:8px;display:flex;flex-direction:column;gap:8px;width:260px;max-height:calc(100vh - 120px);overflow-y:auto;';
                 applyTheme(panel);
+                if (GM_getValue('panelHidden', false) === true) panel.style.display = 'none';
                 document.body.appendChild(panel);
             }
 
