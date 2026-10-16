@@ -1234,4 +1234,4 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   - Agencements 9-12 (rail, onglets, tuiles, compact) NON faits : seulement leurs couleurs en themes.
 - Teste (Playwright Edge, `t72.js`) : 2 cartes, 6 tablettes, Reglages ouvert par defaut, Sauvegarde ferme Reglages, lecteur idem,
   captures stele/parchemin/laque/jade/neon/braise/actuel, 0 erreur du script.
-- Recette complete run-all.js (Edge/Firefox/WebKit) : 73 OK / 0 FAIL / 0 SKIP (run72.txt). PAS teste : vrai Opera + Tampermonkey, themes clairs sur toutes les fenetres (Fiche, Historique...). Commitee, PAS POUSSEE (attend accord).
+- Recette complete run-all.js (Edge/Firefox/WebKit) : 73 OK / 0 FAIL / 0 SKIP (run72.txt). PAS teste : vrai Opera + Tampermonkey, themes clairs sur toutes les fenetres (Fiche, Historique...). POUSSEE le 2026-10-16.
