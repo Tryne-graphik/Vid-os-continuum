@@ -1,0 +1,17 @@
+/* Verre neon (maquette 9) : verre depoli, rail d'icones au halo cyan, bouton principal en degrade. Agencement : rail. */
+.vc-th-neon {
+  --vc-bg: rgba(14,18,26,.82); --vc-text: #cfd8e3; --vc-dim: #6b7788;
+  --vc-acc: #03d0fc; --vc-acct: #6fdcff; --vc-onacc: #041018;
+  --vc-btn: rgba(255,255,255,.07); --vc-bline: rgba(3,208,252,.28); --vc-bsh: none; --vc-brad: 7px;
+  --vc-main: linear-gradient(90deg, #03d0fc, #2b7bff); --vc-mainsh: 0 0 12px rgba(3,208,252,.35);
+  --vc-field: rgba(0,0,0,.45); --vc-card: rgba(0,0,0,.25); --vc-edge: rgba(255,255,255,.08); --vc-rad: 10px;
+  --vc-on: rgba(3,208,252,.12); --vc-onl: rgba(3,208,252,.5); --vc-glow: rgba(3,208,252,.45);
+  border: 1px solid rgba(255,255,255,.08); border-radius: 12px;
+}
+.vc-th-neon .vc-nav { background: rgba(0,0,0,.35); border-radius: 10px; padding: 8px 0; }
+.vc-th-neon .vc-tab { color: #6b7788; }
+.vc-th-neon .vc-tab .vc-lbl { display: none; }
+.vc-th-neon .vc-tab .vc-ic { width: 20px; height: 20px; }
+.vc-th-neon .vc-tab[aria-expanded="true"] { color: #03d0fc; background: rgba(3,208,252,.12); box-shadow: 0 0 10px rgba(3,208,252,.45), inset 0 0 0 1px rgba(3,208,252,.5); }
+.vc-th-neon .vc-badge { width: 8px; height: 8px; border-radius: 50%; background: #ff9f1a; font-size: 0; }
+.vc-th-neon .vc-pane-title, .vc-th-neon .vc-grp { color: #03d0fc; }

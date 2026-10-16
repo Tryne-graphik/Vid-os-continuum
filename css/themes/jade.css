@@ -1,0 +1,14 @@
+/* Jade imperial (maquette 6) : jade profond, titre or en Cinzel, bouton principal lumineux. Agencement : tablettes. */
+.vc-th-jade {
+  --vc-bg: linear-gradient(160deg, #0f3b31, #0a2620); --vc-text: #d6efe4; --vc-dim: #7fb8a3;
+  --vc-acc: #3fe0aa; --vc-acct: #7ff0c4; --vc-onacc: #06241c;
+  --vc-btn: #12493c; --vc-bline: #2e8f73; --vc-bsh: none; --vc-brad: 6px;
+  --vc-main: linear-gradient(#7ff0c4, #2fbf91); --vc-mainsh: 0 0 12px rgba(63,224,170,.4);
+  --vc-field: #08201a; --vc-card: rgba(10,38,32,.9); --vc-edge: #2e8f73; --vc-rad: 8px;
+  --vc-on: #1f7a62; --vc-onl: #7ff0c4; --vc-glow: rgba(63,224,170,.35);
+  border: 1px solid #2e8f73; border-radius: 10px; box-shadow: 0 0 0 1px #06150f, inset 0 1px 0 rgba(63,176,143,.33), 0 2px 10px rgba(0,0,0,.5);
+}
+.vc-th-jade .vc-head { justify-content: space-between; font: 600 12px "VC Cinzel", serif; letter-spacing: .1em; color: #e8cf8a; text-transform: uppercase; }
+.vc-th-jade .vc-head .vc-ver { color: #7fd1b5 !important; }
+.vc-th-jade .vc-name { color: #fff; font-size: 15px; }
+.vc-th-jade .vc-tab[aria-expanded="true"] { color: #e8cf8a; border-color: #e8cf8a; background: #12493c; }

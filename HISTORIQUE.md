@@ -1260,3 +1260,19 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   var(--vc-warn,#ffb300) / var(--vc-ok,#4caf50) (couleur posee en JS -> variables de theme) ; parchemin : warn #9a4a00, ok #2e6b1f.
   Theme clair : numero de version (.vc-ver) et (!) des Nouveautes (#ffd400) fonces.
 - Teste (Edge, `t73b.js`) : 12 themes, capture Parchemin lisible, 0 erreur. Recette complete NON relancee (CSS + couleur seulement).
+- Retour utilisateur (captures) : "seules les couleurs et la forme des boutons changent" -> il manquait l'AGENCEMENT des maquettes.
+- Refonte de la source (demande : "structure entiere, modifs CSS seules pour la suite") :
+  - Decoupage : `src/NN-*.js` (20 morceaux aux sections existantes, verifie identique octet pour octet a l'original), `build.js`.
+  - CSS sorti du JS : `css/base.css`, `css/agencements/*.css`, `css/themes/*.css`, minifie et injecte par build.js
+    (marqueur dans src/14-sections.js). themes() = liste seulement (label, layout, font, acc, light, glass).
+  - Nouvelle structure des 2 panneaux (ids inchanges) : .vc-head, .vc-card.vc-ep, .vc-card.vc-follow, .vc-nav (.vc-tab) +
+    .vc-pane (src/23-menus.js : menusHtml / bindMenus, un seul ouvert, etat garde par panneau), .vc-foot. Styles en ligne retires.
+    Nouveautes / Signaler / Legende renvoient des menuItem ; bouton "Masquer jusqu'a la prochaine version" dans le volet.
+  - 4 agencements par attribut data-vc-layout : liste (ordre --o + display:contents), tablettes, onglets (libelle sur l'onglet
+    actif seulement), rail (grille 54 px + contenu, panneau 300 px). Reglage "Agencement" (Personnaliser, GM panelLayout,
+    sauvegarde + validation a l'import).
+  - Corrige : bouton principal sans couleur de theme (regle generique des boutons plus specifique : :where()), Fin intro ici /
+    Debut outro ici verts une fois regles (classe .vc-set au lieu d'un style en ligne ecrase).
+- Teste : `t74.js` (Edge) 12 themes x 2 panneaux, 6 onglets, Reglages ouvert par defaut, un seul volet ouvert, 0 erreur, planches
+  out/t74_ep.png / t74_ed.png. Recette complete run-all.js : 73 OK / 0 FAIL / 0 SKIP (tpanel.js adapte aux onglets).
+- PAS teste : vrai Chrome/Opera + Tampermonkey. Commitee, PAS POUSSEE (attend accord).

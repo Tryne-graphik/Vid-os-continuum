@@ -1,0 +1,23 @@
+/* Agencement "rail" (maquettes 4, 9) : colonne d'icones a gauche (toujours visible), tout le reste a droite.
+   Grille 2 colonnes ; le rail occupe la colonne 1 sur toute la hauteur. Panneau elargi pour garder la place utile. */
+.vc-thm[data-vc-layout="rail"] {
+  display: grid; grid-template-columns: 54px minmax(0, 1fr); column-gap: 8px; row-gap: 0; align-content: start;
+  width: 300px !important; max-width: 300px !important;
+}
+[data-vc-layout="rail"] > * { grid-column: 2; margin-bottom: var(--vc-gap); }
+[data-vc-layout="rail"] > .vc-nav {
+  grid-column: 1; grid-row: 1 / span 40; align-self: start; position: sticky; top: 0;
+  flex-direction: column; flex-wrap: nowrap; gap: 6px; padding: 4px 0; margin: 0;
+}
+[data-vc-layout="rail"] .vc-tab {
+  flex: 0 0 auto; flex-direction: column; gap: 2px; width: 54px; padding: 6px 1px;
+  background: transparent; border: none; border-radius: var(--vc-rad); font-size: 8.5px; letter-spacing: -.1px; position: relative;
+}
+[data-vc-layout="rail"] .vc-tab .vc-ic { display: block; width: 18px; height: 18px; }
+[data-vc-layout="rail"] .vc-lbl { max-width: 100%; }
+[data-vc-layout="rail"] .vc-badge { position: absolute; top: 2px; right: 4px; font-size: 9px; }
+[data-vc-layout="rail"] .vc-tab[aria-expanded="true"] { background: var(--vc-on); color: var(--vc-acct); box-shadow: 0 0 10px var(--vc-glow); }
+[data-vc-layout="rail"] .vc-pane { padding: 0 0 4px; }
+[data-vc-layout="rail"] .vc-pane-title {
+  display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--vc-acct); font-family: var(--vc-tfont);
+}

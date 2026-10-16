@@ -7,8 +7,18 @@ Depot : github.com/Tryne-graphik/Vid-os-continuum (MAJ auto Tampermonkey depuis 
 tout push = mise a jour chez les utilisateurs -> demander avant de pousser).
 Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7.md`) en pause.
 
+## Source decoupee (v7.4) : NE PLUS MODIFIER le .user.js a la main
+- `src/NN-nom.js` : le script coupe en morceaux (meme fermeture, recolles dans l'ordre des noms).
+- `css/base.css` (composants + liste des variables), `css/agencements/{liste,tablettes,onglets,rail}.css`
+  (attribut `data-vc-layout` de l'hote), `css/themes/<id>.css` (classe `.vc-th-<id>` : variables + signature).
+- `node build.js` regenere `esprit-donghua-suivi-progression-v6.user.js` (CSS minifie injecte a la place de
+  `/*@@VC_CSS@@*/''` dans src/14-sections.js). Fichier commence par `_` = ignore.
+- Nouveau theme : `css/themes/<id>.css` + une ligne dans `themes()` (src/20-themes.js : label, layout, font, acc).
+- Panneaux : `.vc-head`, `.vc-card.vc-ep`, `.vc-card.vc-follow`, `.vc-nav > .vc-tab` + `.vc-pane` (menusHtml / bindMenus,
+  src/23-menus.js, un seul ouvert), `.vc-foot`. Ids inchanges. Bouton principal `.vc-main`, danger `.vc-danger`, puce `.vc-chip`.
+
 ## Fichiers cles
-- `esprit-donghua-suivi-progression-v6.user.js` : version ACTIVE (les v3/v4/sans suffixe sont anciennes).
+- `esprit-donghua-suivi-progression-v6.user.js` : version ACTIVE, GENEREE par build.js (les v3/v4/sans suffixe sont anciennes).
 - (`anime-tracker-generique.user.js` v1.0 supprime en v6.50 : la version generique partira de la v6 ; recuperable via git.)
 - Sauvegarde : blocs JSON `ed-progress-backup`, `ed-history-backup`, `ed-settings-backup` (BACKUP_SETTINGS / BACKUP_PREFS,
   `cleanBackupValue` a l'import : fichier non fiable). Toute nouvelle donnee utilisateur en GM -> l'ajouter a BACKUP_SETTINGS.
@@ -18,7 +28,7 @@ Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7
 ## A chaque version
 - Monter `@version` ET ajouter une entree en tete de `CHANGELOG` (encart "Nouveautes").
 - Chaines JS entre apostrophes : echapper `\'` (les patchs via bash/python perdent souvent l'echappement -> `node --check`).
-- Publier : `node --check f && git commit ... && git push` en UNE seule chaine (v6.53 poussee cassee sinon).
+- Publier : `node build.js && node --check f && git commit ... && git push` en UNE seule chaine (v6.53 poussee cassee sinon).
 - Ajouter une section a la fin de `HISTORIQUE.md` (ce qui a ete teste / pas teste).
 
 ## YouTube (v6.27 -> v6.38)

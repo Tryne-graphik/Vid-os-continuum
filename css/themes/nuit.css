@@ -1,0 +1,14 @@
+/* Nuit violette (maquette 10) : nuit bleutee, onglet actif lumineux violet, sections violettes. Agencement : onglets. */
+.vc-th-nuit {
+  --vc-bg: linear-gradient(180deg, #171a24, #0e1017); --vc-text: #d6dbe3; --vc-dim: #7d8699;
+  --vc-acc: #b46bff; --vc-acct: #c99bff; --vc-onacc: #fff;
+  --vc-btn: #1f2330; --vc-bline: #2f3547; --vc-bsh: none; --vc-brad: 6px;
+  --vc-main: linear-gradient(90deg, #b46bff, #7b5cff); --vc-mainsh: 0 0 10px rgba(180,107,255,.35);
+  --vc-field: #0b0d13; --vc-card: #161925; --vc-edge: #262b3a; --vc-rad: 6px;
+  --vc-on: #3b2560; --vc-onl: #b46bff; --vc-glow: rgba(180,107,255,.28);
+  border: 1px solid #262b3a; border-radius: 10px;
+}
+.vc-th-nuit .vc-head { justify-content: space-between; font: 600 13px Bahnschrift, "Segoe UI", sans-serif; color: #fff; }
+.vc-th-nuit .vc-card { border: none; background: transparent; padding: 0; }
+.vc-th-nuit .vc-tab[aria-expanded="true"] { color: #fff; text-shadow: 0 0 8px #b46bff; background: linear-gradient(180deg, transparent, rgba(180,107,255,.14)); }
+.vc-th-nuit .vc-grp { color: #b46bff; }

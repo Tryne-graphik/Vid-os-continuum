@@ -1,0 +1,14 @@
+/* Indigo (maquette 2, facon Linear) : cartes discretes, bouton principal indigo, onglets soulignes. Agencement : onglets. */
+.vc-th-linear {
+  --vc-bg: #17181a; --vc-text: #c9ccd1; --vc-dim: #7d818a;
+  --vc-acc: #5e6ad2; --vc-acct: #9aa3f0; --vc-onacc: #fff;
+  --vc-btn: #26282c; --vc-bline: #33363b; --vc-bsh: none; --vc-brad: 5px;
+  --vc-field: #121315; --vc-card: #1f2124; --vc-edge: #2a2c30; --vc-rad: 6px;
+  --vc-on: #2b2f5a; --vc-onl: #5e6ad2; --vc-glow: rgba(94,106,210,.25);
+  border: 1px solid #2a2c30; border-radius: 8px;
+}
+.vc-th-linear .vc-head { justify-content: space-between; font-size: 11px; color: #7d818a; font-weight: 600; }
+.vc-th-linear .vc-name { text-align: left; color: #f2f3f5; font-size: 13.5px; font-weight: 600; }
+.vc-th-linear .vc-epline { justify-content: space-between; }
+.vc-th-linear .vc-tab[aria-expanded="true"] { color: #f2f3f5; }
+.vc-th-linear .vc-grp { color: #7d818a; }

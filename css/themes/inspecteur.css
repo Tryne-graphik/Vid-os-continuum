@@ -1,0 +1,20 @@
+/* Inspecteur (maquette 1) : panneau d'outil sobre facon inspecteur, sections en capitales grises. Agencement : liste. */
+.vc-th-inspecteur {
+  --vc-bg: #1e1f22; --vc-text: #d4d6da; --vc-dim: #8b8f97;
+  --vc-acc: #03d0fc; --vc-acct: #5fd3ec; --vc-onacc: #04202a;
+  --vc-btn: #26282c; --vc-bline: #3a3d44; --vc-bsh: none; --vc-brad: 4px;
+  --vc-field: #17181b; --vc-card: transparent; --vc-edge: #2f3136; --vc-rad: 4px;
+  --vc-on: #1f4a2c; --vc-onl: #3fae62; --vc-glow: rgba(3,208,252,.18);
+  border: 1px solid #2f3136;
+}
+.vc-th-inspecteur .vc-head { justify-content: space-between; font-size: 12px; color: #d4d6da; padding-bottom: 6px; border-bottom: 1px solid #2f3136; }
+.vc-th-inspecteur .vc-card { border: none; padding: 0; }
+.vc-th-inspecteur .vc-name { text-align: left; font-size: 13px; color: #fff; }
+.vc-th-inspecteur .vc-epline { justify-content: space-between; }
+.vc-th-inspecteur .vc-tab { text-transform: uppercase; font-size: 10.5px; letter-spacing: .06em; }
+.vc-th-inspecteur .vc-tab::before { content: "\25B8"; }
+.vc-th-inspecteur .vc-tab[aria-expanded="true"]::before { content: "\25BE"; }
+.vc-th-inspecteur .vc-tab::after { content: none; }
+.vc-th-inspecteur .vc-lbl { text-align: left; }
+.vc-th-inspecteur .vc-tab[aria-expanded="true"] { background: #25272b; color: #fff; box-shadow: inset 2px 0 #03d0fc; }
+.vc-th-inspecteur .vc-pane { background: #25272b; box-shadow: inset 2px 0 #03d0fc; }

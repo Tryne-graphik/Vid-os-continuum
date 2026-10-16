@@ -1,0 +1,163 @@
+/* ============================================================================================
+   Video Continuum - CSS de base (v7.4). Assemble par build.js avec css/agencements/*.css puis css/themes/*.css.
+   Hote = #ep-panel (pages du site) et #ed-topbar (lecteur), classes .vc-th-host .vc-thm .vc-th-<theme>,
+   attribut data-vc-layout = liste | tablettes | onglets | rail.
+   Structure : .vc-head > .vc-card.vc-ep > .vc-card.vc-follow > .vc-nav (onglets .vc-tab) > .vc-pane x N > .vc-foot
+   Variables (a redefinir dans css/themes/<id>.css) :
+     --vc-bg fond du panneau          --vc-text texte          --vc-dim texte secondaire
+     --vc-acc accent                  --vc-acct accent texte   --vc-onacc texte sur accent
+     --vc-btn fond bouton             --vc-bline bord bouton   --vc-bsh ombre bouton      --vc-brad arrondi bouton
+     --vc-main fond bouton principal  --vc-mainsh ombre bouton principal
+     --vc-field fond des champs       --vc-card fond des cartes --vc-edge bords          --vc-rad arrondi cartes
+     --vc-on / --vc-onl case cochee (fond / bord)       --vc-glow halo du menu ouvert
+     --vc-tfont police des titres     --vc-warn / --vc-ok numero d'episode (a rattraper / a jour)
+     --vc-tsh ombre du texte          --vc-pad marge interieure du panneau   --vc-gap espace entre blocs
+   ============================================================================================ */
+
+.vc-thm {
+  --vc-bg: #15151f; --vc-text: #e6e6ea; --vc-dim: #9a9aa6; --vc-acc: #03d0fc; --vc-acct: #5fd3ec; --vc-onacc: #04161b;
+  --vc-btn: #2a2a34; --vc-bline: transparent; --vc-bsh: none; --vc-brad: 4px; --vc-main: var(--vc-acc); --vc-mainsh: none;
+  --vc-field: #0e0e14; --vc-card: rgba(255,255,255,.04); --vc-edge: rgba(255,255,255,.1); --vc-rad: 6px;
+  --vc-on: #2e7d32; --vc-onl: #4caf50; --vc-glow: rgba(3,208,252,.25); --vc-tfont: inherit;
+  --vc-tsh: none; --vc-pad: 10px; --vc-gap: 6px;
+  display: flex; flex-direction: column; gap: var(--vc-gap);
+  box-sizing: border-box; padding: var(--vc-pad);
+  background: var(--vc-bg); color: var(--vc-text);
+  border-radius: var(--vc-rad); box-shadow: 0 2px 10px rgba(0,0,0,.5);
+  font: 12px/1.35 var(--vc-font, "Segoe UI"), system-ui, Arial, sans-serif;
+  text-shadow: var(--vc-tsh);
+}
+.vc-thm * { box-sizing: border-box; }
+.vc-thm > * { flex-shrink: 0; }
+.vc-thm.vc-thm [hidden] { display: none !important; }
+
+/* ---------- En-tete ---------- */
+.vc-thm .vc-head { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 15px; color: var(--vc-acct); }
+.vc-thm .vc-brand { font-family: var(--vc-tfont); }
+
+/* ---------- Cartes ---------- */
+.vc-thm .vc-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 6px;
+  background: var(--vc-card); border: 1px solid var(--vc-edge); border-radius: var(--vc-rad);
+}
+.vc-thm .vc-name {
+  text-align: center; font-size: 14px; font-weight: 700; line-height: 1.25; font-family: var(--vc-tfont);
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
+}
+.vc-thm .vc-epline { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.vc-thm .vc-epnum { font-size: 15px; font-weight: 700; }
+.vc-thm .vc-src { align-items: center; justify-content: center; gap: 6px; }
+.vc-thm .vc-src-label { border-left: 3px solid var(--vc-acc); padding-left: 5px; font-size: 11px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-thm .vc-status { font-size: 11px; text-align: center; color: var(--vc-dim); }
+.vc-thm .vc-note { font-size: 11px; color: var(--vc-dim); }
+.vc-thm .vc-alert { font-size: 11px; text-align: center; padding: 6px; border-radius: var(--vc-rad); border: 1px solid #ffb300; background: rgba(255,179,0,.12); color: #ffb300; }
+.vc-thm .vc-alert--danger { border: none; background: none; padding: 0; color: #f66; }
+.vc-thm .vc-row { display: flex; gap: 4px; }
+.vc-thm .vc-row > * { flex: 1; min-width: 0; }
+.vc-thm .vc-wrap { flex-wrap: wrap; }
+.vc-thm .vc-row > button { white-space: normal; line-height: 1.15; }
+.vc-thm .vc-actions > .vc-main { flex: 2; }
+.vc-thm .vc-goto > button { flex: 0 0 auto; }
+.vc-thm .vc-goto > input { width: 0; flex: 1; }
+
+/* ---------- Boutons et champs (les boutons de contenu ont encore des styles en ligne : !important) ---------- */
+/* :where() = specificite nulle : .vc-main, .vc-chip, les themes... passent devant sans surenchere. */
+.vc-thm button:where(:not(.vc-ver):not(.vc-tab)) {
+  min-height: 29px; padding: 5px 8px !important; cursor: pointer;
+  font: inherit !important; font-size: 12px !important; font-weight: 600 !important;
+  background: var(--vc-btn) !important; color: var(--vc-text) !important;
+  border: 1px solid var(--vc-bline) !important; border-radius: var(--vc-brad) !important; box-shadow: var(--vc-bsh) !important;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.vc-thm button.vc-main { background: var(--vc-main) !important; color: var(--vc-onacc) !important; border-color: transparent !important; box-shadow: var(--vc-mainsh) !important; text-shadow: none; }
+.vc-thm button.vc-danger { background: #5a1f1f !important; color: #fff !important; border-color: transparent !important; }
+.vc-thm button.vc-set { background: var(--vc-on) !important; border-color: var(--vc-onl) !important; }
+.vc-thm button.vc-chip { min-height: 24px; padding: 2px 8px !important; font-size: 11px !important; background: transparent !important; color: var(--vc-acct) !important; border: 1px solid var(--vc-acct) !important; box-shadow: none !important; flex: 0 0 auto; }
+.vc-thm button:disabled { opacity: .55; cursor: default; }
+.vc-thm select, .vc-thm input[type=number], .vc-thm input[type=text], .vc-thm textarea {
+  width: 100%; padding: 5px !important; font: inherit !important; font-size: 12px !important;
+  background: var(--vc-field) !important; color: var(--vc-text) !important;
+  border: 1px solid var(--vc-edge) !important; border-radius: var(--vc-brad) !important;
+}
+.vc-thm .vc-series { font-family: Consolas, monospace !important; }
+.vc-thm option.vc-behind { color: #ffb300; font-weight: 700; }
+.vc-thm label { color: var(--vc-text) !important; }
+.vc-thm input[type=color] { border: none !important; background: none !important; }
+
+/* Bascules (Suivre, Enchainer...) : case cachee dans un label, etat par :has(:checked). */
+.vc-thm .vc-track {
+  position: relative; display: block; min-width: 0; text-align: center; padding: 5px 4px; line-height: 17px; min-height: 29px; cursor: pointer;
+  font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--vc-btn); color: var(--vc-text) !important; border: 1px solid var(--vc-bline); border-radius: var(--vc-brad); box-shadow: var(--vc-bsh);
+}
+.vc-thm .vc-row > .vc-track, .vc-thm .vc-track.vc-small { flex: 1; }
+.vc-thm .vc-track:has(input:checked) { background: var(--vc-on); border-color: var(--vc-onl); }
+.vc-thm .vc-track input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.vc-thm .vc-track .on { display: none; }
+.vc-thm .vc-track:has(input:checked) .on { display: inline; }
+.vc-thm .vc-track:has(input:checked) .off { display: none; }
+
+.vc-thm .vc-ver { background: none !important; border: none !important; box-shadow: none !important; padding: 5px 2px !important; color: #ffd400 !important; font: 700 12px Arial, sans-serif !important; cursor: pointer; }
+.vc-thm .vc-ver:hover { text-decoration: underline; }
+.vc-thm .vc-grp { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--vc-acct); margin-top: 8px; font-family: var(--vc-tfont); }
+
+/* Sous-sections repliables (Avance, Personnaliser, doublons) */
+.vc-thm summary {
+  cursor: pointer; padding: 6px 4px !important; height: auto; line-height: 16px; font-size: 12px !important; font-weight: 600 !important;
+  background: transparent !important; border: none !important; border-bottom: 1px solid var(--vc-edge) !important; border-radius: 0 !important;
+  color: var(--vc-dim) !important; font-family: var(--vc-tfont) !important;
+}
+.vc-thm details[open] > summary { color: var(--vc-acct) !important; border-bottom-color: var(--vc-acct) !important; }
+
+/* ---------- Menus : valeurs neutres (chaque agencement precise) ---------- */
+.vc-thm .vc-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.vc-thm .vc-tab {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0;
+  padding: 6px 7px; margin: 0; cursor: pointer; font: inherit; font-size: 11px; font-weight: 600; font-family: var(--vc-tfont);
+  background: var(--vc-card); color: var(--vc-dim); border: 1px solid var(--vc-edge); border-radius: var(--vc-rad);
+  white-space: nowrap; text-shadow: inherit;
+}
+.vc-thm .vc-tab:hover { color: var(--vc-text); }
+.vc-thm .vc-tab[aria-expanded="true"] { color: var(--vc-acct); border-color: var(--vc-acc); }
+.vc-thm .vc-tab .vc-ic { display: none; width: 16px; height: 16px; flex: 0 0 auto; }
+.vc-thm .vc-lbl { overflow: hidden; text-overflow: ellipsis; }
+.vc-thm .vc-badge { color: #ffd400; font-weight: 700; }
+.vc-thm .vc-pane { display: flex; flex-direction: column; gap: 6px; }
+.vc-thm .vc-pane-title { display: none; }
+.vc-thm .vc-news-x { color: var(--vc-dim) !important; }
+
+/* ---------- Pied : resume par site, liens, mode d'ouverture ---------- */
+.vc-thm .vc-foot, .vc-thm .vc-summary { display: flex; flex-direction: column; gap: 6px; }
+.vc-thm .ep-summary-line { background: var(--vc-card) !important; border-color: var(--vc-acct) !important; border-radius: var(--vc-rad) !important; }
+.vc-thm .vc-open-link { background: var(--vc-field) !important; border-color: var(--vc-edge) !important; border-radius: var(--vc-brad) !important; font-size: 11px !important; padding: 6px 4px !important; }
+
+/* ---------- Contenu encore en styles en ligne (volets, fenetres du panneau) ---------- */
+.vc-thm [style*="color:#03d0fc"] { color: var(--vc-acct) !important; }
+.vc-thm [style*="background:#03d0fc"]:not(button) { background: var(--vc-acc) !important; }
+.vc-thm [style*="color:#fff"], .vc-thm [style*="color:#eee"], .vc-thm [style*="color:#ccc"], .vc-thm [style*="color:#ddd"] { color: var(--vc-text) !important; }
+.vc-thm [style*="color:#888"], .vc-thm [style*="color:#aaa"], .vc-thm [style*="color:#8a8a99"] { color: var(--vc-dim) !important; }
+
+/* ---------- Theme clair (Parchemin) ---------- */
+.vc-thm.vc-light { --vc-tsh: none; }
+.vc-thm.vc-light [style*="color:#ffb300"] { color: #9a5200 !important; }
+.vc-thm.vc-light .vc-ver, .vc-thm.vc-light [style*="color:#ffd400"], .vc-thm.vc-light .vc-badge { color: #9a4a00 !important; }
+
+/* ---------- Verre (flou de l'arriere-plan) ---------- */
+.vc-thm.vc-glass { backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
+@media (prefers-reduced-transparency: reduce) { .vc-thm.vc-glass { background: #141b24; backdrop-filter: none; -webkit-backdrop-filter: none; } }
+
+/* ---------- Personnaliser : couleur choisie (variables posees sur l'hote par applyTheme) ---------- */
+.vc-ct-cadre { outline: 2px solid var(--vc-cc) !important; outline-offset: -2px; }
+.vc-thm.vc-ct-titres button.vc-main { background: var(--vc-cc) !important; color: var(--vc-ccon) !important; }
+.vc-thm.vc-ct-titres .vc-head, .vc-thm.vc-ct-titres .vc-grp, .vc-thm.vc-ct-titres .vc-tab[aria-expanded="true"], .vc-thm.vc-ct-titres details[open] > summary { color: var(--vc-cct) !important; }
+.vc-thm.vc-ct-cases .vc-track:has(input:checked) { background: var(--vc-cc) !important; border-color: var(--vc-cc) !important; color: var(--vc-ccon) !important; }
+.vc-cinzel .vc-tab, .vc-cinzel summary, .vc-cinzel .vc-grp, .vc-cinzel .vc-brand { font-family: "VC Cinzel", var(--vc-font, "Segoe UI"), serif !important; letter-spacing: .06em; }
+
+/* ---------- Divers ---------- */
+.vc-thm :focus-visible, .vc-thm .vc-track:has(input:focus-visible) { outline: 2px solid var(--vc-acct) !important; outline-offset: 1px !important; }
+#ed-topbar { transition: opacity .4s; }
+#ed-topbar.vc-faded:not(:hover):not(:focus-within) { opacity: .12; }
+@media (prefers-reduced-motion: reduce) { #ed-topbar { transition: none; } }
+/* Vignettes des sites : option "Estomper les series suivies" (le cadre .ep-thumb-frame reste net). */
+.vc-dim-tracked img[data-vc-st] { opacity: .35; filter: grayscale(.85); transition: opacity .2s, filter .2s; }
+.vc-dim-tracked a:hover img[data-vc-st] { opacity: 1; filter: none; }

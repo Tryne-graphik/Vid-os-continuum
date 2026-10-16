@@ -1,0 +1,16 @@
+/* Agencement "onglets" (maquettes 2, 10) : rangee d'onglets icone + libelle, soulignement d'accent
+   sur l'onglet actif, volet a plat juste dessous. */
+[data-vc-layout="onglets"] .vc-nav { flex-wrap: nowrap; gap: 0; border-bottom: 1px solid var(--vc-edge); }
+[data-vc-layout="onglets"] .vc-tab {
+  flex: 1 1 0; flex-direction: column; gap: 2px; padding: 5px 1px 4px;
+  background: transparent; border: none; border-bottom: 2px solid transparent; border-radius: 0; margin-bottom: -1px;
+  font-size: 9.5px; position: relative;
+}
+[data-vc-layout="onglets"] .vc-tab .vc-ic { display: block; }
+/* libelle seulement sur l'onglet actif (6 onglets dans ~220 px) ; les autres : icone + infobulle. */
+[data-vc-layout="onglets"] .vc-lbl { display: none; max-width: 100%; }
+[data-vc-layout="onglets"] .vc-tab[aria-expanded="true"] { flex-grow: 2.2; }
+[data-vc-layout="onglets"] .vc-tab[aria-expanded="true"] .vc-lbl { display: block; }
+[data-vc-layout="onglets"] .vc-badge { position: absolute; top: 1px; right: 4px; font-size: 9px; }
+[data-vc-layout="onglets"] .vc-tab[aria-expanded="true"] { border-bottom-color: var(--vc-acc); }
+[data-vc-layout="onglets"] .vc-pane { padding: 2px 0 4px; }

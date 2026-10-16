@@ -1,0 +1,19 @@
+/* Braise (maquette 11, facon plateforme de streaming) : carte episode en "affiche" degradee, tuiles arrondies. Agencement : tablettes. */
+.vc-th-braise {
+  --vc-bg: #0d0f14; --vc-text: #e8e8f0; --vc-dim: #8a90a0;
+  --vc-acc: #ff6a3d; --vc-acct: #ffb38f; --vc-onacc: #190700;
+  --vc-btn: rgba(255,255,255,.08); --vc-bline: transparent; --vc-bsh: none; --vc-brad: 8px;
+  --vc-main: #ff6a3d; --vc-field: #08090d; --vc-card: #171a22; --vc-edge: #20232d; --vc-rad: 10px;
+  --vc-on: #4a2214; --vc-onl: #ff6a3d; --vc-glow: rgba(255,106,61,.35);
+  --vc-tfont: "VC Cinzel", Georgia, serif;
+  border: 1px solid #20232d; border-radius: 14px;
+}
+.vc-th-braise .vc-ep {
+  border: none; padding: 10px;
+  background: linear-gradient(160deg, rgba(255,106,61,.35), rgba(120,40,200,.35) 55%, #0d0f14), repeating-linear-gradient(45deg, #1a1d27 0 6px, #161922 6px 12px);
+}
+.vc-th-braise .vc-name { text-align: left; color: #fff; font-size: 15px; }
+.vc-th-braise .vc-epline { justify-content: space-between; }
+.vc-th-braise .vc-tab { background: #171a22; border: none; border-radius: 10px; padding: 8px 2px; color: #8a90a0; }
+.vc-th-braise .vc-tab[aria-expanded="true"] { background: #1f1612; color: #ffb38f; box-shadow: 0 0 0 1px #ff6a3d, 0 0 12px rgba(255,106,61,.35); }
+.vc-th-braise .vc-pane { background: #1f1612; border-color: rgba(255,106,61,.5); }

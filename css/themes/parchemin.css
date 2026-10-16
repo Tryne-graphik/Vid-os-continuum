@@ -1,0 +1,22 @@
+/* Parchemin et sceaux (maquette 5) : papier clair, double filet, sceau rouge, tout en Cinzel. Agencement : liste. Theme clair. */
+.vc-th-parchemin {
+  --vc-bg: linear-gradient(#f1e4c3, #e6d3a6); --vc-text: #3a2a1a; --vc-dim: #6b5636;
+  --vc-acc: #a8261f; --vc-acct: #8c1f19; --vc-onacc: #f6e7c4;
+  --vc-btn: #f8eed4; --vc-bline: #9a7a42; --vc-bsh: none; --vc-brad: 3px;
+  --vc-main: linear-gradient(#a8261f, #7c1814); --vc-mainsh: inset 0 1px 0 #d4574f;
+  --vc-field: #fbf4e2; --vc-card: transparent; --vc-edge: #b8975a; --vc-rad: 3px;
+  --vc-on: #e4d29c; --vc-onl: #7a5a2e; --vc-glow: rgba(168,38,31,.25);
+  --vc-tfont: "VC Cinzel", Georgia, serif; --vc-warn: #9a4a00; --vc-ok: #2f6b2f;
+  border: 2px solid #7a5a2e; border-radius: 4px;
+  box-shadow: inset 0 0 0 3px #f1e4c3, inset 0 0 0 4px #b8975a, 0 2px 10px rgba(0,0,0,.5);
+}
+.vc-th-parchemin .vc-head { justify-content: space-between; font-size: 14px; letter-spacing: .06em; color: #3a2a1a; padding-bottom: 5px; border-bottom: 1px solid #b8975a; }
+.vc-th-parchemin.vc-thm .vc-ver { background: #8c1d18 !important; color: #f6e7c4 !important; font: 11px Consolas, monospace !important; padding: 1px 6px !important; border-radius: 2px; }
+.vc-th-parchemin .vc-card { border: none; padding: 0; }
+.vc-th-parchemin .vc-name { text-align: left; font-size: 15px; }
+.vc-th-parchemin .vc-epline { justify-content: space-between; }
+.vc-th-parchemin button.vc-main { font-family: var(--vc-tfont) !important; font-size: 13px !important; border: 1px solid #4d0d0a !important; }
+.vc-th-parchemin .vc-tab { font-size: 12px; letter-spacing: .04em; color: #6b5636; }
+.vc-th-parchemin .vc-tab[aria-expanded="true"] { background: #f8eed4; color: #8c1d18; }
+.vc-th-parchemin .vc-pane { background: rgba(248,238,212,.6); }
+.vc-th-parchemin .vc-track:has(input:checked) { color: #3a2a1a !important; }

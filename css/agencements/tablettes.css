@@ -1,0 +1,14 @@
+/* Agencement "tablettes" (maquette 8, Stele) : menus en tablettes sur 2 rangees, le menu ouvert
+   devient une carte cerclee d'accent sous les tablettes, titre en capitales, boutons en couleur d'accent. */
+[data-vc-layout="tablettes"] .vc-nav { display: flex; flex-wrap: wrap; gap: 4px; }
+[data-vc-layout="tablettes"] .vc-tab { flex: 1 1 auto; padding: 6px 6px; }
+[data-vc-layout="tablettes"] .vc-tab[aria-expanded="true"] { box-shadow: 0 0 8px var(--vc-glow); }
+[data-vc-layout="tablettes"] .vc-pane {
+  padding: 0 6px 6px; background: var(--vc-card); border: 1px solid var(--vc-acc); border-radius: var(--vc-rad);
+  box-shadow: 0 0 10px var(--vc-glow);
+}
+[data-vc-layout="tablettes"] .vc-pane-title {
+  display: block; text-align: center; padding: 6px 0 5px; border-bottom: 1px solid var(--vc-edge);
+  font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--vc-acct); font-family: var(--vc-tfont);
+}
+[data-vc-layout="tablettes"] .vc-pane button:not(.vc-danger):not(.vc-ver):not(.vc-set) { color: var(--vc-acct) !important; }

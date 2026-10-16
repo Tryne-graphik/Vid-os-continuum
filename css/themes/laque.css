@@ -1,0 +1,22 @@
+/* Laque noire et or (maquette 7) : noir laque, barre doree, angles vifs, menus numerotes. Agencement : liste. */
+.vc-th-laque {
+  --vc-bg: #14110f; --vc-text: #cfc8b8; --vc-dim: #7d745f;
+  --vc-acc: #d9a94a; --vc-acct: #e0b866; --vc-onacc: #14110f;
+  --vc-btn: #1f1a16; --vc-bline: #3a3228; --vc-bsh: none; --vc-brad: 0;
+  --vc-main: #d9a94a; --vc-field: #0e0c0a; --vc-card: transparent; --vc-edge: #2a231d; --vc-rad: 0;
+  --vc-on: #2a2112; --vc-onl: #d9a94a; --vc-glow: rgba(217,169,74,.25);
+  border: 1px solid #3a3228; border-top: 3px solid #b8892c; border-radius: 0; counter-reset: vc-menu;
+}
+.vc-th-laque .vc-head { justify-content: space-between; font: 600 13px "VC Cinzel", serif; letter-spacing: .12em; color: #d9a94a; text-transform: uppercase; }
+.vc-th-laque .vc-head .vc-ver { border: 1px solid #d9a94a !important; color: #d9a94a !important; padding: 0 5px !important; font: 10px Bahnschrift, sans-serif !important; }
+.vc-th-laque .vc-card { border: none; padding: 0; }
+.vc-th-laque .vc-name { text-align: left; color: #f2ead8; font-size: 15px; }
+.vc-th-laque .vc-epline { justify-content: space-between; }
+.vc-th-laque button.vc-main { border-bottom: 3px solid #8c6414 !important; text-transform: uppercase; letter-spacing: .08em; }
+.vc-th-laque .vc-track:has(input:checked) { color: #d9a94a !important; }
+.vc-th-laque .vc-tab { counter-increment: vc-menu; color: #7d745f; text-transform: uppercase; letter-spacing: .08em; }
+.vc-th-laque .vc-tab::before { content: counter(vc-menu, upper-roman); font: 700 12px "VC Cinzel", serif; color: #5d5340; width: 18px; }
+.vc-th-laque .vc-lbl { text-align: left; }
+.vc-th-laque .vc-tab[aria-expanded="true"] { color: #f2ead8; background: linear-gradient(90deg, #3a2a12, #14110f); }
+.vc-th-laque .vc-tab[aria-expanded="true"]::before { content: counter(vc-menu, upper-roman); color: #d9a94a; }
+.vc-th-laque .vc-pane { background: linear-gradient(90deg, #1f180e, #14110f); }

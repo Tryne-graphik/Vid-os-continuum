@@ -1,0 +1,19 @@
+/* Menthe neon (maquette 12, "lecteur compact") : verre sombre, puces arrondies, liste a la palette de commandes. Agencement : tablettes. */
+.vc-th-menthe {
+  --vc-bg: rgba(10,14,20,.78); --vc-text: #dfe6ee; --vc-dim: #7d8b9a;
+  --vc-acc: #50ffbe; --vc-acct: #50ffbe; --vc-onacc: #03150d;
+  --vc-btn: rgba(255,255,255,.08); --vc-bline: transparent; --vc-bsh: none; --vc-brad: 99px;
+  --vc-main: #50ffbe; --vc-mainsh: 0 0 14px rgba(80,255,190,.5);
+  --vc-field: #0a0d12; --vc-card: rgba(10,13,18,.75); --vc-edge: #1d242e; --vc-rad: 10px;
+  --vc-on: rgba(80,255,190,.16); --vc-onl: rgba(80,255,190,.4); --vc-glow: rgba(80,255,190,.25);
+  border: 1px solid rgba(80,255,190,.2); border-radius: 14px;
+}
+.vc-th-menthe .vc-head { justify-content: space-between; font: 600 13px Bahnschrift, "Segoe UI", sans-serif; color: #fff; }
+.vc-th-menthe .vc-card { border: none; }
+.vc-th-menthe .vc-name { text-align: left; color: #fff; }
+.vc-th-menthe .vc-epline { justify-content: space-between; }
+.vc-th-menthe .vc-track:has(input:checked) { color: #50ffbe !important; }
+.vc-th-menthe .vc-tab { border-radius: 99px; border-color: transparent; background: rgba(255,255,255,.08); }
+.vc-th-menthe .vc-tab[aria-expanded="true"] { background: rgba(80,255,190,.16); color: #50ffbe; }
+.vc-th-menthe .vc-pane { background: #0a0d12; border-color: #50ffbe; }
+.vc-th-menthe .vc-pane button:not(.vc-danger):not(.vc-ver) { border-radius: 8px !important; }

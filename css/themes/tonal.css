@@ -1,0 +1,17 @@
+/* Tonal (maquette 4, facon Material 3) : rail d'icones a pastille tonale, boutons en pilule. Agencement : rail. */
+.vc-th-tonal {
+  --vc-bg: #1c1b1f; --vc-text: #e6e1e5; --vc-dim: #938f99;
+  --vc-acc: #c4e7ff; --vc-acct: #c4e7ff; --vc-onacc: #002a36;
+  --vc-btn: transparent; --vc-bline: #49454f; --vc-bsh: none; --vc-brad: 14px;
+  --vc-main: #03d0fc; --vc-field: #151418; --vc-card: #2b2930; --vc-edge: #36343b; --vc-rad: 12px;
+  --vc-on: #3b4a5a; --vc-onl: #3b4a5a; --vc-glow: transparent;
+  border-radius: 12px;
+}
+.vc-th-tonal .vc-card { border: none; }
+.vc-th-tonal button.vc-main { border-radius: 18px !important; }
+.vc-th-tonal .vc-nav { background: #211f26; border-radius: 12px; padding: 8px 0; }
+.vc-th-tonal .vc-tab { color: #938f99; }
+.vc-th-tonal .vc-tab .vc-ic { width: 40px; height: 24px; padding: 3px 0; border-radius: 13px; }
+.vc-th-tonal .vc-tab[aria-expanded="true"] { background: transparent; box-shadow: none; color: #e6e1e5; }
+.vc-th-tonal .vc-tab[aria-expanded="true"] .vc-ic { background: #3b4a5a; color: #c4e7ff; }
+.vc-th-tonal .vc-pane { background: #2b2930; border-radius: 12px; padding: 8px; }

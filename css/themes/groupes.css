@@ -1,0 +1,15 @@
+/* Graphite (maquette 3, facon Reglages macOS) : groupes arrondis sans bord, lignes larges, libelles 13 px. Agencement : liste. */
+.vc-th-groupes {
+  --vc-bg: #232326; --vc-text: #e6e6e9; --vc-dim: #8e8e93;
+  --vc-acc: #0a84ff; --vc-acct: #64b0ff; --vc-onacc: #fff;
+  --vc-btn: #38383d; --vc-bline: transparent; --vc-bsh: none; --vc-brad: 8px;
+  --vc-field: #1c1c1f; --vc-card: #2c2c30; --vc-edge: #38383d; --vc-rad: 8px;
+  --vc-on: #1f6b34; --vc-onl: #34c759; --vc-glow: rgba(10,132,255,.22);
+  border-radius: 10px; font-size: 13px;
+}
+.vc-th-groupes .vc-card { border: none; }
+.vc-th-groupes .vc-tab { background: #2c2c30; font-size: 13px; color: #e6e6e9; border-bottom-color: #38383d; }
+.vc-th-groupes .vc-tab::before { content: none; }
+.vc-th-groupes .vc-lbl { text-align: left; }
+.vc-th-groupes .vc-tab[aria-expanded="true"] { background: #34343a; color: #64b0ff; box-shadow: 0 0 0 1px rgba(10,132,255,.4); }
+.vc-th-groupes .vc-pane { background: #34343a; box-shadow: none; padding-left: 8px; }
