@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.1
+// @version      7.2
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2308,7 +2308,52 @@
         // Photos (dossier themes/ du depot) via @resource, repli sur l'URL brute.
         // fonction (pas de const) : ensureVcStyles peut tourner avant cette ligne.
         function themes() { return {
-            actuel: { label: 'Actuel' },
+            // v7.2 : 12 themes de la planche design/planche-12-styles.html (glow = halo du menu ouvert, rad = arrondi,
+            // font = police du theme si aucune n'est choisie dans Personnaliser, light = theme clair).
+            stele: { label: 'Stèle de cultivation', font: 'Segoe UI', v: {
+                text: '#d8dde1', dim: '#8f99a1', acc: '#03d0fc', acct: '#6fd3ee', onacc: '#04161b', btn: 'linear-gradient(#444c52,#353b40)', bline: '#14181a',
+                bsh: 'inset 0 1px 0 #5b646b', field: '#1c2023', card: '#23282c', on: 'linear-gradient(#2c5a3a,#1f4029)', onl: '#5fbf7a', edge: '#14181a',
+                glow: 'rgba(3,208,252,.3)', rad: '3px', bg: 'linear-gradient(#3b4248,#2c3237)' } },
+            inspecteur: { label: 'Inspecteur', v: {
+                text: '#d4d6da', dim: '#8b8f97', acc: '#03d0fc', acct: '#5fd3ec', onacc: '#04202a', btn: '#26282c', bline: '#3a3d44', bsh: 'none',
+                field: '#17181b', card: '#232428', on: '#1f4a2c', onl: '#3fae62', edge: '#2f3136', glow: 'rgba(3,208,252,.18)', rad: '4px', bg: '#1e1f22' } },
+            linear: { label: 'Indigo', v: {
+                text: '#c9ccd1', dim: '#7d818a', acc: '#5e6ad2', acct: '#9aa3f0', onacc: '#fff', btn: '#1f2124', bline: '#2a2c30', bsh: 'none',
+                field: '#121315', card: '#1f2124', on: '#2b2f5a', onl: '#5e6ad2', edge: '#2a2c30', glow: 'rgba(94,106,210,.25)', rad: '6px', bg: '#17181a' } },
+            groupes: { label: 'Graphite', v: {
+                text: '#e6e6e9', dim: '#9a9aa2', acc: '#0a84ff', acct: '#64b0ff', onacc: '#fff', btn: '#38383d', bline: 'transparent', bsh: 'none',
+                field: '#1c1c1f', card: '#2c2c30', on: '#1f6b34', onl: '#34c759', edge: '#38383d', glow: 'rgba(10,132,255,.22)', rad: '8px', bg: '#232326' } },
+            tonal: { label: 'Tonal', v: {
+                text: '#e6e1e5', dim: '#938f99', acc: '#d0bcff', acct: '#d0bcff', onacc: '#381e72', btn: '#2b2930', bline: 'transparent', bsh: 'none',
+                field: '#151418', card: '#2b2930', on: '#4a4458', onl: '#d0bcff', edge: '#36343b', glow: 'rgba(208,188,255,.2)', rad: '12px', bg: '#1c1b1f' } },
+            parchemin: { label: 'Parchemin et sceaux', light: true, font: 'Cambria', v: {
+                text: '#3a2a1a', dim: '#6b5636', acc: '#a8261f', acct: '#8c1f19', onacc: '#f6e7c4', btn: '#f8eed4', bline: '#9a7a42', bsh: 'none',
+                field: '#fbf4e2', card: 'rgba(248,238,212,.85)', on: '#e4d29c', onl: '#7a5a2e', edge: '#7a5a2e', glow: 'rgba(168,38,31,.25)', rad: '3px',
+                bg: 'linear-gradient(#f1e4c3,#e6d3a6)' } },
+            jade: { label: 'Jade impérial', v: {
+                text: '#d6efe4', dim: '#7fb8a3', acc: '#3fe0aa', acct: '#7ff0c4', onacc: '#06241c', btn: '#12493c', bline: '#2e8f73', bsh: 'none',
+                field: '#08201a', card: 'rgba(10,38,32,.9)', on: '#1d6b52', onl: '#7ff0c4', edge: '#2e8f73', glow: 'rgba(63,224,170,.35)', rad: '6px',
+                bg: 'linear-gradient(160deg,#0f3b31,#0a2620)' } },
+            laque: { label: 'Laque noire et or', font: 'Bahnschrift', v: {
+                text: '#cfc8b8', dim: '#948a76', acc: '#d9a94a', acct: '#e0b866', onacc: '#14110f', btn: '#1f1a16', bline: '#3a3228', bsh: 'none',
+                field: '#0e0c0a', card: '#1a1613', on: '#3a2e14', onl: '#d9a94a', edge: '#3a3228', glow: 'rgba(217,169,74,.25)', rad: '0', bg: '#14110f' } },
+            neon: { label: 'Verre néon', glass: true, v: {
+                text: '#cfd8e3', dim: '#6b7788', acc: '#03d0fc', acct: '#6fdcff', onacc: '#041018', btn: 'rgba(255,255,255,.06)', bline: 'rgba(255,255,255,.08)', bsh: 'none',
+                field: 'rgba(0,0,0,.45)', card: 'rgba(0,0,0,.3)', on: 'rgba(3,208,252,.22)', onl: '#03d0fc', edge: 'rgba(255,255,255,.08)', glow: 'rgba(3,208,252,.35)', rad: '9px',
+                bg: 'rgba(14,18,26,.82)' } },
+            nuit: { label: 'Nuit violette', v: {
+                text: '#d6dbe3', dim: '#7d8699', acc: '#b46bff', acct: '#c99bff', onacc: '#fff', btn: '#1f2330', bline: '#2f3547', bsh: 'none',
+                field: '#0b0d13', card: '#161925', on: '#3b2560', onl: '#b46bff', edge: '#262b3a', glow: 'rgba(180,107,255,.28)', rad: '6px',
+                bg: 'linear-gradient(180deg,#171a24,#0e1017)' } },
+            braise: { label: 'Braise', v: {
+                text: '#e8e8f0', dim: '#8a90a0', acc: '#ff6a3d', acct: '#ff9670', onacc: '#1a0a04', btn: '#171a22', bline: '#20232d', bsh: 'none',
+                field: '#08090d', card: '#171a22', on: '#4a2214', onl: '#ff6a3d', edge: '#20232d', glow: 'rgba(255,106,61,.3)', rad: '10px',
+                bg: 'linear-gradient(160deg,rgba(255,106,61,.16),rgba(120,40,200,.14) 45%,#0d0f14 80%)' } },
+            menthe: { label: 'Menthe néon', glass: true, v: {
+                text: '#dfe6ee', dim: '#7d8b9a', acc: '#50ffbe', acct: '#50ffbe', onacc: '#03150d', btn: 'rgba(255,255,255,.05)', bline: '#1d242e', bsh: 'none',
+                field: '#0a0d12', card: 'rgba(10,13,18,.75)', on: 'rgba(80,255,190,.2)', onl: '#50ffbe', edge: 'rgba(80,255,190,.2)', glow: 'rgba(80,255,190,.3)', rad: '10px',
+                bg: 'rgba(10,14,20,.78)' } },
+            actuel: { label: 'Classique (avant 7.2)' },
             // v6.58 (dossier lisibilite) : plaques opaques sans liseré (bline transparent), accent texte desature (acct),
             // dim = titres de sections (niveau 3), card = plaque des cartes de sites.
             metal: { label: 'Metallique', tex: ['vcMetal', 'metal.jpg'], v: {
@@ -2359,8 +2404,21 @@
             return common + Object.keys(themes()).filter((k) => themes()[k].v).map((k) => '.vc-th-' + k + '{' +
                 Object.keys(themes()[k].v).map((n) => '--vc-' + n + ':' + themes()[k].v[n] + ';').join('') + '}').join('') +
                 T + '{background:var(--vc-bg)!important;color:var(--vc-text)!important;box-shadow:inset -1px 0 0 var(--vc-edge),0 2px 8px rgba(0,0,0,.5)!important;}' +
-                '.vc-th-verre{backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);}' +
-                '@media (prefers-reduced-transparency:reduce){.vc-th-verre{background:#141b24!important;backdrop-filter:none;-webkit-backdrop-filter:none;}}' +
+                '.vc-th-verre,.vc-glass{backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);}' +
+                // v7.2 (planche 12 styles, base "Stele") : cartes par tache + tablettes de menus (un seul ouvert, details name=).
+                // Le menu ouvert devient une carte cerclee d'accent, ses boutons en couleur d'accent : rien n'est grise.
+                T + '{border-radius:var(--vc-rad,8px)!important;}' +
+                H + ' .vc-card{display:flex;flex-direction:column;gap:6px;flex-shrink:0;padding:6px;background:var(--vc-card,rgba(255,255,255,.04));border:1px solid var(--vc-edge,rgba(255,255,255,.08));border-radius:var(--vc-rad,6px);box-shadow:inset 0 2px 4px rgba(0,0,0,.2);}' +
+                '.vc-menus{display:flex;flex-wrap:wrap;gap:4px;flex-shrink:0;}.vc-menus>details,.vc-menus>.vc-news-wrap{flex:1 1 auto;}' +
+                '.vc-menus>details[open],.vc-menus>.vc-news-wrap:has(>details[open]){flex-basis:100%;order:1;}' +
+                H + ' .vc-menus>details>summary,' + H + ' .vc-menus>.vc-news-wrap>details>summary{list-style:none;text-align:center;font-size:11px!important;padding:6px 7px!important;background:var(--vc-card,#22222c)!important;border:1px solid var(--vc-edge,rgba(255,255,255,.1))!important;border-radius:var(--vc-rad,4px)!important;}' +
+                H + ' .vc-menus summary::-webkit-details-marker{display:none;}' + H + ' .vc-menus details[data-sec="nouveautes"]>summary{padding-right:20px!important;}' +
+                H + ' .vc-menus>details[open],' + H + ' .vc-menus>.vc-news-wrap>details[open]{background:var(--vc-card,#1d1d27);border:1px solid var(--vc-acc,#03d0fc);border-radius:var(--vc-rad,6px);box-shadow:0 0 10px var(--vc-glow,rgba(3,208,252,.25));padding:0 6px 6px;}' +
+                H + ' .vc-menus>details[open]>summary,' + H + ' .vc-menus>.vc-news-wrap>details[open]>summary{background:transparent!important;border:none!important;border-bottom:1px solid var(--vc-edge,rgba(255,255,255,.12))!important;border-radius:0!important;letter-spacing:.12em;text-transform:uppercase;color:var(--vc-acct,var(--vc-acc,#5fd3ec))!important;}' +
+                H + ' .vc-menus details[open] button:not(.vc-ver):not([id$="delete-btn"]){color:var(--vc-acct,var(--vc-acc,#5fd3ec))!important;}' +
+                '.vc-light,.vc-light *{text-shadow:none!important;}.vc-light .vc-track:has(input:checked){color:var(--vc-text)!important;}' +
+                '.vc-light [style*="color:#888"],.vc-light [style*="color:#aaa"],.vc-light [style*="color:#8a8a99"]{color:var(--vc-dim)!important;}' +
+                '@media (prefers-reduced-transparency:reduce){.vc-th-verre,.vc-glass{background:#141b24!important;backdrop-filter:none;-webkit-backdrop-filter:none;}}' +
                 T + ' button:not([id$="delete-btn"]):not(.vc-ver){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
                 T + ' button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
                 T + ' #ed-info-btn,' + T + ' #ed-source-btn,' + T + ' #ep-info-btn{border-color:var(--vc-acct,var(--vc-acc))!important;}' +
@@ -2409,7 +2467,7 @@
         function accentTargets() { return { cadre: 'Cadre du panneau', titres: 'Titres des sections', cases: 'Cases cochees', tout: 'Tout' }; }
         function currentAccentTarget() { const t = GM_getValue('accentTarget', 'cadre'); return accentTargets()[t] ? t : 'cadre'; }
         function themeAccent() { const v = themes()[currentThemeId()].v; return v ? v.acc : '#03d0fc'; }
-        function currentThemeId() { const t = GM_getValue('theme', 'actuel'); return themes()[t] ? t : 'actuel'; }
+        function currentThemeId() { const t = GM_getValue('theme', 'stele'); return themes()[t] ? t : 'stele'; }
         function themeTexUrl(tex) {
             if (!tex) return 'none';
             try { const u = typeof GM_getResourceURL === 'function' && GM_getResourceURL(tex[0]); if (u) return 'url("' + u + '")'; } catch (e) { /* repli */ }
@@ -2423,6 +2481,8 @@
             el.classList.add('vc-th-host');
             Object.keys(themes()).forEach((k) => el.classList.toggle('vc-th-' + k, k === id));
             el.classList.toggle('vc-thm', id !== 'actuel');
+            el.classList.toggle('vc-light', !!themes()[id].light);
+            el.classList.toggle('vc-glass', !!themes()[id].glass);
             el.style.setProperty('--vc-tex', themeTexUrl(themes()[id].tex));
             const acc = currentAccent();
             const tg = currentAccentTarget();
@@ -2433,7 +2493,8 @@
                 el.style.setProperty('--vc-cct', accentText(acc));
                 el.style.setProperty('--vc-ccon', relLum(hexRgb(acc)) > 0.18 ? '#000' : '#fff');
             }
-            el.style.setProperty('--vc-font', '"' + vcFonts()[currentFont()] + '"');
+            // v7.2 : police du theme tant qu'aucune n'est choisie dans Personnaliser.
+            el.style.setProperty('--vc-font', '"' + (GM_getValue('fontFamily', '') || !themes()[id].font ? vcFonts()[currentFont()] : themes()[id].font) + '"');
             el.classList.toggle('vc-cinzel', GM_getValue('titleCinzel', false) === true);
             applyScale(el);
         }
@@ -2452,6 +2513,10 @@
             if (vcScaleBound) return;
             vcScaleBound = true;
             window.addEventListener('resize', () => document.querySelectorAll('.vc-th-host').forEach(applyScale));
+        }
+        // v7.2 : un seul menu ouvert a la fois (accordeon natif <details name>, ignore par les vieux navigateurs).
+        function exclusiveMenus(root, name) {
+            root.querySelectorAll('.vc-menus>details,.vc-menus>.vc-news-wrap>details').forEach((d) => d.setAttribute('name', name));
         }
         function groupLabel(t) { return '<div class="vc-grp">' + t + '</div>'; }
         function versionButtonHtml(prefix, v) {
@@ -2554,6 +2619,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.2', ['Nouveau look : le panneau est rangé en cartes (épisode, suivi) et les menus deviennent des tablettes ; un seul menu s\'ouvre à la fois, encadré et dans la couleur d\'accent.',
+                '12 nouveaux thèmes (Réglages > Plus > Affichage) : Stèle de cultivation (par défaut), Inspecteur, Indigo, Graphite, Tonal, Parchemin et sceaux, Jade impérial, Laque noire et or, Verre néon, Nuit violette, Braise, Menthe néon. Les anciens thèmes restent disponibles.']],
             ['7.1', ['Ligne « Source » sous le numéro d\'épisode (bleu = lecteur du site, rouge = YouTube) avec un bouton Changer : une seule fenêtre pour les lecteurs du site, le même épisode sur les autres sites et les vidéos YouTube. Remplace le volet Sources du lecteur.',
                 'Recherche YouTube : le nom de la série doit apparaître en entier (« The Demon Hunter\'s Romance », une série live, n\'est plus proposée pour « The Demon Hunter »), les vidéos d\'une autre saison sont écartées, et un épisode deux fois trop long ou trop court aussi (si la durée est connue).']],
             ['7.0', ['Version de recette complète : sauvegarde plus sûre (les noms comme "Re:Zero" et les séries exclues ne se perdent plus à la restauration ; un fichier contenant seulement des réglages s\'importe).', 'Sécurité : un fichier de sauvegarde piégé ne peut plus injecter de code ; le lecteur n\'écoute plus que le calque.', 'Plus fluide : vérification des nouveaux épisodes 4 séries à la fois et jamais en onglet caché, moins d\'écritures pendant la lecture.', 'Clavier : Échap ferme la fenêtre du dessus, puis le lecteur ; le focus va dans la fenêtre ouverte.', 'Panneau : accents corrigés, Réglages fermés hors épisode (plus de défilement en 1366x768), Nouveautés limitées aux 5 dernières versions, message clair quand le filtre masque tout.']],
@@ -2737,7 +2804,7 @@
             overlay.appendChild(toggleBtn);
 
             const topbar = document.createElement('div');
-            topbar.style.cssText = 'position:absolute;top:52px;left:10px;z-index:10;display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.6);padding:10px;border-radius:8px;font-family:Arial,sans-serif;color:#eee;font-size:12px;max-width:220px;max-height:calc(100vh - 70px);overflow-y:auto;';
+            topbar.style.cssText = 'position:absolute;top:52px;left:10px;z-index:10;display:flex;flex-direction:column;gap:5px;background:rgba(0,0,0,.6);padding:10px;border-radius:8px;font-family:Arial,sans-serif;color:#eee;font-size:12px;max-width:236px;max-height:calc(100vh - 70px);overflow-y:auto;';
             applyTheme(topbar);
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
             const B = BTN_STYLE;
@@ -2745,7 +2812,7 @@
             const CHECK = 'display:flex;align-items:center;gap:6px;color:#ccc;';
             topbar.innerHTML =
                 '<div style="font-weight:bold;color:#03d0fc;font-size:15px;text-align:center;">Vidéo Continuum ' + versionButtonHtml('ed', scriptVersion) + '</div>' +
-                '<div id="ed-current-name" style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;"></div>' +
+                '<div class="vc-card"><div id="ed-current-name" style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;"></div>' +
                 '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;"><div id="ed-current-ep" style="font-size:15px;font-weight:bold;text-align:center;"></div>' +
                 '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;">&#8505; Fiche</button></div>' +
                 // v7.1 : source en cours toujours visible + un seul bouton pour en changer (demande : "confus avec les autres sources").
@@ -2764,13 +2831,13 @@
                 '<input type="number" id="ed-goto-input" aria-label="Numéro de l’épisode" min="1" placeholder="N&#176; ep." style="width:0;flex:1;padding:5px 6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 '<button id="ed-goto-btn" style="' + B + 'padding:6px 6px;">Aller</button>' +
                 '<button id="ed-next-btn" title="Épisode suivant" aria-label="Épisode suivant" style="' + B + 'padding:6px 8px;">&#9654;</button>' +
-                '</div>' +
-                '<div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
+                '</div></div>' +
+                '<div class="vc-card"><div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
                 '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>' +
                 '<select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de série --</option></select>' +
                 '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Vérifier les nouveaux épisodes</button>' +
-                toggleButtonsHtml('ed-', false, false) +
-                '<div class="vc-pair">' + collapsibleSection('reglages', 'Réglages',
+                toggleButtonsHtml('ed-', false, false) + '</div>' +
+                '<div class="vc-menus">' + collapsibleSection('reglages', 'Réglages',
                     '<div class="vc-trio"><button id="ed-set-intro-btn" style="' + B + '">Fin intro</button><button id="ed-set-outro-btn" style="' + B + '">Début outro</button>' +
                     collapsibleSection('plus', 'Plus',
                         groupLabel('Intro / outro') +
@@ -2782,19 +2849,19 @@
                         '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) === true ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
                         '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Retire de la progression la série choisie dans la liste">Retirer du suivi</button></div>', false, true) + '</div>', true) + '</div>' +
-                '<div class="vc-pair">' + collapsibleSection('sauvegarde', 'Sauvegarde',
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Retire de la progression la série choisie dans la liste">Retirer du suivi</button></div>', false, true) + '</div>', true) +
+                collapsibleSection('sauvegarde', 'Sauvegarde',
                     '<div class="vc-pair"><button id="ed-export-btn" style="' + B + '">Exporter</button>' +
                     '<button id="ed-import-btn" style="' + B + '">Importer</button></div>' +
                     '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
                     '<button id="ed-choose-backup-btn" style="' + B + '">Choisir le fichier</button>' +
                     '<button id="ed-reauth-backup-btn" style="' + B + '">Réautoriser le fichier</button>' +
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
-                newsSectionHtml(false, 'ed') + '</div>' +
-                '<div class="vc-pair">' + incidentSectionHtml('ed', false) + legendSectionHtml(false) + '</div>' +
+                newsSectionHtml(false, 'ed') + incidentSectionHtml('ed', false) + legendSectionHtml(false) + '</div>' +
                 '<select id="ed-site-filter" title="Filtrer la liste des animes suivis par site" style="' + SELECT + '">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" style="display:flex;flex-direction:column;gap:4px;"></div>' +
                 siteLinksHtml() + openModeSelectHtml();
+            exclusiveMenus(topbar, 'vc-ed-menu');
             overlay.appendChild(topbar);
             topbar.id = 'ed-topbar';
             overlay.addEventListener('mousemove', panelWake);
@@ -4513,14 +4580,14 @@
 
             if (currentEpisode && currentEpisode.seriesName) {
                 const disp = getCurrentEpisodeDisplay();
-                html += '<div style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
+                html += '<div class="vc-card"><div style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>';
                 html += '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;"><div style="font-size:15px;font-weight:bold;color:' + disp.color + ';text-align:center;">' + disp.epText + '</div>' +
                     '<button id="ep-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;">&#8505; Fiche</button></div>';
                 html += '<button id="ep-open-player" style="background:#03d0fc;color:#000;border:none;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;">Ouvrir le lecteur</button>';
-                html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div>';
+                html += '<div id="ep-player-status" style="font-size:11px;color:#ccc;"></div></div>';
             }
 
-            html += '<div class="vc-pair">' + (currentEpisode && currentEpisode.seriesName ? trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode))) : '') +
+            html += '<div class="vc-card"><div class="vc-pair">' + (currentEpisode && currentEpisode.seriesName ? trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode))) : '') +
                 '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>';
             if (entries.length === 0) {
                 // v7.0 : le filtre de sites peut tout masquer : ne pas dire "aucun anime suivi" a tort.
@@ -4540,9 +4607,9 @@
             }
 
             html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Vérifier les nouveaux épisodes</button>';
-            html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
+            html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled()) + '</div>';
 
-            html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Réglages',
+            html += '<div class="vc-menus">' + collapsibleSection('reglages', 'Réglages',
                 '<div class="vc-trio"><button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + '">Début outro</button>' +
                 collapsibleSection('plus', 'Plus',
                     groupLabel('Intro / outro') +
@@ -4562,8 +4629,7 @@
                     '<button id="ep-youtube-off-btn" title="Revenir a la source du site" style="' + BTN_STYLE + '">Source du site</button></div>',
                     prevOpen.youtube);
             }
-            html += '</div>';
-            html += '<div class="vc-pair">' + collapsibleSection('sauvegarde', 'Sauvegarde',
+            html += collapsibleSection('sauvegarde', 'Sauvegarde',
                 '<div class="vc-pair"><button id="ep-export-panel" style="' + BTN_STYLE + '">Exporter</button>' +
                 '<button id="ep-import-panel" style="' + BTN_STYLE + '">Importer</button></div>' +
                 '<button id="ep-choose-backup" style="' + BTN_STYLE + '">Choisir le fichier</button>' +
@@ -4571,14 +4637,14 @@
                 '<span id="ep-backup-status" style="font-size:11px;color:#888;"></span>' +
                 '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
                 prevOpen.sauvegarde);
-            html += newsSectionHtml(prevOpen.nouveautes, 'ep') + '</div>';
-            html += '<div class="vc-pair">' + incidentSectionHtml('ep', prevOpen.incident) + legendSectionHtml(prevOpen.legende) + '</div>';
+            html += newsSectionHtml(prevOpen.nouveautes, 'ep') + incidentSectionHtml('ep', prevOpen.incident) + legendSectionHtml(prevOpen.legende) + '</div>';
             html += '<select id="ep-site-filter" title="Filtrer la liste des animes suivis par site" style="width:100%;padding:6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 buildSiteFilterOptionsHtml() + '</select>';
             html += renderTrackingSummary();
             html += siteLinksHtml() + openModeSelectHtml();
 
             panel.innerHTML = html;
+            exclusiveMenus(panel, 'vc-ep-menu');
             panel.querySelector('#ep-history-btn').addEventListener('click', openHistoryPopup);
             refreshIntroOutroButtons();
 

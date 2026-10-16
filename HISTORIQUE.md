@@ -1219,3 +1219,19 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   (3) detail "ST auto FR ne marche pas" (quelle video, ce qui s'affiche) ; (4) test blocage ecran 1 (ianimes plein ecran /
   ED script coupe) ; (5) panneau hors lecteur : son volet Sources reste a aligner sur "Changer" ; (6) regroupement des menus (point 4).
 - Recette 7.1 relancee (2026-10-16) : Edge 35 OK (run71.txt), Firefox + WebKit 48 OK / 0 FAIL / 0 SKIP (run71b.txt). POUSSEE.
+
+## v7.2 (2026-10-16) : refonte du panneau (planche 12 styles, base "Stele de cultivation")
+- Demande : idee "griser le reste quand un menu se deroule" -> refonte complete. Planche `design/planche-12-styles.html`
+  (12 maquettes par 3 agents : sobre 1-4, xianxia 5-8, agencements 9-12, + / - de chacune). Choix utilisateur : 8, + les 12 en themes.
+- Fait :
+  - Structure (panneau du site ET lecteur) : 2 cartes `.vc-card` (episode ; suivi) puis `.vc-menus` = tablettes (details de 1er niveau,
+    largeur au contenu). Un seul menu ouvert : `<details name>` natif pose par `exclusiveMenus(root, 'vc-ep-menu' | 'vc-ed-menu')`.
+    Menu ouvert = carte pleine largeur cerclee d'accent + halo (`--vc-glow`), titre en capitales accent, boutons en accent (rien n'est grise).
+  - 12 themes dans `themes()` (stele, inspecteur, linear "Indigo", groupes "Graphite", tonal, parchemin (clair), jade, laque, neon, nuit,
+    braise, menthe) ; nouvelles cles : glow, rad, font (police du theme si `fontFamily` jamais choisi), light (`.vc-light` : sans ombre
+    de texte, gris inline -> dim), glass (`.vc-glass` : flou). Defaut = stele (anciens themes gardes, "Actuel" -> "Classique (avant 7.2)").
+  - Lecteur : max-width 220 -> 236 px (les cartes prenaient la place, "Episode 199 / 487" passait sur 2 lignes).
+  - Agencements 9-12 (rail, onglets, tuiles, compact) NON faits : seulement leurs couleurs en themes.
+- Teste (Playwright Edge, `t72.js`) : 2 cartes, 6 tablettes, Reglages ouvert par defaut, Sauvegarde ferme Reglages, lecteur idem,
+  captures stele/parchemin/laque/jade/neon/braise/actuel, 0 erreur du script.
+- Recette complete run-all.js (Edge/Firefox/WebKit) : 73 OK / 0 FAIL / 0 SKIP (run72.txt). PAS teste : vrai Opera + Tampermonkey, themes clairs sur toutes les fenetres (Fiche, Historique...). Commitee, PAS POUSSEE (attend accord).
