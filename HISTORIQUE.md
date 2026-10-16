@@ -1235,3 +1235,9 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Teste (Playwright Edge, `t72.js`) : 2 cartes, 6 tablettes, Reglages ouvert par defaut, Sauvegarde ferme Reglages, lecteur idem,
   captures stele/parchemin/laque/jade/neon/braise/actuel, 0 erreur du script.
 - Recette complete run-all.js (Edge/Firefox/WebKit) : 73 OK / 0 FAIL / 0 SKIP (run72.txt). PAS teste : vrai Opera + Tampermonkey, themes clairs sur toutes les fenetres (Fiche, Historique...). POUSSEE le 2026-10-16.
+
+## v7.3 (2026-10-16) : chiffres Georgia -> Cambria
+- Police Georgia (Personnaliser) : famille composite "VC Georgia" (@font-face : chiffres U+0030-0039 = local Cambria, reste =
+  local Georgia) ; applyTheme remplace "Georgia" par "VC Georgia" dans --vc-font. Sans Cambria (hors Windows) : repli Georgia.
+- Teste (Edge, `t73.js`) : --vc-font = "VC Georgia", "Episode 199 / 487" en chiffres alignes (capture), 0 erreur.
+- PAS teste : Firefox/WebKit, vrai Opera + Tampermonkey. Commitee, PAS POUSSEE (attend accord).

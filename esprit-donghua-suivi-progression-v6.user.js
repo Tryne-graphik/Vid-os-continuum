@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.2
+// @version      7.3
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2442,6 +2442,8 @@
                 '.vc-ct-titres [style*="color:#03d0fc"],.vc-ct-titres .vc-grp,.vc-ct-titres details[open]>summary{color:var(--vc-cct)!important;}' +
                 '.vc-ct-titres [style*="background:#03d0fc"]:not(button){background:var(--vc-cc)!important;}' +
                 '.vc-ct-cases .vc-track:has(input:checked){background:var(--vc-cc)!important;border-color:var(--vc-cc)!important;color:var(--vc-ccon)!important;text-shadow:none;}' +
+                // v7.3 : chiffres de Georgia elzeviriens (5 et 9 descendent) -> chiffres pris dans Cambria.
+                '@font-face{font-family:"VC Georgia";src:local("Cambria");unicode-range:U+0030-0039;}@font-face{font-family:"VC Georgia";src:local("Georgia");}' +
                 '@font-face{font-family:"VC Cinzel";src:' + themeTexUrl(['vcCinzel', 'cinzel.woff2']) + ' format("woff2");font-weight:400 900;font-display:swap;}' +
                 '.vc-cinzel summary,.vc-cinzel .vc-grp{font-family:"VC Cinzel",var(--vc-font,"Segoe UI"),serif!important;letter-spacing:.06em!important;}' +
                 // Vignettes : option "Estomper les séries suivies" (le cadre .ep-thumb-frame reste net).
@@ -2494,7 +2496,7 @@
                 el.style.setProperty('--vc-ccon', relLum(hexRgb(acc)) > 0.18 ? '#000' : '#fff');
             }
             // v7.2 : police du theme tant qu'aucune n'est choisie dans Personnaliser.
-            el.style.setProperty('--vc-font', '"' + (GM_getValue('fontFamily', '') || !themes()[id].font ? vcFonts()[currentFont()] : themes()[id].font) + '"');
+            el.style.setProperty('--vc-font', '"' + (GM_getValue('fontFamily', '') || !themes()[id].font ? vcFonts()[currentFont()] : themes()[id].font).replace(/^Georgia$/, 'VC Georgia') + '"');
             el.classList.toggle('vc-cinzel', GM_getValue('titleCinzel', false) === true);
             applyScale(el);
         }
@@ -2619,6 +2621,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.3', ['Police Georgia : les chiffres sont maintenant pris dans Cambria et restent alignés (le 5 et le 9 ne descendent plus sous la ligne).']],
             ['7.2', ['Nouveau look : le panneau est rangé en cartes (épisode, suivi) et les menus deviennent des tablettes ; un seul menu s\'ouvre à la fois, encadré et dans la couleur d\'accent.',
                 '12 nouveaux thèmes (Réglages > Plus > Affichage) : Stèle de cultivation (par défaut), Inspecteur, Indigo, Graphite, Tonal, Parchemin et sceaux, Jade impérial, Laque noire et or, Verre néon, Nuit violette, Braise, Menthe néon. Les anciens thèmes restent disponibles.']],
             ['7.1', ['Ligne « Source » sous le numéro d\'épisode (bleu = lecteur du site, rouge = YouTube) avec un bouton Changer : une seule fenêtre pour les lecteurs du site, le même épisode sur les autres sites et les vidéos YouTube. Remplace le volet Sources du lecteur.',
