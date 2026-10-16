@@ -1188,4 +1188,4 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   ecran refuse en headless), 1 FAIL YouTube Firefox = alea (2 relances OK). `t70.js` (cibles 7.0) : 6/6 OK sur 7.0, 5/6 FAIL sur 6.66.
 - PAS fait (a decider) : refonte de refreshThumbnailBadges (lecture/ecriture separees, cache), cache AniList persistant, regroupement
   des menus (Aide = Legende+Nouveautes+Signaler), raccourcis clavier du lecteur, compte a rebours "Passer l'intro".
-- PAS teste : vrai Opera + Tampermonkey, plein ecran reel. NON POUSSEE (branche nuit/v7).
+- PAS teste : vrai Opera + Tampermonkey, plein ecran reel. POUSSEE le 2026-10-17 (fast-forward de nuit/v7).

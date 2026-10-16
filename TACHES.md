@@ -14,6 +14,6 @@ Mis à jour le 2026-10-17. Tâche faite : supprimer la ligne (ou la barrer ~~ain
 | 8 | v7 : installer gh (fait, connexion à finir), veille des sites de nuit | Claude | basse |
 | 9 | v7 phase 0 : prototype panneau latéral, test Chrome + Opera | Claude | basse |
 | 10 | Opera : installer la 6.65, vérifier que Importer / Historique / Fiche répondent (console : "repli sur les propriétés on<type>"), puis supprimer le script "VC test clic" | toi | haute |
-| 11 | Relire le rapport de nuit et publier la 7.0 (branche `nuit/v7`, contient la 6.66) : fusion dans master + push | Claude (sur ton OK) | haute |
+| 11 | ~~Publier la 7.0~~ poussée le 2026-10-17 | Claude | — |
 | 12 | 7.0 dans Opera + Tampermonkey : plein écran réel, Échap ferme le lecteur, panneau | toi | haute |
 | 13 | Choisir les améliorations suivantes (rapport de nuit : raccourcis clavier, compte à rebours intro, menus Aide, cache fiches) | toi | moyenne |
