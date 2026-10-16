@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.0
+// @version      7.1
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1574,6 +1574,23 @@
             }
             return null;
         }
+        // v7.1 : nom de la serie en mots entiers ("The Demon Hunter's Romance",
+        // serie live, passait pour "The Demon Hunter") et pas d'autre saison
+        // annoncee ("S2", "Season 3", "Saison 2", "S02E480", "Nom 2 EP17").
+        // ponytail: saison du titre comparee a celle de l'adresse du site ; une chaine qui numerote autrement est ecartee
+        function ytWords(t) { return ' ' + String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’]s\b/g, 's').replace(/[^a-z0-9]+/g, ' ').trim() + ' '; }
+        function ytTitleOk(title, name, season) {
+            const t = ytWords(title), k = ytWords(name);
+            const at = t.indexOf(k);
+            if (k.length < 4 || at === -1) return false;
+            const m = t.match(/ s(?:eason|aison)? ?0?(\d{1,2})(?= |e\d)/) || t.slice(at + k.length).match(/^(\d{1,2}) (?:ep|episode)/);
+            return !m || Number(m[1]) === season;
+        }
+        function seriesSeason(info) {
+            const url = info.resumeUrl || info.pageUrl || '';
+            const sea = seasonOf(url);
+            return sea ? Math.floor(sea.n) : Number((url.match(/-s(\d+)-e\d+/) || [])[1]) || 1;
+        }
         // Recherche YouTube generale (v6.34, sans cle d'API) quand la video
         // cale ou est morte : resultats dont le titre contient un des noms de
         // la serie (avant / entre parentheses) ET le numero d'episode.
@@ -1588,6 +1605,9 @@
             const queries = [];
             names.slice(0, 2).forEach((v) => queries.push(v + ' episode ' + n + ' vostfr', v + ' EP ' + n));
             const seen = {}, out = [];
+            const season = seriesSeason(info);
+            // Duree de l'episode si le lecteur du site l'a donnee : ecarte un episode unique 2x trop long/court.
+            const dur = aniSkip && aniSkip.key === storageKey(info) && aniSkip.ep === info.episodeNumber && aniSkip.duration;
             return Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => ''))).then((pages) => {
                 pages.forEach((html) => (function walk(o) {
                     if (Array.isArray(o)) { o.forEach(walk); return; }
@@ -1597,7 +1617,7 @@
                         const title = o.title.simpleText || (o.title.runs || []).map((r) => r.text).join('');
                         const owner = (o.ownerText.runs || [])[0] || {};
                         const be = owner.navigationEndpoint && owner.navigationEndpoint.browseEndpoint;
-                        const name = names.find((v) => ytNorm(title).indexOf(ytNorm(v)) !== -1);
+                        const name = names.find((v) => ytTitleOk(title, v, season));
                         const range = episodeRangeInTitle(title, n);
                         // Extraits / bandes-annonces : pas l'episode entier.
                         const teaser = /highlight|trailer|preview|teaser|bande[- ]annonce|apercu|aperçu|clip|shorts?/i.test(title);
@@ -1605,8 +1625,10 @@
                         // Badge "Sous-titres" = vraie piste traduisible en FR. Sans
                         // badge ni FR : sous-titres anglais incrustes, ecartee (v6.35).
                         const cc = /"label":"(?:Sous-titres|CC|Subtitles)"/.test(JSON.stringify(o.badges || []));
-                        if (name && range && be && be.browseId && !teaser && (vf || cc)) {
-                            out.push({ id: o.videoId, title: title, len: ytTimeToSec(o.lengthText.simpleText), channelId: be.browseId, channelName: owner.text || '',
+                        const len = ytTimeToSec(o.lengthText.simpleText);
+                        const badLen = dur && range && range.first === range.last && (len > dur * 1.6 || len < dur * 0.5);
+                        if (name && range && be && be.browseId && !teaser && !badLen && (vf || cc)) {
+                            out.push({ id: o.videoId, title: title, len: len, channelId: be.browseId, channelName: owner.text || '',
                                 keyword: name, first: range.first, last: range.last, vf: vf, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
                         }
                     }
@@ -1682,21 +1704,37 @@
                 }));
             }).catch((e) => { zone.textContent = 'Recherche YouTube impossible : ' + e.message; });
         }
-        // Bouton "Trouver sur YouTube" : vignettes au choix dans l'encadre du calque.
-        function showYoutubeChooser(info) {
+        // Choix de la source (v7.1, remplace le volet "Sources") : lecteurs du
+        // site, meme episode sur les autres sites geres, resultats YouTube.
+        function showSourceChooser(info) {
             if (!overlayEls) return;
             const box = overlayEls.siteErrorBox;
-            box.setAttribute('data-kind', 'youtube');
-            box.innerHTML = '<div style="font-size:16px;font-weight:bold;margin-bottom:8px;">Episode ' + escapeHtml(String(info.episodeNumber)) + ' sur YouTube</div>' +
-                '<div id="ed-yt-results" style="font-size:12px;text-align:left;">Recherche sur YouTube...</div>' +
+            const BTN = 'display:block;width:100%;text-align:left;margin-bottom:4px;background:#0d2a33;color:#fff;border:1px solid #03d0fc;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:12px;';
+            const head = (t, c) => '<div style="font-weight:bold;color:' + c + ';margin:10px 0 4px;">' + t + '</div>';
+            let site = head('Sur ' + escapeHtml(info.siteLabel || 'le site'), '#03d0fc');
+            if (ytActive) site += '<button type="button" data-act="site" style="' + BTN + '">&#8617; Revenir au lecteur du site</button>';
+            else site += playerCandidates.map((src, i) => '<button type="button" data-act="player" data-i="' + i + '" style="' + BTN + (i === playerCandidateIndex ? 'opacity:.6;cursor:default;' : '') + '"' + (i === playerCandidateIndex ? ' disabled' : '') + '>' +
+                'Lecteur ' + (i + 1) + ' &middot; ' + escapeHtml(hostOf(src)) + (i === playerCandidateIndex ? ' &#10003; en cours' : '') + '</button>').join('');
+            if (info.site === 'esprit-donghua') site += '<button type="button" data-act="odysee" style="' + BTN + '">Ouvrir sur odysee.com (nouvel onglet)</button>';
+            box.setAttribute('data-kind', 'sources');
+            box.innerHTML = '<div style="font-size:16px;font-weight:bold;">Sources de l\'épisode ' + escapeHtml(String(info.episodeNumber)) + '</div>' +
+                '<div style="font-size:12px;text-align:left;">' + site +
+                head('Autres sites', '#ffb300') + '<div id="ed-site-alt" style="color:#d9b77a;">Recherche sur les autres sites...</div>' +
+                head('YouTube', '#ff4e45') + '<div id="ed-yt-results" style="color:#d9b77a;">Recherche sur YouTube...</div></div>' +
                 '<div style="margin-top:12px;"><button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
-            box.querySelector('[data-act="close"]').addEventListener('click', () => { box.style.display = 'none'; });
+            box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
+                const act = b.getAttribute('data-act');
+                box.style.display = 'none';
+                if (act === 'site') leaveYoutubeMode();
+                if (act === 'odysee') openCurrentEpisodeOnOdysee();
+                if (act === 'player') selectPlayer(Number(b.getAttribute('data-i')));
+            }));
+            renderElsewhere(box.querySelector('#ed-site-alt'), info, ytActive ? [] : playerCandidates.slice());
             renderYoutubeChoices(box.querySelector('#ed-yt-results'), info, () => { box.style.display = 'none'; });
         }
-        function findYoutubeEpisode(assoc, n) {
+        function findYoutubeEpisode(assoc, n, season) {
             const path = assoc.channelId ? 'channel/' + assoc.channelId : assoc.channelHandle;
-            const kw = ytNorm(assoc.titleKeyword);
             const search = (q) => fetchPageHtml('https://www.youtube.com/' + path + '/search?ucbcb=1&query=' + encodeURIComponent(q)).then((html) => {
                 const vids = [];
                 (function walk(o) {
@@ -1707,7 +1745,7 @@
                 })(ytInitialJson(html, 'var ytInitialData'));
                 let best = null;
                 vids.forEach((v) => {
-                    if (!v.len || ytNorm(v.title).indexOf(kw) === -1) return;
+                    if (!v.len || !ytTitleOk(v.title, assoc.titleKeyword, season)) return;
                     const r = episodeRangeInTitle(v.title, n);
                     if (!r) return;
                     const a = r.first, b = r.last;
@@ -1732,8 +1770,8 @@
             const go = (assoc) => {
                 if (!assoc) return;
                 setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube (' + assoc.channelName + ')...');
-                return findYoutubeEpisode(assoc, Number(info.episodeNumber)).then((hit) => {
-                    if (!hit) { setStatus('Episode ' + info.episodeNumber + ' introuvable sur la chaine YouTube ' + assoc.channelName + ' : choisis une autre video.'); showYoutubeChooser(info); return; }
+                return findYoutubeEpisode(assoc, Number(info.episodeNumber), seriesSeason(info)).then((hit) => {
+                    if (!hit) { setStatus('Episode ' + info.episodeNumber + ' introuvable sur la chaine YouTube ' + assoc.channelName + ' : choisis une autre video.'); showSourceChooser(info); return; }
                     storeYoutubeHit(info, hit);
                     setYoutubeMode(info, true);
                     console.log('[AnimeTracker v6] YouTube (' + reason + ') : ' + hit.title + ' a ' + hit.start + 's');
@@ -1742,11 +1780,11 @@
             };
             const assoc = getYoutubeChannelAssociation(info);
             if (assoc && assoc.titleKeyword && (assoc.channelId || assoc.channelHandle)) return go(assoc);
-            showYoutubeChooser(info);
+            showSourceChooser(info);
         }
         function useYoutubeAutoForCurrentEpisode() {
             if (!currentEpisode) { alert('Ouvre d\'abord un episode.'); return; }
-            showYoutubeChooser(currentEpisode);
+            showSourceChooser(currentEpisode);
         }
         function leaveYoutubeMode() {
             if (!currentEpisode) return;
@@ -2305,7 +2343,7 @@
                 H + '{font-family:var(--vc-font,"Segoe UI"),system-ui,Arial,sans-serif!important;}' +
                 H + ' button,' + H + ' summary,' + H + ' select,' + H + ' input,' + H + ' textarea,' + H + ' label{font-family:inherit!important;font-size:12px!important;}' +
                 H + ' button,' + H + ' summary,' + H + ' .vc-track{font-weight:600!important;}' +
-                H + ' button:not(.vc-ver):not(#ed-info-btn):not(#ep-info-btn),' + H + ' .vc-track{height:29px;box-sizing:border-box;}' +
+                H + ' button:not(.vc-ver):not(#ed-info-btn):not(#ep-info-btn):not(#ed-source-btn),' + H + ' .vc-track{height:29px;box-sizing:border-box;}' +
                 H + ' .vc-track{line-height:17px;}' +
                 H + ' summary{background:transparent!important;border:none!important;border-bottom:1px solid rgba(255,255,255,.14)!important;border-radius:0!important;box-shadow:none!important;' +
                     'letter-spacing:.02em;color:#a3a9b5!important;padding:6px 4px!important;line-height:16px;height:29px;box-sizing:border-box;}' +
@@ -2313,7 +2351,7 @@
                 H + ' select,' + H + ' input[type=number],' + H + ' textarea{background:#101216!important;color:#ececec!important;border:1px solid #2a2e36!important;}' +
                 H + ' button[style*="color:#fff"]:not(.vc-ver){color:#ececec!important;}' +
                 H + ' .vc-open-link{font-size:11px!important;padding:6px 4px!important;}' +
-                '#ed-info-btn,#ep-info-btn{min-height:24px;}.vc-ver{padding:5px 2px!important;}.vc-news-x{min-width:24px;min-height:24px;padding:0!important;display:flex;align-items:center;justify-content:center;}' +
+                '#ed-info-btn,#ep-info-btn,#ed-source-btn{min-height:24px;}.vc-ver{padding:5px 2px!important;}.vc-news-x{min-width:24px;min-height:24px;padding:0!important;display:flex;align-items:center;justify-content:center;}' +
                 H + ' :focus-visible,' + H + ' .vc-track:has(input:focus-visible){outline:2px solid #fff!important;outline-offset:1px!important;box-shadow:0 0 0 4px rgba(0,0,0,.85)!important;}' +
                 '.vc-th-actuel [style*="color:#03d0fc"]{color:#5fd3ec!important;}' +
                 '#ed-topbar{transition:opacity .4s;}#ed-topbar.vc-faded:not(:hover):not(:focus-within){opacity:.12;}' +
@@ -2325,7 +2363,7 @@
                 '@media (prefers-reduced-transparency:reduce){.vc-th-verre{background:#141b24!important;backdrop-filter:none;-webkit-backdrop-filter:none;}}' +
                 T + ' button:not([id$="delete-btn"]):not(.vc-ver){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
                 T + ' button[style*="background:#03d0fc"][style]:not(.vc-ver){background:var(--vc-acc)!important;color:var(--vc-onacc)!important;border-color:transparent!important;}' +
-                T + ' #ed-info-btn,' + T + ' #ep-info-btn{border-color:var(--vc-acct,var(--vc-acc))!important;}' +
+                T + ' #ed-info-btn,' + T + ' #ed-source-btn,' + T + ' #ep-info-btn{border-color:var(--vc-acct,var(--vc-acc))!important;}' +
                 T + ' select,' + T + ' input[type=number],' + T + ' textarea{background:var(--vc-field)!important;color:var(--vc-text)!important;border:1px solid rgba(255,255,255,.10)!important;}' +
                 T + ' .vc-track{background:var(--vc-btn)!important;color:var(--vc-text)!important;border-color:var(--vc-bline)!important;box-shadow:var(--vc-bsh);}' +
                 T + ' .vc-track:has(input:checked){background:var(--vc-on)!important;border-color:var(--vc-onl)!important;color:#fff!important;}' +
@@ -2516,6 +2554,8 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.1', ['Ligne « Source » sous le numéro d\'épisode (bleu = lecteur du site, rouge = YouTube) avec un bouton Changer : une seule fenêtre pour les lecteurs du site, le même épisode sur les autres sites et les vidéos YouTube. Remplace le volet Sources du lecteur.',
+                'Recherche YouTube : le nom de la série doit apparaître en entier (« The Demon Hunter\'s Romance », une série live, n\'est plus proposée pour « The Demon Hunter »), les vidéos d\'une autre saison sont écartées, et un épisode deux fois trop long ou trop court aussi (si la durée est connue).']],
             ['7.0', ['Version de recette complète : sauvegarde plus sûre (les noms comme "Re:Zero" et les séries exclues ne se perdent plus à la restauration ; un fichier contenant seulement des réglages s\'importe).', 'Sécurité : un fichier de sauvegarde piégé ne peut plus injecter de code ; le lecteur n\'écoute plus que le calque.', 'Plus fluide : vérification des nouveaux épisodes 4 séries à la fois et jamais en onglet caché, moins d\'écritures pendant la lecture.', 'Clavier : Échap ferme la fenêtre du dessus, puis le lecteur ; le focus va dans la fenêtre ouverte.', 'Panneau : accents corrigés, Réglages fermés hors épisode (plus de défilement en 1366x768), Nouveautés limitées aux 5 dernières versions, message clair quand le filtre masque tout.']],
             ['6.66', ['Le panneau reste ferme (ou ouvert) d\'une page a l\'autre : il ne reapparait plus a chaque rechargement.', 'Nouveautes fermees par defaut : le (!) jaune signale une nouvelle version, a ouvrir si besoin.']],
             ['6.65', ['Opera (Tampermonkey) : les boutons du panneau, Importer, Historique, le suivi et les Fiches ne reagissaient pas. Corrige.']],
@@ -2708,6 +2748,9 @@
                 '<div id="ed-current-name" style="flex-shrink:0;text-align:center;font-size:14px;font-weight:bold;color:#fff;line-height:1.25;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;overflow-wrap:anywhere;"></div>' +
                 '<div style="display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0;"><div id="ed-current-ep" style="font-size:15px;font-weight:bold;text-align:center;"></div>' +
                 '<button id="ed-info-btn" title="Fiche de l\'anime : synopsis, genres, note..." style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;">&#8505; Fiche</button></div>' +
+                // v7.1 : source en cours toujours visible + un seul bouton pour en changer (demande : "confus avec les autres sources").
+                '<div id="ed-source" style="display:none;align-items:center;justify-content:center;gap:6px;flex-shrink:0;"><span id="ed-source-label" style="border-left:3px solid #03d0fc;padding-left:5px;font-size:11px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>' +
+                '<button id="ed-source-btn" title="Lecteurs du site, autres sites, YouTube" style="background:#1f2a33;color:#03d0fc;border:1px solid #03d0fc;padding:3px 8px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:bold;white-space:nowrap;flex-shrink:0;">Changer</button></div>' +
                 '<div id="ed-status" role="status" aria-live="polite" style="color:#ccc;font-size:11px;text-align:center;">En attente...</div>' +
                 '<div id="ed-aniskip" style="display:none;font-size:12px;color:#ccc;text-align:center;"></div>' +
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
@@ -2739,11 +2782,7 @@
                         '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) === true ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
                         '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Retire de la progression la série choisie dans la liste">Retirer du suivi</button></div>', false, true) + '</div>', true) +
-                collapsibleSection('youtube', 'Sources',
-                    (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
-                    '<div class="vc-pair"><button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">YouTube</button>' +
-                    '<button id="ed-youtube-off-btn" title="Revenir a la source du site" style="' + B + '">Source du site</button></div>') + '</div>' +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Retire de la progression la série choisie dans la liste">Retirer du suivi</button></div>', false, true) + '</div>', true) + '</div>' +
                 '<div class="vc-pair">' + collapsibleSection('sauvegarde', 'Sauvegarde',
                     '<div class="vc-pair"><button id="ed-export-btn" style="' + B + '">Exporter</button>' +
                     '<button id="ed-import-btn" style="' + B + '">Importer</button></div>' +
@@ -2893,10 +2932,7 @@
                 postToPlayerFrame({ type: MSG_PREFIX + 'pause' });
                 if (document.fullscreenElement === overlay) document.exitFullscreen().catch(() => {});
             });
-            const edOpenOdyseeBtn = topbar.querySelector('#ed-open-odysee-btn');
-            if (edOpenOdyseeBtn) edOpenOdyseeBtn.addEventListener('click', openCurrentEpisodeOnOdysee);
-            topbar.querySelector('#ed-youtube-auto-btn').addEventListener('click', useYoutubeAutoForCurrentEpisode);
-            topbar.querySelector('#ed-youtube-off-btn').addEventListener('click', leaveYoutubeMode);
+            topbar.querySelector('#ed-source-btn').addEventListener('click', () => { if (currentEpisode) showSourceChooser(currentEpisode); });
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
             toast.querySelector('#ed-toast-now').addEventListener('click', () => { if (cancelCountdown && nextNowCountdown) nextNowCountdown(); });
 
@@ -3006,6 +3042,31 @@
             setStatus('Lecteur ' + playerCandidateIndex + ' du site indisponible, essai du lecteur ' + (playerCandidateIndex + 1) + '...');
             overlayEls.playerFrame.src = playerCandidates[playerCandidateIndex];
             armPlayerReadyTimer();
+            renderSourceLine();
+        }
+        function selectPlayer(i) {
+            if (!playerCandidates[i]) return;
+            playerCandidateIndex = i;
+            positionArmed = false;
+            outroSignalSent = false;
+            setStatus('Chargement du lecteur ' + (i + 1) + '...');
+            overlayEls.playerFrame.src = playerCandidates[i];
+            armPlayerReadyTimer();
+            renderSourceLine();
+        }
+        // Ligne "Source" sous le numero d'episode : bleu = site, rouge = YouTube.
+        function renderSourceLine() {
+            const line = overlayEls && overlayEls.overlay.querySelector('#ed-source');
+            if (!line || !currentEpisode) return;
+            const assoc = ytActive && getYoutubeChannelAssociation(currentEpisode);
+            const text = ytActive
+                ? 'YouTube' + (assoc && assoc.channelName ? ' · ' + assoc.channelName : '') + (ytSegment && ytSegment.last > ytSegment.first ? ' · compil. ' + ytSegment.first + '-' + ytSegment.last : '')
+                : hostOf(overlayEls.playerFrame.src) + (playerCandidates.length > 1 ? ' (' + (playerCandidateIndex + 1) + '/' + playerCandidates.length + ')' : '');
+            const label = line.querySelector('#ed-source-label');
+            label.textContent = '▶ ' + text;
+            label.title = 'Source en cours : ' + (ytActive ? '' : (currentEpisode.siteLabel || 'site') + ', ') + text;
+            label.style.borderLeftColor = ytActive ? '#ff4e45' : '#03d0fc';
+            line.style.display = 'flex';
         }
 
         // Demande utilisateur : dire clairement que c'est le site (video
@@ -3050,11 +3111,13 @@
                 if (act === 'retry') { positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src; }
             }));
             renderYoutubeChoices(box.querySelector('#ed-yt-results'), info, () => { box.style.display = 'none'; });
-            findEpisodeElsewhere(info, playerCandidates.slice()).then((found) => {
-                const alt = box.querySelector('#ed-site-alt');
-                if (!alt || currentEpisode !== info) return;
+            renderElsewhere(box.querySelector('#ed-site-alt'), info, playerCandidates.slice());
+        }
+        function renderElsewhere(alt, info, deadEmbeds) {
+            findEpisodeElsewhere(info, deadEmbeds).then((found) => {
+                if (!alt.isConnected || currentEpisode !== info) return;
                 if (!found.length) { alt.textContent = 'Pas trouve sur les autres sites geres - essaie la recherche Google.'; return; }
-                alt.innerHTML = 'Disponible ailleurs : ' + found.map((f) => '<a href="' + escapeHtml(f.url) + '" style="display:inline-block;margin:4px;background:#4caf50;color:#000;font-weight:bold;text-decoration:none;padding:5px 10px;border-radius:4px;">Regarder l\'ep. ' + escapeHtml(String(info.episodeNumber)) + ' sur ' + escapeHtml(f.label) + '</a>').join('');
+                alt.innerHTML = 'Disponible ailleurs : ' + found.map((f) => '<a href="' + escapeHtml(f.url) + '" style="display:inline-block;margin:4px;background:#ffb300;color:#000;font-weight:bold;text-decoration:none;padding:5px 10px;border-radius:4px;">Regarder l\'ep. ' + escapeHtml(String(info.episodeNumber)) + ' sur ' + escapeHtml(f.label) + '</a>').join('');
             });
         }
 
@@ -3498,7 +3561,7 @@
             // Serie passee sur YouTube : chercher d'abord cet episode la-bas.
             if (!skipYoutubeLookup && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
                 setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube...');
-                findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber))
+                findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber), seriesSeason(info))
                     .then((hit) => { if (hit) storeYoutubeHit(info, hit); else console.log('[AnimeTracker v6] YouTube : episode ' + info.episodeNumber + ' introuvable sur la chaine, source du site'); })
                     .catch((e) => console.log('[AnimeTracker v6] YouTube : recherche impossible (' + e.message + '), source du site'))
                     .then(() => applyLoadedEpisode(info, pushHistory, true));
@@ -3532,6 +3595,7 @@
             playerCandidateIndex = 0;
             overlayEls.siteErrorBox.style.display = 'none';
             if (playerCandidates.length) armPlayerReadyTimer(); else clearTimeout(playerReadyTimer);
+            renderSourceLine();
             if (youtubeOverride) {
                 setStatus('Lecture via YouTube' + (ytSegment && ytSegment.last > ytSegment.first ? ' (compilation ep. ' + ytSegment.first + '-' + ytSegment.last + ')' : '') + ', sous-titres en francais - pas de saut intro/outro sur cette source.');
             } else {

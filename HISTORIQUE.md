@@ -1169,7 +1169,7 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - NB : `playwright install firefox webkit` a supprime chromium-1208 (cache Playwright) -> tests Chromium via msedge.exe.
 - 6.66 PAS POUSSEE (modifs dans le fichier, non commitees) : attendre le OK de l utilisateur.
 
-## v7.0 (2026-10-17) : equipe de nuit - recette complete avant la version extension
+## v7.0 (2026-10-16) : equipe de nuit - recette complete avant la version extension
 - Equipes (agents) : bugs/erreurs silencieuses, securite, perf, UI/menus, recette Playwright, comparaison concurrents.
   Rapports detailles (non publies) : scratchpad de session `nuit/1-code.md` ... `6-comparaison.md`.
 - Corrige :
@@ -1188,4 +1188,34 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   ecran refuse en headless), 1 FAIL YouTube Firefox = alea (2 relances OK). `t70.js` (cibles 7.0) : 6/6 OK sur 7.0, 5/6 FAIL sur 6.66.
 - PAS fait (a decider) : refonte de refreshThumbnailBadges (lecture/ecriture separees, cache), cache AniList persistant, regroupement
   des menus (Aide = Legende+Nouveautes+Signaler), raccourcis clavier du lecteur, compte a rebours "Passer l'intro".
-- PAS teste : vrai Opera + Tampermonkey, plein ecran reel. POUSSEE le 2026-10-17 (fast-forward de nuit/v7).
+- PAS teste : vrai Opera + Tampermonkey, plein ecran reel. POUSSEE le 2026-10-16 (fast-forward de nuit/v7).
+
+## v7.1 (2026-10-16) : ligne Source + bouton Changer, recherche YouTube plus stricte
+- Retours utilisateur sur la 7.0 :
+  - Blocage (mise en memoire tampon) sur l'ecran 1 seulement, meme en fenetre reduite -> pas la taille du lecteur (reglage de
+    taille abandonne). Esprit Donghua et ianimes.eu utilisent la MEME video Odysee (CYT17:8) : a departager (plein ecran sur ianimes,
+    script coupe sur ED). Piste : acceleration materielle (etait desactivee chez l'utilisateur).
+  - 1er resultat YouTube "VOSTFR" = "The Demon Hunter's Romance" (serie live iQIYI) pour Cang Yuan Tu (The Demon Hunter) ;
+    les "The Demon Hunter S2 EP17" etaient aussi proposes.
+  - "ST auto FR ne marche pas" : NON reproduit (Edge, OYY0IV3yQe4 : piste en>fr posee, sous-titres FR affiches). Detail demande.
+  - Chiffres qui descendent (5, 9) : police Georgia (chiffres elzeviriens, pas de lnum dans la Georgia de Windows). Proposition :
+    chiffres pris dans Cambria via @font-face unicode-range. PAS fait, attend le choix.
+- Fait :
+  - `#ed-source` sous le numero d'episode : hebergeur (bleu) ou "YouTube · chaine · compil." (rouge), `renderSourceLine()`
+    appele par applyLoadedEpisode / tryNextPlayer / selectPlayer. Bouton "Changer" -> `showSourceChooser` (remplace
+    showYoutubeChooser) : lecteurs du site (`selectPlayer(i)`) ou "Revenir au lecteur du site", Ouvrir sur odysee.com,
+    autres sites (`renderElsewhere`, partage avec showSiteError), vignettes YouTube. Volet "Sources" du lecteur supprime
+    (celui du panneau hors lecteur garde).
+  - YouTube : `ytTitleOk(title, nom, saison)` (nom en mots entiers, "'s" colle au mot ; saison annoncee S2/Season/Saison/S02E/
+    "Nom 2 EP" != `seriesSeason(info)` -> ecarte), aussi dans findYoutubeEpisode ; episode unique ecarte si duree hors
+    [0,5x ; 1,6x] de la duree connue (aniSkip.duration).
+- Teste (Playwright Edge, `t71.js`) : ligne Source "▶ odysee.com", fenetre Sources (en cours, Autres sites, YouTube),
+  Cang Yuan Tu ep 17 sans Romance ni S2, 0 erreur console. Recherche rejouee en node : 4 resultats S1, Romance/S2/S3 ecartes.
+- PAS teste : vrai Opera + Tampermonkey, bascule YouTube -> "Revenir au lecteur du site" depuis la fenetre, choix d'un lecteur 2.
+- Test retour : clic vignette -> ligne rouge "YouTube · YOUKU..." -> Changer -> "Revenir au lecteur du site" -> odysee OK (t71.js).
+- ETAT a la sauvegarde : 7.1 PAS COMMITEE NI POUSSEE (modifs dans le fichier). Recette complete run-all.js lancee
+  (scratchpad nuit/tests/out/run71.txt ; suites.js pointe maintenant sur #ed-source-btn) : resultat a relire.
+- Suite : (1) relire run71.txt puis demander OK pour pousser 7.1 ; (2) chiffres Georgia -> Cambria (attend choix) ;
+  (3) detail "ST auto FR ne marche pas" (quelle video, ce qui s'affiche) ; (4) test blocage ecran 1 (ianimes plein ecran /
+  ED script coupe) ; (5) panneau hors lecteur : son volet Sources reste a aligner sur "Changer" ; (6) regroupement des menus (point 4).
+- Recette 7.1 relancee (2026-10-16) : Edge 35 OK (run71.txt), Firefox + WebKit 48 OK / 0 FAIL / 0 SKIP (run71b.txt). POUSSEE.
