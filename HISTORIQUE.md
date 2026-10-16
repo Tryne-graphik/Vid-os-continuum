@@ -1240,4 +1240,17 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Police Georgia (Personnaliser) : famille composite "VC Georgia" (@font-face : chiffres U+0030-0039 = local Cambria, reste =
   local Georgia) ; applyTheme remplace "Georgia" par "VC Georgia" dans --vc-font. Sans Cambria (hors Windows) : repli Georgia.
 - Teste (Edge, `t73.js`) : --vc-font = "VC Georgia", "Episode 199 / 487" en chiffres alignes (capture), 0 erreur.
-- PAS teste : Firefox/WebKit, vrai Opera + Tampermonkey. Commitee, PAS POUSSEE (attend accord).
+- Retour utilisateur (Chrome, 7.2) : "seules les couleurs changent" -> la 7.2 ne reprenait que les palettes des maquettes.
+- Signature des themes : nouvelles cles brad (arrondi des boutons), main / mainsh (bouton principal), tfont (titres : VC Cinzel
+  pour stele/parchemin), css (regles propres, '&' = .vc-thm.vc-th-host.vc-th-<id>). Classes vc-title / vc-serie sur les titres.
+- Anciens themes RETIRES (actuel, metal, carbone, verre, pierre-noire, pierre-bleue + @resource des textures) : valeur inconnue
+  -> stele (currentThemeId), import d'un ancien theme ignore (validation BACKUP_PREFS). vc-thm toujours pose.
+- Police : choix "Police du theme" (cle 'theme', defaut et Reinitialiser) = font du theme, sinon Segoe UI.
+- Libelles (voix F de design/planche-libelles.html) : Regarder, Mes series, Nouveaux episodes, Enchainer, Ouverture auto,
+  Fin intro ici / Debut outro ici (Avance sur sa ligne : .vc-trio>details 100 %), Avance (ex Plus), Reglages par serie,
+  Ne plus suivre, Fichier de sauvegarde, Redonner l'acces, Afficher : a rattraper / tous les sites, Son coupe : clique dans
+  la video, accents (Reinitialiser, Video ne se lance pas), icones Fermer / Changer.
+- Teste (Edge, `t73b.js`) : 12 themes, 12 options dans le menu, captures assemblees (out/t73_planche.png), 0 erreur.
+- Connu : Parchemin, numero d'episode du lecteur reste orange clair (couleur posee en JS, pas en attribut style).
+- PAS teste : vrai Chrome/Opera + Tampermonkey.
+- Recette complete : 70 OK + 3 FAIL sauvegarde = test qui semait le theme retire 'metal' (import l'ignore, voulu) ; test -> 'jade', groupe sauvegarde relance 24 OK / 0 FAIL. Commitee, PAS POUSSEE (attend accord).
