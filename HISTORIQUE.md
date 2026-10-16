@@ -1168,3 +1168,24 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   Nouveautes fermees avec (!)). Test 6.65 sur Edge : normal 17/17, panne simulee 17/17.
 - NB : `playwright install firefox webkit` a supprime chromium-1208 (cache Playwright) -> tests Chromium via msedge.exe.
 - 6.66 PAS POUSSEE (modifs dans le fichier, non commitees) : attendre le OK de l utilisateur.
+
+## v7.0 (2026-10-17) : equipe de nuit - recette complete avant la version extension
+- Equipes (agents) : bugs/erreurs silencieuses, securite, perf, UI/menus, recette Playwright, comparaison concurrents.
+  Rapports detailles (non publies) : scratchpad de session `nuit/1-code.md` ... `6-comparaison.md`.
+- Corrige :
+  - Sauvegarde : `cleanBackupValue` ne rejette plus que javascript:/data:/vbscript:/file:/blob: ("Re:Zero", "Overlord: S4" etaient effaces
+    -> marques Pas aime/Deja vu perdues) ; export de TOUTES les entrees (series exclues comprises) ; entree importee sans date n'ecrase
+    plus une entree datee ; fichier avec seulement des reglages importable ; `loadProgress` ignore une entree nulle.
+  - Securite : `data-key` echappe (tableau intro/outro) ; liens importes sans `"'<>` ni espace ; listener du lecteur (iframe) :
+    `event.source === window.parent`. `@match *://*/*` garde (sites ajoutes) : verifie que sur un hote inconnu le script ne pose rien
+    dans la page (seulement la commande de menu).
+  - Perf : `checkForNewEpisodes` 4 series a la fois (`runLimited`), `.catch` final, `findNextSeason` en asynchrone, intervalle 20 min
+    saute en onglet cache ; `setResumePosition` n'ecrit plus si < 10 s d'ecart ; observers fiche/badges ignorent les noeuds du script.
+  - UI : accents des libelles, Reglages fermes hors page d'episode (1366x768 : 681 -> sans defilement), Nouveautes = 5 dernieres versions
+    + lien historique, message "aucun anime avec ce filtre", "Retirer du suivi" au lieu de "Supprimer", focus dans les fenetres
+    (`focusDialog`) rendu a l'ouvrant, Echap ferme la fenetre du dessus puis le lecteur. Code mort du bandeau pollution supprime.
+- Tests : recette `run-all.js` (Edge/Firefox/WebKit, 3 sites, lecteur, sauvegarde, imports hostiles, YouTube) : 70 OK, 2 SKIP (plein
+  ecran refuse en headless), 1 FAIL YouTube Firefox = alea (2 relances OK). `t70.js` (cibles 7.0) : 6/6 OK sur 7.0, 5/6 FAIL sur 6.66.
+- PAS fait (a decider) : refonte de refreshThumbnailBadges (lecture/ecriture separees, cache), cache AniList persistant, regroupement
+  des menus (Aide = Legende+Nouveautes+Signaler), raccourcis clavier du lecteur, compte a rebours "Passer l'intro".
+- PAS teste : vrai Opera + Tampermonkey, plein ecran reel. NON POUSSEE (branche nuit/v7).

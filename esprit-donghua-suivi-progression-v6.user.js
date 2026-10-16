@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      6.66
+// @version      7.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -47,7 +47,7 @@
 // (recherche HTML brute, pas encore de test en navigateur reel) :
 //  - animoflix.to : une vraie page par episode (comme esprit-donghua),
 //    liens suivant/precedent en HTML (`a.ep-nav-btn.next-btn` /
-//    `a.ep-nav-btn[aria-label="Episode precedent"]`). Mais 2-3 hebergeurs
+//    `a.ep-nav-btn[aria-label="Épisode précédent"]`). Mais 2-3 hebergeurs
 //    video au choix par episode (video.sibnet.ru, ansembed.net, parfois
 //    sendvid.com) exposes dans un <select id="epLecteurSelect"> - ce
 //    script v1 ne gere QUE video.sibnet.ru (demande explicite de
@@ -425,6 +425,7 @@
         });
 
         window.addEventListener('message', (event) => {
+            if (event.source !== window.parent) return; // v7.0 : seulement le calque (pas une pub voisine)
             if (!event.data || typeof event.data.type !== 'string' || event.data.type.indexOf(MSG_PREFIX) !== 0) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
@@ -656,41 +657,7 @@
         console.warn('[AnimeTracker v6] Pollution tierce detectee (' + findings.length + ') :');
         findings.forEach((f) => console.warn('  [' + f.severity + '] ' + f.category + ' - ' + f.detail + (f.rule ? ' | regle : ' + f.rule : '')));
 
-        // ponytail: encadre jaune retire (v6.32, bruit sans action possible) - console seule.
-        return;
-        if (document.getElementById('ed-pollution-banner')) return;
-        const banner = document.createElement('div');
-        banner.id = 'ed-pollution-banner';
-        banner.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:2147483647;background:#2a1a05;color:#ffb020;border:1px solid #ffb020;border-radius:6px;padding:10px 14px;font-family:Arial,sans-serif;font-size:12px;max-width:360px;box-shadow:0 2px 10px rgba(0,0,0,.5);';
-
-        const title = document.createElement('div');
-        title.style.cssText = 'font-weight:bold;margin-bottom:6px;display:flex;justify-content:space-between;gap:10px;align-items:center;';
-        const titleText = document.createElement('span');
-        titleText.textContent = findings.length + ' element(s) tiers suspect(s) detecte(s)';
-        const closeBtn = document.createElement('span');
-        closeBtn.textContent = 'x';
-        closeBtn.style.cssText = 'cursor:pointer;opacity:.7;padding:0 4px;';
-        closeBtn.addEventListener('click', () => banner.remove());
-        title.appendChild(titleText);
-        title.appendChild(closeBtn);
-        banner.appendChild(title);
-
-        const list = document.createElement('div');
-        list.style.cssText = 'max-height:160px;overflow-y:auto;';
-        findings.slice(0, 8).forEach((f) => {
-            const line = document.createElement('div');
-            line.style.cssText = 'margin-bottom:4px;';
-            line.textContent = '[' + f.severity + '] ' + f.detail;
-            list.appendChild(line);
-        });
-        banner.appendChild(list);
-
-        const hint = document.createElement('div');
-        hint.style.cssText = 'margin-top:6px;opacity:.8;';
-        hint.textContent = 'Detail complet + regles uBlock suggerees dans la console (F12).';
-        banner.appendChild(hint);
-
-        document.body.appendChild(banner);
+        // Encadre jaune retire en v6.32 (bruit sans action possible) : console seule (code supprime en v7.0).
     }
 
     function runPollutionAnalysis() {
@@ -1169,7 +1136,7 @@
     //    "N!lien1,lien2,..." - french-anime.com et les sites du meme moteur) :
     //    navigation interne comme anime-sama, tous les lecteurs en secours ;
     //  - une page par episode avec un lecteur en iframe (myfluneo.eu) : le
-    //    lecteur = la plus grande iframe, "suivant" = lien "Episode suivant"
+    //    lecteur = la plus grande iframe, "suivant" = lien "Épisode suivant"
     //    du site, suivi par navigation (les pages peuvent etre generees en JS,
     //    donc pas de lecture du HTML brut).
     function loadCustomSites() { try { return GM_getValue('customSites', {}) || {}; } catch (e) { return {}; } }
@@ -1359,7 +1326,7 @@
             const nbPlayers = (info.embedCandidates || []).length;
             if (!confirm('Detecte sur ' + host + ' :\n\nAnime : ' + info.seriesName + '\nEpisode : ' + info.episodeNumber + (info.totalEpisodes ? ' (sur ' + info.totalEpisodes + ')' : '') +
                 '\nLecteur : ' + hostOf(info.embedSrc) + (nbPlayers > 1 ? ' (+' + (nbPlayers - 1) + ' de secours)' : '') +
-                '\nEpisode suivant : ' + (info.navStyle === 'index' ? 'liste du site' : (info.nextPageUrl ? 'lien trouve' : 'non trouve')) +
+                '\nÉpisode suivant : ' + (info.navStyle === 'index' ? 'liste du site' : (info.nextPageUrl ? 'lien trouve' : 'non trouve')) +
                 '\n\nAjouter ' + host + ' a Video Continuum ? (la page va se recharger)')) return;
             const all = loadCustomSites();
             all[host] = { addedAt: new Date().toISOString() };
@@ -1394,6 +1361,14 @@
         // Toute donnee venue d'une page scrapee ou d'un fichier importe est
         // echappee avant d'entrer dans du innerHTML : un fichier de sauvegarde
         // partage pouvait sinon injecter du HTML/JS dans le panneau.
+        // v7.0 : focus clavier dans la fenetre ouverte, rendu au bouton d'origine a la fermeture.
+        function focusDialog(el) {
+            const opener = document.activeElement;
+            const rm = el.remove.bind(el);
+            el.remove = () => { rm(); if (opener && opener.isConnected && opener.focus) opener.focus(); };
+            el.tabIndex = -1; el.style.outline = 'none';
+            el.focus();
+        }
         function escapeHtml(value) {
             return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
@@ -1408,12 +1383,15 @@
             const known = SITES.find((x) => x.id === siteId);
             if (!known) return null;
             const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+            // v7.0 : pas de guillemet/chevron/espace dans un lien importe (sortie
+            // d'attribut HTML si un rendu oublie escapeHtml).
+            const okUrl = (u) => /^https:\/\/[^\s"'<>`]+$/i.test(u) && known.matchesUrl(u);
             const episodeUrl = str(e.episodeUrl, 1000);
-            if (!/^https:\/\//i.test(episodeUrl) || !known.matchesUrl(episodeUrl)) return null;
+            if (!okUrl(episodeUrl)) return null;
             const seriesName = str(e.seriesName, 300);
             if (!seriesName) return null;
             let seriesUrl = str(e.seriesUrl, 1000);
-            if (!(/^https:\/\//i.test(seriesUrl) && known.matchesUrl(seriesUrl)) && seriesUrl.indexOf('legacy:') !== 0) seriesUrl = 'legacy:' + seriesName;
+            if (!okUrl(seriesUrl) && seriesUrl.indexOf('legacy:') !== 0) seriesUrl = 'legacy:' + seriesName;
             const num = Number(e.episodeNumber);
             const watched = e.watchedAt && !isNaN(new Date(e.watchedAt).getTime()) ? new Date(e.watchedAt).toISOString() : null;
             return {
@@ -1431,6 +1409,7 @@
             // peut porter une etiquette perimee ("[ES]" vu en usage reel le
             // 2026-10-01 sur une entree esprit-donghua).
             Object.keys(data).forEach((k) => {
+                if (!data[k] || typeof data[k] !== 'object') { delete data[k]; return; } // v7.0 : entree corrompue
                 const known = SITES.find((x) => x.id === data[k].site);
                 if (known) { data[k].siteTag = known.tag; data[k].siteLabel = known.label; }
             });
@@ -1946,7 +1925,9 @@
                 items += '</ul>';
             }
             const dataBlock = '<script type="application/json" id="ed-progress-backup">' +
-                JSON.stringify(entries).replace(/</g, '\\u003c') + '</' + 'script>' +
+                // v7.0 : toutes les entrees, exclues comprises (excludedSeries est
+                // sauvegarde : sans l'entree, l'episode memorise etait perdu).
+                JSON.stringify(Object.keys(progress).map((k) => progress[k])).replace(/</g, '\\u003c') + '</' + 'script>' +
                 '<script type="application/json" id="ed-history-backup">' +
                 JSON.stringify(Object.keys(loadHistory()).map((k) => loadHistory()[k])).replace(/</g, '\\u003c') + '</' + 'script>' +
                 '<script type="application/json" id="ed-settings-backup">' +
@@ -2109,7 +2090,9 @@
         // tailles bornees, pas d'adresse autre que https (iframe, liens).
         function cleanBackupValue(v, depth) {
             if (typeof v === 'boolean' || (typeof v === 'number' && isFinite(v))) return v;
-            if (typeof v === 'string') return v.length > 2000 || /^\s*[a-z][a-z0-9+.-]*:/i.test(v) && !/^https:\/\//i.test(v) ? undefined : v;
+            // v7.0 : seuls les schemas dangereux sont rejetes ("Re:Zero" ou
+            // "Overlord: S4" etaient effaces, marques Pas aime/Deja vu perdues).
+            if (typeof v === 'string') return v.length > 2000 || /^\s*(javascript|data|vbscript|file|blob)\s*:/i.test(v) ? undefined : v;
             if (!v || typeof v !== 'object' || depth > 3) return undefined;
             const out = Array.isArray(v) ? [] : {};
             Object.keys(v).slice(0, 5000).forEach((k) => {
@@ -2177,7 +2160,8 @@
                 const key = site + '::' + seriesUrl;
                 const existing = progress[key];
                 if (existing) {
-                    if (existing.watchedAt && e.watchedAt && new Date(existing.watchedAt) >= new Date(e.watchedAt)) { skipped++; return; }
+                    // v7.0 : une entree importee sans date n'ecrase plus une entree datee.
+                    if (existing.watchedAt && (!e.watchedAt || new Date(existing.watchedAt) >= new Date(e.watchedAt))) { skipped++; return; }
                     progress[key] = Object.assign({}, existing, e, { site: site, seriesUrl: seriesUrl });
                     updated++;
                 } else {
@@ -2193,7 +2177,8 @@
             reader.onload = () => {
                 try {
                     const entries = parseProgressBackup(String(reader.result));
-                    if (entries.length === 0) { alert('Aucune entree de progression trouvee dans ce fichier.'); return; }
+                    // v7.0 : un fichier sans progression mais avec reglages est restaure.
+                    if (entries.length === 0 && !/id="ed-settings-backup"/.test(String(reader.result))) { alert('Aucune donnee Video Continuum trouvee dans ce fichier.'); return; }
                     const nbSettings = mergeImportedSettings(String(reader.result));
                     const result = mergeImportedEntries(entries);
                     mergeImportedHistory(String(reader.result));
@@ -2363,7 +2348,7 @@
                 '.vc-ct-cases .vc-track:has(input:checked){background:var(--vc-cc)!important;border-color:var(--vc-cc)!important;color:var(--vc-ccon)!important;text-shadow:none;}' +
                 '@font-face{font-family:"VC Cinzel";src:' + themeTexUrl(['vcCinzel', 'cinzel.woff2']) + ' format("woff2");font-weight:400 900;font-display:swap;}' +
                 '.vc-cinzel summary,.vc-cinzel .vc-grp{font-family:"VC Cinzel",var(--vc-font,"Segoe UI"),serif!important;letter-spacing:.06em!important;}' +
-                // Vignettes : option "Estomper les series suivies" (le cadre .ep-thumb-frame reste net).
+                // Vignettes : option "Estomper les séries suivies" (le cadre .ep-thumb-frame reste net).
                 '.vc-dim-tracked img[data-vc-st]{opacity:.35;filter:grayscale(.85);transition:opacity .2s,filter .2s;}' +
                 '.vc-dim-tracked a:hover img[data-vc-st]{opacity:1;filter:none;}';
         }
@@ -2450,7 +2435,7 @@
             return collapsibleSection('perso', 'Personnaliser',
                 '<label style="' + row + '">Couleur :<input type="color" id="' + prefix + '-accent" value="' + (currentAccent() || themeAccent()) + '" aria-label="Couleur (pipette dans le selecteur)" style="flex:1;height:26px;padding:0 2px;border:none;background:none;cursor:pointer;">' +
                 '<button id="' + prefix + '-accent-apply" title="Appliquer et enregistrer la couleur choisie" style="' + BTN_STYLE + 'flex:0 0 auto;">Appliquer</button></label>' +
-                '<label style="' + row + '">Appliquer a :<select id="' + prefix + '-accent-target" aria-label="Element colore" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
+                '<label style="' + row + '">Appliquer à<select id="' + prefix + '-accent-target" aria-label="Element colore" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 Object.keys(accentTargets()).map((k) => '<option value="' + k + '"' + (k === currentAccentTarget() ? ' selected' : '') + '>' + accentTargets()[k] + '</option>').join('') + '</select></label>' +
                 '<label style="' + row + '">Police :<select id="' + prefix + '-font" aria-label="Police du panneau" style="flex:1;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 Object.keys(F).map((k) => '<option value="' + k + '"' + (k === f ? ' selected' : '') + ' style="font-family:\'' + F[k] + '\';">' + F[k] + '</option>').join('') + '</select></label>' +
@@ -2531,6 +2516,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.0', ['Version de recette complète : sauvegarde plus sûre (les noms comme "Re:Zero" et les séries exclues ne se perdent plus à la restauration ; un fichier contenant seulement des réglages s\'importe).', 'Sécurité : un fichier de sauvegarde piégé ne peut plus injecter de code ; le lecteur n\'écoute plus que le calque.', 'Plus fluide : vérification des nouveaux épisodes 4 séries à la fois et jamais en onglet caché, moins d\'écritures pendant la lecture.', 'Clavier : Échap ferme la fenêtre du dessus, puis le lecteur ; le focus va dans la fenêtre ouverte.', 'Panneau : accents corrigés, Réglages fermés hors épisode (plus de défilement en 1366x768), Nouveautés limitées aux 5 dernières versions, message clair quand le filtre masque tout.']],
             ['6.66', ['Le panneau reste ferme (ou ouvert) d\'une page a l\'autre : il ne reapparait plus a chaque rechargement.', 'Nouveautes fermees par defaut : le (!) jaune signale une nouvelle version, a ouvrir si besoin.']],
             ['6.65', ['Opera (Tampermonkey) : les boutons du panneau, Importer, Historique, le suivi et les Fiches ne reagissaient pas. Corrige.']],
             ['6.64', ['Nouveau bouton "\u2713 Deja vu" dans la Fiche : icone grise (3 coches) sur les vignettes des series vues avant le script. Une serie suivie garde son icone de suivi.']],
@@ -2538,14 +2524,14 @@
             ['6.62', ['Fiche : synopsis en francais retrouve depuis les vignettes d\'episode d\'Esprit Donghua (lu sur la page de la serie).', 'Fiche : genres et note aussi pour les series AniList sans fiche MyAnimeList (beaucoup de donghua), en essayant le nom romanise puis le nom anglais.']],
             ['6.61', ['Bouton "ℹ Fiche" sur toutes les vignettes (Esprit Donghua, Animoflix, sites ajoutes) : synopsis, genres et note par-dessus la page, sans lancer l\'episode.', 'Anime-Sama : le bouton Fiche des vignettes ouvre aussi la fiche sur place (lien "Page de l\'anime" dedans).', 'Une fiche deja ouverte se reaffiche tout de suite ; rien n\'est enregistre pour les series non suivies.']],
             ['6.60', ['Personnaliser : "Accent" devient "Couleur", avec un bouton Appliquer (la couleur ne change plus pendant le choix).', 'Nouvelle liste "Appliquer a" : cadre du panneau (par defaut), titres des sections, cases cochees, ou tout.']],
-            ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les series suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
+            ['6.59', ['Series en memoire mieux reperables sur les pages des sites : cadre de couleur autour de la vignette (meme couleur que l\'icone, agrandie).', 'Option "Estomper les séries suivies" (panneau du site, Reglages > Plus > Affichage) : les series deja en memoire sont grisees, les nouveautes ressortent ; nettes au survol.', 'Reglages > Plus > Personnaliser : couleur d\'accent (avec pipette), police du panneau (6 polices Windows), titres en Cinzel, bouton Reinitialiser.']],
             ['6.58', ['Lisibilite (12 pistes) : police Segoe UI 12 px demi-gras ; boutons sur plaques pleines et textures adoucies ; verre trempe fume (texte lisible sur scene claire) ; titres de sections en simples intitules ; couleurs d\'accent adoucies ; plus de noir ni de blanc purs.', 'Cartes des sites : etat avec icone et mot (● 2 a rattraper, ✓ a jour). Zones de clic d\'au moins 24 px, contour clavier visible sur tous les themes.', 'Option "Panneau discret en lecture" (Reglages > Plus > Affichage) : le panneau s\'efface apres 4 s sans souris et revient au survol.']],
-            ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Debut outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
+            ['6.57', ['Retours de recette : nom de la serie sur 2 lignes si besoin, bouton "ℹ Fiche" sur la ligne de l\'episode, numero de version cliquable pour verifier les mises a jour.', '"↻ Verifier les nouveaux episodes" de nouveau sur une ligne entiere ; Reglages : Fin intro | Début outro | Plus, et Plus range en 3 groupes (Intro / outro, Affichage, Page).', 'Croix ✕ sur Nouveautes pour la masquer jusqu\'a la prochaine version.', 'Themes plus lisibles (texte teinte, semi-gras, ombre) ; panneau agrandi automatiquement sur grand ecran (1440p, 4K).']],
             ['6.56', ['Themes du panneau (Reglages > Plus > Theme) : Metallique, Fibre de carbone, Verre trempe, Pierre noire, Pierre bleue, ou Actuel. Une couleur d\'accent par theme ; le lecteur et le panneau du site suivent le meme theme.']],
-            ['6.55', ['Reglages ouvert par defaut (Fin intro / Debut outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
+            ['6.55', ['Reglages ouvert par defaut (Fin intro / Début outro toujours visibles).', 'Afficher l\'etat AniSkip deplace dans Reglages > Plus, en bouton comme les autres ; Plus aligne sur les autres sections.']],
             ['6.54', ['Correctif : la 6.53 ne se lancait pas (erreur de syntaxe).']],
             ['6.53', ['Nom de la serie et numero d\'episode un peu plus petits.']],
-            ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein ecran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Verifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein ecran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
+            ['6.52', ['Panneau plus compact (tient sur un ecran 1080p) : Plein écran / Fermer, Prec. / N° / Aller / Suiv., Nouveaux ep. / Historique et Signaler / Legende sur une meme ligne ; Fiche de l\'anime = bouton ℹ a cote du nom ; Vérifier MAJ dans Nouveautes ; Suivre | Historique ; liste des series + ↻ (verifier les nouveaux episodes) ; Reglages | Sources, Sauvegarde | Nouveautes, Exporter | Importer, YouTube | Source du site.', 'Tous les boutons a la meme taille (Suivre, Plein écran, Fermer, Aller... etaient plus gros).', 'Ligne AniSkip masquee par defaut (Reglages > Afficher l\'etat AniSkip) et raccourcie : AniSkip ✓ / ✗, detail au survol.']],
             ['6.51', ['Clavier : Echap ferme les fenetres (fiche, reglages, historique, suivi) ; cases Suivre, vignettes YouTube, lignes du resume et bouton Fiche utilisables au clavier (Tab, Entree).', 'Lecteurs d\'ecran : champs et listes etiquetes, statut et compte a rebours annonces.']],
             ['6.50', ['Fenetre de suivi : la saison vue est affichee apres le nom (Anime-Sama, Animoflix, myfluneo), ex. "Clevatess · Saison 2".', 'Fenetre "Mes animes" et petit bouton ▶ retires des autres sites. "Ajouter ce site" devient une commande directe du menu Tampermonkey (depuis la page d\'un episode).', 'Sauvegarde complete : en plus de la progression et de l\'historique, le fichier garde les series abandonnees / en attente, les reglages intro/outro, les chaines YouTube, les sites ajoutes, les reprises et les preferences (restaures a l\'import, sans ecraser ceux deja presents).']],
             ['6.49', ['Nouvelles saisons detectees pour les series en attente (pause) sur Anime-Sama, Animoflix et myfluneo : la serie repasse en nouvel episode avec un bouton "Regarder (Saison N)" dans la fenetre de suivi.', 'Anime-Sama / myfluneo : des qu\'un episode de la nouvelle saison est vu, l\'ancienne saison est retiree du suivi (elle reste dans l\'historique).']],
@@ -2553,20 +2539,20 @@
             ['6.47', ['Animoflix : plus de 2e icone au milieu de certaines vignettes (elle se posait sur le petit drapeau de langue).']],
             ['6.46', ['Animoflix : icone de suivi des vignettes en bas a droite aussi (meme etiquette Anime qui la cachait).']],
             ['6.45', ['Anime-Sama : icone de suivi des vignettes deplacee en bas a droite (l\'etiquette "Anime" du site la cachait).']],
-            ['6.44', ['Boutons Episode precedent / suivant places sous la barre de lecture, dans la rangee des commandes (entre le temps et les reglages).']],
+            ['6.44', ['Boutons Épisode précédent / suivant places sous la barre de lecture, dans la rangee des commandes (entre le temps et les reglages).']],
             ['6.43', ['Verification des nouveaux episodes : les series importees d\'une ancienne sauvegarde (Esprit Donghua) retrouvent leur page serie par la recherche du site au lieu d\'une erreur "Refused to connect to legacy:".']],
-            ['6.42', ['Boutons Episode precedent / suivant plus petits et plus bas, juste au-dessus de la barre de lecture.']],
+            ['6.42', ['Boutons Épisode précédent / suivant plus petits et plus bas, juste au-dessus de la barre de lecture.']],
             ['6.41', ['Pastilles des vignettes remplacees par une petite icone liste a cases, cases a la couleur de l\'etat, 1re case cochee (croix pour les series exclues), la coche se dessine a l\'apparition.']],
             ['6.40', ['Pastille ✓ sur les vignettes des sites : verte = suivi ici, turquoise = nouvel episode a voir, jaune = suivi sur un autre site, rouge = exclu du suivi.']],
-            ['6.39', ['Boutons Episode precedent / suivant deplaces en bas au centre, au-dessus de la barre de lecture.',
+            ['6.39', ['Boutons Épisode précédent / suivant deplaces en bas au centre, au-dessus de la barre de lecture.',
                 'Le bouton Suivant reste visible (grise, "Pas encore sorti") sur le dernier episode sorti.',
                 'Video sans choix de qualite (fichier d\'origine) qui cale : bascule directe sur YouTube au lieu de recharger.']],
-            ['6.38', ['Boutons Episode precedent / suivant sur la video, a gauche et a droite du centre : ils apparaissent quand la souris bouge et disparaissent apres 3 s.',
+            ['6.38', ['Boutons Épisode précédent / suivant sur la video, a gauche et a droite du centre : ils apparaissent quand la souris bouge et disparaissent apres 3 s.',
                 'Vignettes YouTube : badge VOSTFR (annonce dans le titre) ou ST auto FR (sous-titres traduits automatiquement par YouTube).',
                 'Lecture sur YouTube : "Prec." revient a l\'episode precedent au lieu d\'afficher "Aucun episode precedent".']],
             ['6.37', ['Recherche YouTube : essaie aussi le nom anglais de la serie et "EP N" - trouve les compilations (ex. "EP 181 - EP 200") qui ne citent pas le numero cherche.',
                 'Lecteur YouTube : le bouton "Plus de videos" est masque (il cachait les reglages).',
-                'Episode suivant sur YouTube : ne retombe plus sur le site quand YouTube affiche sa page de consentement aux cookies.']],
+                'Épisode suivant sur YouTube : ne retombe plus sur le site quand YouTube affiche sa page de consentement aux cookies.']],
             ['6.36', ['"Trouver sur YouTube" cherche tout seul et propose les videos en vignettes (plus de lien a coller) ; la chaine choisie est retenue pour les episodes suivants.', 'Compilations YouTube : le debut de chaque episode est lu dans les chapitres de la video quand elle en a (sinon estime).']],
             ['6.35', ['Recherche YouTube : les videos aux sous-titres anglais incrustes dans l\'image (pas traduisibles en francais) ne sont plus proposees.']],
             ['6.34', ['Video qui cale ou episode indisponible : l\'encadre cherche tout seul l\'episode sur YouTube et affiche les resultats (nom de la serie + numero, VOSTFR en premier). Un clic lance la video et retient la chaine : les prochains episodes qui calent y basculent automatiquement.',
@@ -2575,9 +2561,9 @@
                 'Choix automatique de la qualite Odysee et case 720p supprimes (Odysee le refuse sans compte : petite fenetre rouge). Avec un compte, regler la qualite sur odysee.com/$/settings.']],
             ['6.32', ['Esprit Donghua a change ses adresses d\'episodes (numerotation par saison) : les series suivies dont l\'adresse ne marchait plus sont retrouvees et corrigees toutes seules, la detection des nouveaux episodes remarche.',
                 'Plus d\'encadre jaune "elements tiers suspects" : le detail reste dans la console (F12).']],
-            ['6.31', ['Episode suivant : le decompte commence 4 s avant le debut de l\'outro et enchaine 2 s apres (la derniere replique n\'est plus coupee). Sans outro reglee : decompte sur les 4 dernieres secondes, enchainement a la fin.',
+            ['6.31', ['Épisode suivant : le decompte commence 4 s avant le debut de l\'outro et enchaine 2 s apres (la derniere replique n\'est plus coupee). Sans outro reglee : decompte sur les 4 dernieres secondes, enchainement a la fin.',
                 'Decompte en bas a droite (ne cache plus les sous-titres) avec "Suivant maintenant" a cote d\'"Annuler".',
-                'Boutons "Fin intro" / "Debut outro" verts quand c\'est regle pour la serie (a la main ou par AniSkip), gris sinon.']],
+                'Boutons "Fin intro" / "Début outro" verts quand c\'est regle pour la serie (a la main ou par AniSkip), gris sinon.']],
             ['6.30', ['Numero d\'episode plus gros, chargement en fine barre (les messages d\'erreur restent en texte).',
                 '"Lecture continue" et "Lecteur auto" deviennent des boutons comme "Suivi" ; 720p rangee dans Reglages > Plus (sous-menu decale).',
                 'Sites tout en bas en petits boutons toujours visibles, avec le choix du mode d\'ouverture juste dessous.']],
@@ -2588,14 +2574,14 @@
             ['6.28', ['"Revenir a la source du site" relit la page de l\'episode : Suivant / Precedent remarchent (avant : "Aucun episode suivant detecte").']],
             ['6.27', ['YouTube sans cle API : "Lire sur YouTube" (ou bouton "Trouver sur YouTube") demande une seule fois le lien d\'une video de la serie, puis trouve l\'episode, meme dans une compilation de 10 ou 20 episodes, avec les sous-titres traduits en francais.',
                 'Quand la video cale chez l\'hebergeur, bascule automatique sur YouTube si une chaine est associee ; la serie reste sur YouTube ensuite ("Revenir a la source du site" pour annuler). Le suivi avance tout seul pendant une compilation.']],
-            ['6.26', ['Si la video cale chez l\'hebergeur (fichier trop lourd ou mal prepare, cas de certaines chaines Odysee pour Wan Jie Du Zun), un encadre l\'explique et propose : Reessayer, Chercher sur YouTube, Rechercher sur Google, Episode suivant.']],
+            ['6.26', ['Si la video cale chez l\'hebergeur (fichier trop lourd ou mal prepare, cas de certaines chaines Odysee pour Wan Jie Du Zun), un encadre l\'explique et propose : Reessayer, Chercher sur YouTube, Rechercher sur Google, Épisode suivant.']],
             ['6.25', ['Plus de message "@connect" dans la console : les nouveaux episodes des sites ajoutes ne sont verifies que depuis ces sites.']],
             ['6.24', ['Odysee : un meme anime publie par plusieurs chaines (ou avec des titres differents) ne cree plus plusieurs lignes de suivi. Les doublons existants sont fusionnes une fois, en gardant le plus ancien episode vu.']],
             ['6.23', ['Fiche de l\'anime sur tous les sites (bouton \u2139 dans le lecteur, le panneau et la fenetre de suivi) : synopsis en francais quand le site le fournit (sinon AniList en anglais), genres, tags sans spoilers, note, nombre d\'episodes, statut et prochain episode.',
                 'Sites ajoutes : la verification des nouveaux episodes n\'etait pas autorisee par Tampermonkey, corrige.']],
             ['6.22', ['"Ajouter ce site" (fenetre \u25B6 Mes animes, depuis la page d\'un episode) : le lecteur, le suivi, la reprise, l\'enchainement et AniSkip sur un site non prevu. Teste sur french-anime.com et myfluneo.eu. Menu Tampermonkey : "Retirer ce site".']],
             ['6.21', ['Lecteur de secours automatique : si le lecteur d\'un episode est mort (ex. "video not found"), le lecteur suivant de la page est essaye tout seul.',
-                'Si aucun lecteur ne marche, un encadre explique que c\'est le site (video supprimee, hebergeur en panne) et non Video Continuum, cherche tout seul le meme episode sur l\'autre site (Anime-Sama / Animoflix), et propose "Rechercher sur Google" et "Episode suivant".',
+                'Si aucun lecteur ne marche, un encadre explique que c\'est le site (video supprimee, hebergeur en panne) et non Video Continuum, cherche tout seul le meme episode sur l\'autre site (Anime-Sama / Animoflix), et propose "Rechercher sur Google" et "Épisode suivant".',
                 'Les lecteurs d\'autres hebergeurs (ex. lecteur 2 d\'animoflix) peuvent etre pilotes.',
                 'Odysee : la verification des nouveaux episodes n\'etait plus autorisee, corrige.']],
             ['6.20', ['Animoflix : le lecteur fonctionne de nouveau (le site est passe de Sibnet, ferme, a ansembed).']],
@@ -2616,11 +2602,13 @@
         function newsSectionHtml(prevOpen, prefix) {
             if (GM_getValue('newsHiddenFor', '') === currentScriptVersion()) return '';
             const unseen = GM_getValue('lastSeenVersion', '') !== currentScriptVersion();
-            const body = CHANGELOG.map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
+            // v7.0 : 5 dernieres versions seulement (tout l'historique faisait ~9000 px).
+            const body = CHANGELOG.slice(0, 5).map(([v, items]) => '<div style="font-size:11px;color:#ccc;"><b style="color:#ffd400;">v' + v + '</b><ul style="margin:2px 0 0 16px;padding:0;">' +
                 items.map((t) => '<li style="margin:2px 0;">' + escapeHtml(t) + '</li>').join('') + '</ul></div>').join('') +
-                '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Verifier MAJ</button>';
+                '<a href="https://github.com/Tryne-graphik/Vid-os-continuum/blob/master/HISTORIQUE.md" target="_blank" rel="noopener" style="font-size:11px;color:#03d0fc;">Tout l\'historique des versions</a>' +
+                '<button id="' + prefix + '-check-update-btn" title="Ouvre la page d\'installation du script - Tampermonkey indique lui-meme si une mise a jour est disponible" style="' + BTN_STYLE + '">&#128260; Vérifier MAJ</button>';
             // ✕ hors du <summary> (axe : pas d'element interactif dans un autre) ; le conteneur devient l'element de la paire.
-            return '<div class="vc-news-wrap">' + collapsibleSection('nouveautes', 'Nouveautes' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, !!prevOpen) +
+            return '<div class="vc-news-wrap">' + collapsibleSection('nouveautes', 'Nouveautés' + (unseen ? ' <span style="color:#ffd400;">(!)</span>' : ''), body, !!prevOpen) +
                 '<span class="vc-news-x" role="button" tabindex="0" title="Masquer jusqu\'a la prochaine version" aria-label="Masquer les nouveautes">&#10005;</span></div>';
         }
         function bindNewsSection(container) {
@@ -2725,33 +2713,33 @@
                 '<div id="ed-cross-site" style="display:none;background:rgba(255,179,0,.12);border:1px solid #ffb300;border-radius:6px;padding:6px;font-size:11px;color:#ffb300;text-align:center;"></div>' +
                 '<span id="ed-mute-indicator" style="color:#f66;display:none;font-size:11px;text-align:center;">Son coupe - clique dans le lecteur</span>' +
                 '<div style="display:flex;gap:4px;">' +
-                '<button id="ed-fullscreen-btn" style="flex:2;background:#03d0fc;color:#000;border:none;padding:6px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:11px;">Plein ecran</button>' +
+                '<button id="ed-fullscreen-btn" style="flex:2;background:#03d0fc;color:#000;border:none;padding:6px;border-radius:4px;cursor:pointer;font-weight:bold;font-size:11px;">Plein écran</button>' +
                 '<button id="ed-close-btn" style="' + B + 'flex:1;padding:6px 4px;">Fermer</button>' +
                 '</div>' +
                 '<div style="display:flex;gap:4px;">' +
-                '<button id="ed-prev-btn" title="Episode precedent" aria-label="Episode precedent" style="' + B + 'padding:6px 8px;">&#9664;</button>' +
+                '<button id="ed-prev-btn" title="Épisode précédent" aria-label="Épisode précédent" style="' + B + 'padding:6px 8px;">&#9664;</button>' +
                 '<input type="number" id="ed-goto-input" aria-label="Numéro de l’épisode" min="1" placeholder="N&#176; ep." style="width:0;flex:1;padding:5px 6px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;">' +
                 '<button id="ed-goto-btn" style="' + B + 'padding:6px 6px;">Aller</button>' +
-                '<button id="ed-next-btn" title="Episode suivant" aria-label="Episode suivant" style="' + B + 'padding:6px 8px;">&#9654;</button>' +
+                '<button id="ed-next-btn" title="Épisode suivant" aria-label="Épisode suivant" style="' + B + 'padding:6px 8px;">&#9654;</button>' +
                 '</div>' +
                 '<div class="vc-pair">' + trackButtonHtml('ed-track-cb', false) +
                 '<button id="ed-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>' +
-                '<select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de serie --</option></select>' +
-                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Verifier nouveaux episodes</button>' +
+                '<select id="ed-series-select" aria-label="Changer de série" style="' + SELECT + 'font-family:Consolas,monospace;"><option value="">-- Changer de série --</option></select>' +
+                '<button id="ed-check-new-btn" style="' + BTN_STYLE + '">&#8635; Vérifier les nouveaux épisodes</button>' +
                 toggleButtonsHtml('ed-', false, false) +
-                '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
-                    '<div class="vc-trio"><button id="ed-set-intro-btn" style="' + B + '">Fin intro</button><button id="ed-set-outro-btn" style="' + B + '">Debut outro</button>' +
+                '<div class="vc-pair">' + collapsibleSection('reglages', 'Réglages',
+                    '<div class="vc-trio"><button id="ed-set-intro-btn" style="' + B + '">Fin intro</button><button id="ed-set-outro-btn" style="' + B + '">Début outro</button>' +
                     collapsibleSection('plus', 'Plus',
                         groupLabel('Intro / outro') +
-                        '<div class="vc-pair"><button id="ed-set-introstart-btn" style="' + B + '">Debut intro</button><button id="ed-set-outroend-btn" style="' + B + '">Fin outro</button></div>' +
-                        '<button id="ed-settings-btn" style="' + B + '">Configuration de toutes les series</button>' +
+                        '<div class="vc-pair"><button id="ed-set-introstart-btn" style="' + B + '">Début intro</button><button id="ed-set-outroend-btn" style="' + B + '">Fin outro</button></div>' +
+                        '<button id="ed-settings-btn" style="' + B + '">Configuration de toutes les séries</button>' +
                         groupLabel('Affichage') +
                         themeSelectHtml('ed-theme-select') + customizeHtml('ed', false) +
                         '<label class="vc-track"><input type="checkbox" id="ed-aniskip-cb"' + (isAniSkipShown() ? ' checked' : '') + '><span class="off">Afficher l\'etat AniSkip</span><span class="on">&#10003; Afficher l\'etat AniSkip</span></label>' +
                         '<label class="vc-track" title="4 s sans bouger la souris : le panneau devient presque transparent ; il revient au survol ou au moindre mouvement"><input type="checkbox" id="ed-autohide-cb"' + (GM_getValue('panelAutoHide', false) === true ? ' checked' : '') + '><span class="off">Panneau discret en lecture</span><span class="on">&#10003; Panneau discret en lecture</span></label>' +
                         groupLabel('Page') +
                         '<div class="vc-pair"><button id="ed-reload-btn" title="Recharger la page" style="' + B + '">&#8635; Recharger</button>' +
-                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Supprimer la serie selectionnee de la progression">Supprimer</button></div>', false, true) + '</div>', true) +
+                        '<button id="ed-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;flex:1;" title="Retire de la progression la série choisie dans la liste">Retirer du suivi</button></div>', false, true) + '</div>', true) +
                 collapsibleSection('youtube', 'Sources',
                     (site.id === 'esprit-donghua' ? '<button id="ed-open-odysee-btn" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + B + '">Ouvrir sur Odysee</button>' : '') +
                     '<div class="vc-pair"><button id="ed-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite." style="' + B + '">YouTube</button>' +
@@ -2761,7 +2749,7 @@
                     '<button id="ed-import-btn" style="' + B + '">Importer</button></div>' +
                     '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
                     '<button id="ed-choose-backup-btn" style="' + B + '">Choisir le fichier</button>' +
-                    '<button id="ed-reauth-backup-btn" style="' + B + '">Reautoriser le fichier</button>' +
+                    '<button id="ed-reauth-backup-btn" style="' + B + '">Réautoriser le fichier</button>' +
                     '<span id="ed-backup-status" style="color:#888;font-size:11px;"></span>') +
                 newsSectionHtml(false, 'ed') + '</div>' +
                 '<div class="vc-pair">' + incidentSectionHtml('ed', false) + legendSectionHtml(false) + '</div>' +
@@ -2788,17 +2776,17 @@
             toast.id = 'ed-toast';
             toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
             toast.style.cssText = 'position:absolute;bottom:30px;right:30px;z-index:10;background:#15151f;color:#eee;padding:14px 20px;border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.6);font-family:Arial,sans-serif;display:none;align-items:center;gap:12px;';
-            toast.innerHTML = '<span id="ed-toast-text">Episode suivant dans 3s...</span><button id="ed-toast-now" style="background:#03d0fc;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">Suivant maintenant</button><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
+            toast.innerHTML = '<span id="ed-toast-text">Épisode suivant dans 3s...</span><button id="ed-toast-now" style="background:#03d0fc;color:#000;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;font-weight:bold;">Suivant maintenant</button><button id="ed-toast-cancel" style="background:#333;color:#fff;border:none;padding:6px 14px;border-radius:4px;cursor:pointer;font-size:13px;">Annuler</button>';
             overlay.appendChild(toast);
 
             // Prec./Suiv. sur la video (v6.38) : apparaissent quand la souris
             // bouge, disparaissent apres 3 s, comme lecture/pause.
             const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
             const navPrev = document.createElement('button');
-            navPrev.type = 'button'; navPrev.title = 'Episode precedent'; navPrev.textContent = '⏮';
+            navPrev.type = 'button'; navPrev.title = 'Épisode précédent'; navPrev.textContent = '⏮';
             navPrev.style.cssText = NAV + 'left:calc(50% - 90px);';
             const navNext = document.createElement('button');
-            navNext.type = 'button'; navNext.title = 'Episode suivant'; navNext.textContent = '⏭';
+            navNext.type = 'button'; navNext.title = 'Épisode suivant'; navNext.textContent = '⏭';
             navNext.style.cssText = NAV + 'left:calc(50% + 90px);';
             overlay.appendChild(navPrev);
             overlay.appendChild(navNext);
@@ -2855,7 +2843,7 @@
             topbar.querySelector('#ed-check-new-btn').addEventListener('click', (ev) => {
                 const btn = ev.currentTarget;
                 btn.disabled = true; btn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Verifier nouveaux episodes'; });
+                checkForNewEpisodes().then(() => { btn.disabled = false; btn.textContent = '↻ Vérifier les nouveaux épisodes'; });
             });
 
             seriesSelectEl.addEventListener('change', () => { if (seriesSelectEl.value) location.href = seriesSelectEl.value; });
@@ -2941,7 +2929,7 @@
             show(overlayEls.navNext, true);
             overlayEls.navNext.style.opacity = hasNext ? '1' : '.35';
             overlayEls.navNext.style.cursor = hasNext ? 'pointer' : 'default';
-            overlayEls.navNext.title = hasNext ? 'Episode suivant' : 'Pas encore sorti';
+            overlayEls.navNext.title = hasNext ? 'Épisode suivant' : 'Pas encore sorti';
             clearTimeout(navHideTimer);
             navHideTimer = setTimeout(() => { show(overlayEls.navPrev, false); show(overlayEls.navNext, false); }, 3000);
         }
@@ -2980,7 +2968,11 @@
         function setResumePosition(info, t) {
             const all = loadResumePositions();
             if (t === null) { if (!all[storageKey(info)]) return; delete all[storageKey(info)]; }
-            else all[storageKey(info)] = { ep: info.episodeNumber, t: Math.floor(t) };
+            else {
+                const old = all[storageKey(info)];
+                if (old && old.ep === info.episodeNumber && Math.abs(old.t - t) < 10) return; // v7.0 : moins d'ecritures
+                all[storageKey(info)] = { ep: info.episodeNumber, t: Math.floor(t) };
+            }
             GM_setValue('resumePositions', all);
         }
         // Faux entre le changement de src et le 'ready' du nouveau lecteur :
@@ -3040,7 +3032,7 @@
                 (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
                 '<button type="button" data-act="youtube" style="' + BTN + '">Lire sur YouTube</button>' +
                 '<button type="button" data-act="google" style="' + BTN + '">Rechercher sur Google</button>' +
-                (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Episode suivant</button>' : '') +
+                (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Épisode suivant</button>' : '') +
                 '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             const info = currentEpisode;
@@ -3336,6 +3328,7 @@
             pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:Arial,sans-serif;';
             pop.innerHTML = '<div id="ep-info-box" style="background:#15151f;color:#eee;max-width:640px;width:92%;max-height:84vh;overflow:auto;border-radius:8px;padding:18px;font-size:13px;line-height:1.5;">Chargement de la fiche de ' + escapeHtml(displayName(info.seriesName)) + '...</div>';
             (overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body).appendChild(pop);
+            focusDialog(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
             const box = pop.querySelector('#ep-info-box');
             if (!ficheCache[key]) {
@@ -3449,12 +3442,12 @@
             let seconds = start || 3, cancelled = false;
             const textEl = toast.querySelector('#ed-toast-text');
             toast.style.display = 'flex';
-            textEl.textContent = 'Episode suivant dans ' + seconds + 's...';
+            textEl.textContent = 'Épisode suivant dans ' + seconds + 's...';
             const interval = setInterval(() => {
                 if (cancelled) { clearInterval(interval); return; }
                 seconds--;
                 if (seconds <= 0) { clearInterval(interval); toast.style.display = 'none'; cancelCountdown = null; advanceToNextEpisode(); return; }
-                textEl.textContent = 'Episode suivant dans ' + seconds + 's...';
+                textEl.textContent = 'Épisode suivant dans ' + seconds + 's...';
             }, 1000);
             cancelCountdown = () => { cancelled = true; clearInterval(interval); toast.style.display = 'none'; cancelCountdown = null; };
             nextNowCountdown = () => { cancelled = true; clearInterval(interval); toast.style.display = 'none'; cancelCountdown = null; advanceToNextEpisode(); };
@@ -3827,14 +3820,14 @@
                 html += '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
                 html += '<tr style="text-align:left;color:#aaa;border-bottom:1px solid #333;">' +
                     '<th style="padding:6px 4px;">Site</th><th style="padding:6px 4px;">Anime</th>' +
-                    '<th style="padding:6px 4px;">Debut intro</th><th style="padding:6px 4px;">Fin intro</th><th style="padding:6px 4px;">Debut outro</th><th style="padding:6px 4px;">Fin outro</th>' +
+                    '<th style="padding:6px 4px;">Début intro</th><th style="padding:6px 4px;">Fin intro</th><th style="padding:6px 4px;">Début outro</th><th style="padding:6px 4px;">Fin outro</th>' +
                     '<th style="padding:6px 4px;">Suivi</th></tr>';
                 entries.forEach((e) => {
                     const io = getIntroOutroForKey(e.key);
                     const tracked = !isSeriesExcluded(e.key);
                     const unconfigured = !io.introEnd && !io.outroStart;
                     const rowStyle = unconfigured ? 'background:rgba(255,179,0,.08);' : '';
-                    html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + e.key + '">' +
+                    html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + escapeHtml(e.key) + '">' +
                         '<td style="padding:6px 4px;color:#888;">' + (e.siteTag || '') + '</td>' +
                         '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + escapeHtml(e.seriesName) + '</td>' +
                         '<td style="padding:6px 4px;"><input type="text" class="ep-set-introStart-input" aria-label="Début intro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introStart) + '"></td>' +
@@ -3853,6 +3846,7 @@
             box.innerHTML = html;
             overlay.appendChild(box);
             document.body.appendChild(overlay);
+            focusDialog(overlay);
             overlay.addEventListener('click', (ev) => { if (ev.target === overlay) overlay.remove(); });
             box.querySelector('#ep-settings-close').addEventListener('click', () => overlay.remove());
             const saveBtn = box.querySelector('#ep-settings-save');
@@ -3878,12 +3872,20 @@
             if (el) el.innerHTML = statusHtml(text);
         }
 
+        // File d'attente : au plus `limit` appels de fn en cours ; une erreur
+        // n'arrete pas les autres.
+        function runLimited(items, limit, fn) {
+            let i = 0;
+            const worker = () => { if (i >= items.length) return null; const item = items[i++]; return Promise.resolve().then(() => fn(item)).catch(() => {}).then(worker); };
+            return Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+        }
         function checkForNewEpisodes() {
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
             const entries = Object.keys(progress).map((k) => Object.assign({ key: k }, progress[k])).filter((e) => !excluded[e.key] && e.episodeUrl);
             let changed = false;
-            const checks = entries.map((e) => {
+            // v7.0 : 4 series verifiees a la fois (avant : toutes en meme temps).
+            const checks = runLimited(entries, 4, (e) => {
                 const site = SITES.find((s) => s.id === e.site);
                 if (!site) return Promise.resolve();
                 // Site ajoute : verifiable seulement depuis ce site (pas dans
@@ -3932,7 +3934,7 @@
                     return site.extract(doc, e.episodeUrl);
                 }).then((info) => { if (info) applyResultFor(e, info, (c) => { if (c) changed = true; }); }).catch(() => {});
             });
-            return Promise.all(checks).then(checkNewSeasons).then(() => {
+            return checks.then(() => checkNewSeasons()).then(() => {
                 const done = loadSeasonDone();
                 Object.keys(done).forEach((k) => {
                     if (Number(latestKnownEpisode[k]) > done[k]) { setSeasonDone(k, false); changed = true; console.log('[AnimeTracker v6] nouvel episode, fin d\'attente : ' + k); }
@@ -3942,7 +3944,7 @@
                 if (changed || firstCheck) buildPersistentPanel();
                 refreshTrackingPopup();
                 refreshThumbnailBadges();
-            });
+            }).catch((err) => console.log('[AnimeTracker v6] verification des nouveaux episodes echouee', err));
 
             // Entree importee d'une vieille sauvegarde : seriesUrl = "legacy:<nom>"
             // (pas une adresse, Tampermonkey refusait). Page serie = 1er resultat
@@ -3966,7 +3968,7 @@
                     const e = Object.assign({ key: k }, prog[k]);
                     const s = SITES.find((x) => x.id === e.site);
                     if (!s || (s.custom && !hostMatches(location.href, s.label))) return null;
-                    return findNextSeason(e).then((ns) => {
+                    return Promise.resolve().then(() => findNextSeason(e)).then((ns) => {
                         if (!ns || ns.n <= (GM_getValue('seasonDismissed', {})[k] || 0)) return;
                         const all = loadNewSeasons();
                         all[k] = { url: ns.url, n: ns.n, label: seasonLabel(ns.n) };
@@ -4110,7 +4112,7 @@
                 // anime dans la fenetre de suivi.
                 const nbBehind = entries.filter((e) => isBehind(e.key)).length;
                 // Etat = icone + mot (jamais la couleur seule, WCAG 1.4.1) ; seul "a rattraper" reste colore.
-                const chip = !lastNewEpisodesCheckAt ? '<span style="font-size:11px;color:#aaa;">verification...</span>'
+                const chip = !lastNewEpisodesCheckAt ? '<span style="font-size:11px;color:#aaa;">vérification…</span>'
                     : nbBehind ? '<span style="font-size:11px;font-weight:bold;background:#ffb300;color:#1a1000;border-radius:9px;padding:1px 7px;white-space:nowrap;">&#9679; ' + nbBehind + ' a rattraper</span>'
                     : '<span style="font-size:11px;color:#9fb4c8;border:1px solid #3a4652;border-radius:9px;padding:0 7px;white-space:nowrap;">&#10003; a jour</span>';
                 return '<div class="ep-summary-line" role="button" tabindex="0" data-site="' + s.id + '" title="Ouvrir le suivi detaille" style="cursor:pointer;background:rgba(255,255,255,.04);border:1px solid rgba(3,208,252,.45);border-radius:6px;padding:7px 9px;font-size:12px;display:flex;flex-direction:column;gap:3px;">' +
@@ -4202,6 +4204,7 @@
             pop.innerHTML = html;
             const host = overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body;
             host.appendChild(pop);
+            focusDialog(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop) pop.remove(); });
             pop.querySelector('#vc-history-close').addEventListener('click', () => pop.remove());
             bindSamePageLinks(pop);
@@ -4277,6 +4280,7 @@
             // plein ecran, qui ne montre que les descendants du calque).
             const host = overlayEls && overlayEls.overlay.style.display !== 'none' ? overlayEls.overlay : document.body;
             host.appendChild(pop);
+            focusDialog(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop) pop.remove(); });
             pop.querySelector('#ep-tracking-close').addEventListener('click', () => pop.remove());
             bindSamePageLinks(pop);
@@ -4335,7 +4339,7 @@
             const excluded = loadExcludedSeries();
             const entries = Object.keys(progress).map((k) => Object.assign({ key: k }, progress[k])).filter((e) => !excluded[e.key] && matchesSiteFilter(e.site)).sort(seriesSortCompare);
             const select = overlayEls.seriesSelect;
-            select.innerHTML = '<option value="">-- Changer de serie --</option>';
+            select.innerHTML = '<option value="">-- Changer de série --</option>';
             if (overlayEls.siteFilterSelect) overlayEls.siteFilterSelect.value = getSiteFilter();
             entries.forEach((e) => {
                 const opt = document.createElement('option');
@@ -4455,7 +4459,8 @@
             html += '<div class="vc-pair">' + (currentEpisode && currentEpisode.seriesName ? trackButtonHtml('ep-track-series', isSeriesTracked(storageKey(currentEpisode))) : '') +
                 '<button id="ep-history-btn" style="' + BTN_STYLE + '">&#128338; Historique</button></div>';
             if (entries.length === 0) {
-                html += '<div style="font-size:12px;color:#aaa;">Aucun anime suivi.</div>';
+                // v7.0 : le filtre de sites peut tout masquer : ne pas dire "aucun anime suivi" a tort.
+                html += '<div style="font-size:12px;color:#aaa;">' + (Object.keys(progress).length ? 'Aucun anime avec ce filtre (liste en bas du panneau).' : 'Aucun anime suivi pour l\'instant : ouvre un épisode puis clique sur Suivre.') + '</div>';
             } else {
                 html += '<select id="ep-select" aria-label="Choisir un anime" style="width:100%;padding:5px;border-radius:4px;border:none;background:#000;color:#eee;font-size:11px;font-family:Consolas,monospace;">';
                 html += '<option value="">-- Choisir un anime --</option>';
@@ -4470,21 +4475,22 @@
                 html += '</select>';
             }
 
-            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Verifier nouveaux episodes</button>';
+            html += '<button id="ep-check-new" style="' + BTN_STYLE + '">&#8635; Vérifier les nouveaux épisodes</button>';
             html += toggleButtonsHtml('ep-', isAutoNextEnabled(), isAutoOpenEnabled());
 
-            html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Reglages',
-                '<div class="vc-trio"><button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + '">Debut outro</button>' +
+            html += '<div class="vc-pair">' + collapsibleSection('reglages', 'Réglages',
+                '<div class="vc-trio"><button id="ep-set-intro" style="' + BTN_STYLE + '">Fin intro</button><button id="ep-set-outro" style="' + BTN_STYLE + '">Début outro</button>' +
                 collapsibleSection('plus', 'Plus',
                     groupLabel('Intro / outro') +
-                    '<div class="vc-pair"><button id="ep-set-introstart" style="' + BTN_STYLE + '">Debut intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + '">Fin outro</button></div>' +
-                    '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration de toutes les series</button>' +
+                    '<div class="vc-pair"><button id="ep-set-introstart" style="' + BTN_STYLE + '">Début intro</button><button id="ep-set-outroend" style="' + BTN_STYLE + '">Fin outro</button></div>' +
+                    '<button id="ep-settings-btn" style="' + BTN_STYLE + '">Configuration de toutes les séries</button>' +
                     groupLabel('Affichage') +
                     themeSelectHtml('ep-theme-select') + customizeHtml('ep', prevOpen.perso) +
-                    '<label class="vc-track" title="Series deja en memoire grisees sur les pages du site (nettes au survol) : les nouveautes ressortent"><input type="checkbox" id="ep-dim-cb"' + (GM_getValue('dimTracked', false) === true ? ' checked' : '') + '><span class="off">Estomper les series suivies</span><span class="on">&#10003; Estomper les series suivies</span></label>' +
-                    (entries.length ? groupLabel('Page') + '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Supprimer la serie</button>' : ''),
+                    '<label class="vc-track" title="Series deja en memoire grisees sur les pages du site (nettes au survol) : les nouveautes ressortent"><input type="checkbox" id="ep-dim-cb"' + (GM_getValue('dimTracked', false) === true ? ' checked' : '') + '><span class="off">Estomper les séries suivies</span><span class="on">&#10003; Estomper les séries suivies</span></label>' +
+                    (entries.length ? groupLabel('Suivi') + '<button id="ep-delete-btn" style="background:#5a1f1f;color:#fff;border:none;padding:6px;border-radius:4px;cursor:pointer;font-size:11px;">Retirer du suivi la série choisie</button>' : ''),
                     prevOpen.plus, true) + '</div>',
-                prevOpen.reglages !== false);
+                // v7.0 : ouvert par defaut seulement sur une page d'episode (gain de hauteur en 1366x768)
+                'reglages' in prevOpen ? prevOpen.reglages : !!(currentEpisode && currentEpisode.seriesName));
             if (currentEpisode && currentEpisode.seriesName) {
                 html += collapsibleSection('youtube', 'Sources',
                     (currentEpisode.site === 'esprit-donghua' ? '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment)." style="' + BTN_STYLE + '">Ouvrir sur Odysee</button>' : '') +
@@ -4497,7 +4503,7 @@
                 '<div class="vc-pair"><button id="ep-export-panel" style="' + BTN_STYLE + '">Exporter</button>' +
                 '<button id="ep-import-panel" style="' + BTN_STYLE + '">Importer</button></div>' +
                 '<button id="ep-choose-backup" style="' + BTN_STYLE + '">Choisir le fichier</button>' +
-                '<button id="ep-reauth-backup" style="' + BTN_STYLE + '">Reautoriser le fichier</button>' +
+                '<button id="ep-reauth-backup" style="' + BTN_STYLE + '">Réautoriser le fichier</button>' +
                 '<span id="ep-backup-status" style="font-size:11px;color:#888;"></span>' +
                 '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">',
                 prevOpen.sauvegarde);
@@ -4534,7 +4540,7 @@
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {
                 checkNewBtn.disabled = true; checkNewBtn.textContent = 'Recherche...';
-                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Verifier nouveaux episodes'; });
+                checkForNewEpisodes().then(() => { checkNewBtn.disabled = false; checkNewBtn.textContent = '↻ Vérifier les nouveaux épisodes'; });
             });
 
             const exportBtn = panel.querySelector('#ep-export-panel');
@@ -4651,7 +4657,11 @@
             };
             addFicheButtons();
             let ficheTimer = null;
-            new MutationObserver(() => { clearTimeout(ficheTimer); ficheTimer = setTimeout(addFicheButtons, 300); })
+            new MutationObserver((muts) => {
+                // v7.0 : ignorer nos propres boutons (sinon l'observer se relancait sur ses ajouts)
+                if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-fiche-btn,.ep-thumb-badge,.ep-thumb-frame,.ep-thumb-info')))) return;
+                clearTimeout(ficheTimer); ficheTimer = setTimeout(addFicheButtons, 300);
+            })
                 .observe(document.body, { childList: true, subtree: true });
         }
 
@@ -4685,7 +4695,7 @@
                 '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
         }
         function legendSectionHtml(open) {
-            return collapsibleSection('legende', 'Legende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu'].map((st) =>
+            return collapsibleSection('legende', 'Légende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu'].map((st) =>
                 '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
                 '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
         }
@@ -4769,7 +4779,7 @@
                     host.appendChild(badge);
                 }
                 // Cadre de couleur (v6.59, l'icone seule etait trop discrete) : calque a part,
-                // il reste net quand l'option "Estomper les series suivies" grise l'image.
+                // il reste net quand l'option "Estomper les séries suivies" grise l'image.
                 if (!frame) {
                     frame = document.createElement('span');
                     frame.className = 'ep-thumb-frame';
@@ -4788,7 +4798,7 @@
         refreshThumbnailBadges();
         let badgeTimer = null;
         new MutationObserver((muts) => {
-            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge,.ep-thumb-frame,.ep-thumb-info')))) return;
+            if (muts.every((m) => Array.from(m.addedNodes).every((n) => n.nodeType === 1 && n.closest('.ep-thumb-badge,.ep-thumb-frame,.ep-thumb-info,.ep-fiche-btn')))) return;
             clearTimeout(badgeTimer); badgeTimer = setTimeout(refreshThumbnailBadges, 400);
         }).observe(document.body, { childList: true, subtree: true });
 
@@ -4806,12 +4816,13 @@
         }).catch((e) => console.log('[AnimeTracker v6] echec extraction initiale', e));
 
         setTimeout(checkForNewEpisodes, 8000);
-        setInterval(checkForNewEpisodes, 20 * 60 * 1000);
+        setInterval(() => { if (!document.hidden) checkForNewEpisodes(); }, 20 * 60 * 1000); // v7.0 : pas en onglet cache
         document.addEventListener('keydown', (ev) => {
             if (ev.key === 'Escape') {
-                const top = ['ep-info-overlay', 'ep-settings-overlay', 'vc-history-overlay', 'ep-tracking-overlay']
-                    .map((id) => document.getElementById(id)).find(Boolean);
+                // v7.0 : la fenetre du dessus (la derniere dans le document), puis le lecteur.
+                const top = Array.from(document.querySelectorAll('#ep-info-overlay, #ep-settings-overlay, #vc-history-overlay, #ep-tracking-overlay')).pop();
                 if (top) { ev.preventDefault(); top.remove(); }
+                else if (overlayEls && overlayEls.overlay.style.display !== 'none' && !document.fullscreenElement) { ev.preventDefault(); overlayEls.overlay.querySelector('#ed-close-btn').click(); }
             } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn, .ep-thumb-info')) {
                 ev.preventDefault(); ev.target.click();
             }
