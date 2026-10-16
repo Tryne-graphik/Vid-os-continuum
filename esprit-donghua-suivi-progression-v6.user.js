@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.3
+// @version      7.4
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2331,7 +2331,7 @@
             parchemin: { label: 'Parchemin et sceaux', light: true, font: 'Cambria', css: '&{box-shadow:inset 0 0 0 3px #f1e4c3,inset 0 0 0 4px #9a7a42,0 2px 8px rgba(0,0,0,.5)!important;border:2px solid #7a5a2e;}& .vc-card{box-shadow:none;}', v: {
                 brad: '3px', main: 'linear-gradient(#a8261f,#7c1814)', mainsh: 'inset 0 1px 0 #d4574f,0 1px 2px rgba(0,0,0,.3)', tfont: '"VC Cinzel",serif',
                 text: '#3a2a1a', dim: '#6b5636', acc: '#a8261f', acct: '#8c1f19', onacc: '#f6e7c4', btn: '#f8eed4', bline: '#9a7a42', bsh: 'none',
-                field: '#fbf4e2', card: 'rgba(248,238,212,.85)', on: '#e4d29c', onl: '#7a5a2e', edge: '#7a5a2e', glow: 'rgba(168,38,31,.25)', rad: '3px',
+                warn: '#9a4a00', ok: '#2e6b1f', field: '#fbf4e2', card: 'rgba(248,238,212,.85)', on: '#e4d29c', onl: '#7a5a2e', edge: '#7a5a2e', glow: 'rgba(168,38,31,.25)', rad: '3px',
                 bg: 'linear-gradient(#f1e4c3,#e6d3a6)' } },
             jade: { label: 'Jade impérial', css: '&{border:1px solid #2e8f73;}', v: {
                 brad: '8px', main: 'linear-gradient(#7ff0c4,#2fbf91)', mainsh: '0 0 12px rgba(63,224,170,.45)',
@@ -2402,7 +2402,7 @@
                 H + ' .vc-menus>details[open],' + H + ' .vc-menus>.vc-news-wrap>details[open]{background:var(--vc-card,#1d1d27);border:1px solid var(--vc-acc,#03d0fc);border-radius:var(--vc-rad,6px);box-shadow:0 0 10px var(--vc-glow,rgba(3,208,252,.25));padding:0 6px 6px;}' +
                 H + ' .vc-menus>details[open]>summary,' + H + ' .vc-menus>.vc-news-wrap>details[open]>summary{background:transparent!important;border:none!important;border-bottom:1px solid var(--vc-edge,rgba(255,255,255,.12))!important;border-radius:0!important;letter-spacing:.12em;text-transform:uppercase;color:var(--vc-acct,var(--vc-acc,#5fd3ec))!important;}' +
                 H + ' .vc-menus details[open] button:not(.vc-ver):not([id$="delete-btn"]){color:var(--vc-acct,var(--vc-acc,#5fd3ec))!important;}' +
-                '.vc-light,.vc-light *{text-shadow:none!important;}.vc-thm.vc-light .vc-track:has(input:checked){color:var(--vc-text)!important;}.vc-thm.vc-light [style*="color:#ffb300"]{color:#9a5200!important;}' +
+                '.vc-light,.vc-light *{text-shadow:none!important;}.vc-thm.vc-light .vc-track:has(input:checked){color:var(--vc-text)!important;}.vc-thm.vc-light [style*="color:#ffb300"]{color:#9a5200!important;}.vc-thm.vc-light button.vc-ver,.vc-thm.vc-light [style*="color:#ffd400"]{color:#9a4a00!important;}' +
                 '.vc-light [style*="color:#888"],.vc-light [style*="color:#aaa"],.vc-light [style*="color:#8a8a99"]{color:var(--vc-dim)!important;}' +
                 '@media (prefers-reduced-transparency:reduce){.vc-glass{background:#141b24!important;backdrop-filter:none;-webkit-backdrop-filter:none;}}' +
                 T + ' button:not([id$="delete-btn"]):not(.vc-ver){background:var(--vc-btn)!important;color:var(--vc-text)!important;border:1px solid var(--vc-bline)!important;box-shadow:var(--vc-bsh)!important;}' +
@@ -2607,6 +2607,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.4', ['Thème Parchemin : le numéro d’épisode, le numéro de version et le (!) des Nouveautés sont maintenant foncés et bien lisibles sur le fond clair.']],
             ['7.3', ['Chaque thème a maintenant sa propre allure : forme des boutons, bouton principal, police des titres, cadre. Seuls les 12 nouveaux thèmes restent (les anciens sont retirés ; un ancien choix passe sur Stèle de cultivation).',
                 'Police : nouveau choix « Police du thème », par défaut (Personnaliser).',
                 'Libellés plus clairs : Regarder, Mes séries, Nouveaux épisodes, Enchaîner, Ouverture auto, Fin intro ici, Début outro ici, Avancé, Réglages par série, Ne plus suivre, Fichier de sauvegarde, Redonner l’accès, Afficher : à rattraper.',
@@ -4181,7 +4182,8 @@
                 name: '[' + currentEpisode.siteTag + '] ' + displayName(currentEpisode.seriesName),
                 fullName: currentEpisode.seriesName + ' (' + currentEpisode.siteLabel + ')',
                 epText: 'Episode ' + (latest ? epNum + ' / ' + latest : epNum),
-                color: isNew ? '#ffb300' : '#4caf50'
+                // v7.4 : variables de theme (Parchemin, theme clair : orange et vert trop pales sur fond beige).
+                color: isNew ? 'var(--vc-warn,#ffb300)' : 'var(--vc-ok,#4caf50)'
             };
         }
 

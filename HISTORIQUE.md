@@ -1254,3 +1254,9 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Connu : Parchemin, numero d'episode du lecteur reste orange clair (couleur posee en JS, pas en attribut style).
 - PAS teste : vrai Chrome/Opera + Tampermonkey.
 - Recette complete : 70 OK + 3 FAIL sauvegarde = test qui semait le theme retire 'metal' (import l'ignore, voulu) ; test -> 'jade', groupe sauvegarde relance 24 OK / 0 FAIL. POUSSEE le 2026-10-16.
+
+## v7.4 (2026-10-16) : Parchemin lisible
+- Retour utilisateur : tests 7.3 bons. Numero d'episode pale sur Parchemin : getCurrentEpisodeDisplay renvoie
+  var(--vc-warn,#ffb300) / var(--vc-ok,#4caf50) (couleur posee en JS -> variables de theme) ; parchemin : warn #9a4a00, ok #2e6b1f.
+  Theme clair : numero de version (.vc-ver) et (!) des Nouveautes (#ffd400) fonces.
+- Teste (Edge, `t73b.js`) : 12 themes, capture Parchemin lisible, 0 erreur. Recette complete NON relancee (CSS + couleur seulement).
