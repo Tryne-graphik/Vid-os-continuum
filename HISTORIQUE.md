@@ -1275,4 +1275,9 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
     Debut outro ici verts une fois regles (classe .vc-set au lieu d'un style en ligne ecrase).
 - Teste : `t74.js` (Edge) 12 themes x 2 panneaux, 6 onglets, Reglages ouvert par defaut, un seul volet ouvert, 0 erreur, planches
   out/t74_ep.png / t74_ed.png. Recette complete run-all.js : 73 OK / 0 FAIL / 0 SKIP (tpanel.js adapte aux onglets).
-- PAS teste : vrai Chrome/Opera + Tampermonkey. Commitee, PAS POUSSEE (attend accord).
+- PAS teste : vrai Chrome/Opera + Tampermonkey. POUSSEE le 2026-10-16.
+- Chrome + Opera (Playwright : canal chrome ; Opera par executable, lib.js operaExe()) : recette run-all.js 47 OK / 0 FAIL /
+  1 SKIP (plein ecran Opera refuse en headless) ; t74.js 12 themes x 2 panneaux OK sur les deux, rendu identique a Edge, 0 erreur.
+- Simulation "addEventListener casse" (t664 BROKEN=1, imite Opera + Tampermonkey) : 17/17 Edge et Chrome, mais 12/17 sur
+  le vrai Opera (5 echecs : boutons Pas aime / Deja vu de la Fiche -> vignette pas mise a jour). DEJA PRESENT en 7.3 (meme 12/17),
+  pas une regression 7.4. Opera en mode normal : 17/17. A trancher par un test reel Opera + Tampermonkey.
