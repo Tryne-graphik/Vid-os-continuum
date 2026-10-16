@@ -1281,3 +1281,10 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Simulation "addEventListener casse" (t664 BROKEN=1, imite Opera + Tampermonkey) : 17/17 Edge et Chrome, mais 12/17 sur
   le vrai Opera (5 echecs : boutons Pas aime / Deja vu de la Fiche -> vignette pas mise a jour). DEJA PRESENT en 7.3 (meme 12/17),
   pas une regression 7.4. Opera en mode normal : 17/17. A trancher par un test reel Opera + Tampermonkey.
+
+## Etat au 2026-10-16 (fin de session) : 7.4 POUSSEE
+- Fait aujourd'hui : 7.1 -> 7.4 poussees (refonte du panneau, 12 themes en CSS, 4 agencements, libelles voix F, chiffres Cambria,
+  source decoupee src/ + css/ + build.js). Planches : design/planche-12-styles.html, design/planche-libelles.html.
+- Suite : (1) verifier en vrai Opera + Tampermonkey les boutons Pas aime / Deja vu de la Fiche (simulation 12/17 sur Opera) ;
+  (2) retours utilisateur sur les 12 themes / agencements (retouches = fichiers css/ seulement) ; (3) detail "ST auto FR ne marche
+  pas" ; (4) blocage video ecran 1 (ianimes plein ecran / ED script coupe) ; (5) fenetres (Fiche, Historique, suivi) pas encore themees.
