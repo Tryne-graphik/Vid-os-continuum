@@ -1253,4 +1253,4 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Teste (Edge, `t73b.js`) : 12 themes, 12 options dans le menu, captures assemblees (out/t73_planche.png), 0 erreur.
 - Connu : Parchemin, numero d'episode du lecteur reste orange clair (couleur posee en JS, pas en attribut style).
 - PAS teste : vrai Chrome/Opera + Tampermonkey.
-- Recette complete : 70 OK + 3 FAIL sauvegarde = test qui semait le theme retire 'metal' (import l'ignore, voulu) ; test -> 'jade', groupe sauvegarde relance 24 OK / 0 FAIL. Commitee, PAS POUSSEE (attend accord).
+- Recette complete : 70 OK + 3 FAIL sauvegarde = test qui semait le theme retire 'metal' (import l'ignore, voulu) ; test -> 'jade', groupe sauvegarde relance 24 OK / 0 FAIL. POUSSEE le 2026-10-16.
