@@ -1,6 +1,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.5', ['Avec l’extension Chrome SideBar : les épisodes à rattraper et la liste de tes sites s’affichent aussi dans le panneau latéral du navigateur (rien ne change sans l’extension).']],
             ['7.4', ['Chaque thème reprend maintenant l’agencement de sa maquette : menus en liste (Parchemin, Laque, Inspecteur, Graphite), en tablettes (Stèle, Jade, Braise, Menthe), en onglets (Indigo, Nuit violette) ou en rail d’icônes à gauche (Tonal, Verre néon).',
                 'Nouveau réglage « Agencement » (Personnaliser) : garder celui du thème ou en choisir un autre.',
                 'Un seul menu ouvert à la fois ; le bouton principal (Regarder, Plein écran) a enfin la couleur de chaque thème ; Fin intro ici / Début outro ici redeviennent verts une fois réglés.',

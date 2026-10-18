@@ -24,6 +24,7 @@ Journal : `HISTORIQUE.md` (long : lire la fin, grep pour un sujet). v7 (`PLAN-v7
   `cleanBackupValue` a l'import : fichier non fiable). Toute nouvelle donnee utilisateur en GM -> l'ajouter a BACKUP_SETTINGS.
 - `installateur/Program.cs` : installateur (ouvre seulement des pages ; SHA-256 de l'exe dans README a mettre a jour si rebuild).
 - `google-apps-script/`, `odysee-referer-extension/`, `save/` (exemple de sauvegarde).
+- v7.5 : `pushToSidebar()` envoie épisodes à rattraper + sites à l'extension SideBar (E:/DevProject/SideBar) ; ID en dur `SIDEBAR_ID`.
 
 ## A chaque version
 - Monter `@version` ET ajouter une entree en tete de `CHANGELOG` (encart "Nouveautes").

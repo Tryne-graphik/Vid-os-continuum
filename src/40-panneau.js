@@ -74,6 +74,7 @@
                 });
                 const firstCheck = !lastNewEpisodesCheckAt;
                 lastNewEpisodesCheckAt = new Date();
+                pushToSidebar();
                 if (changed || firstCheck) buildPersistentPanel();
                 refreshTrackingPopup();
                 refreshThumbnailBadges();
@@ -196,3 +197,19 @@
             };
         }
 
+
+        // ---- Extension SideBar (v7.5) : episodes a rattraper + sites, envoyes apres chaque verification ----
+        // Sans l'extension, chrome.runtime.sendMessage n'existe pas sur la page : rien n'est envoye.
+        const SIDEBAR_ID = 'pehcomonbbdeofffncancicelkcbgldi';
+        const SITE_HOMES = { 'esprit-donghua': 'https://esprit-donghua.xyz/', animoflix: 'https://animoflix.to/', 'anime-sama': 'https://anime-sama.to/', odysee: 'https://odysee.com/' };
+        function pushToSidebar() {
+            const rt = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).chrome?.runtime;
+            if (!rt || !rt.sendMessage) return;
+            const prog = loadProgress();
+            const behind = Object.keys(prog).filter((k) => isBehind(k)).map((k) => {
+                const e = prog[k];
+                return { name: e.seriesName, episode: e.episodeLabel, latest: latestKnownEpisode[k] || null, site: e.siteLabel, url: (newEpisodes[k] && newEpisodes[k].url) || e.episodeUrl };
+            });
+            const sites = SITES.map((s) => ({ label: s.label, url: SITE_HOMES[s.id] || 'https://' + s.id.replace(/^custom:/, '') + '/' }));
+            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), behind: behind, sites: sites }, () => void rt.lastError); } catch (e) { /* extension absente */ }
+        }

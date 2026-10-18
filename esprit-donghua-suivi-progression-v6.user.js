@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.4
+// @version      7.5
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2491,6 +2491,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.5', ['Avec l’extension Chrome SideBar : les épisodes à rattraper et la liste de tes sites s’affichent aussi dans le panneau latéral du navigateur (rien ne change sans l’extension).']],
             ['7.4', ['Chaque thème reprend maintenant l’agencement de sa maquette : menus en liste (Parchemin, Laque, Inspecteur, Graphite), en tablettes (Stèle, Jade, Braise, Menthe), en onglets (Indigo, Nuit violette) ou en rail d’icônes à gauche (Tonal, Verre néon).',
                 'Nouveau réglage « Agencement » (Personnaliser) : garder celui du thème ou en choisir un autre.',
                 'Un seul menu ouvert à la fois ; le bouton principal (Regarder, Plein écran) a enfin la couleur de chaque thème ; Fin intro ici / Début outro ici redeviennent verts une fois réglés.',
@@ -3993,6 +3994,7 @@
                 });
                 const firstCheck = !lastNewEpisodesCheckAt;
                 lastNewEpisodesCheckAt = new Date();
+                pushToSidebar();
                 if (changed || firstCheck) buildPersistentPanel();
                 refreshTrackingPopup();
                 refreshThumbnailBadges();
@@ -4115,6 +4117,22 @@
             };
         }
 
+
+        // ---- Extension SideBar (v7.5) : episodes a rattraper + sites, envoyes apres chaque verification ----
+        // Sans l'extension, chrome.runtime.sendMessage n'existe pas sur la page : rien n'est envoye.
+        const SIDEBAR_ID = 'pehcomonbbdeofffncancicelkcbgldi';
+        const SITE_HOMES = { 'esprit-donghua': 'https://esprit-donghua.xyz/', animoflix: 'https://animoflix.to/', 'anime-sama': 'https://anime-sama.to/', odysee: 'https://odysee.com/' };
+        function pushToSidebar() {
+            const rt = (typeof unsafeWindow !== 'undefined' ? unsafeWindow : window).chrome?.runtime;
+            if (!rt || !rt.sendMessage) return;
+            const prog = loadProgress();
+            const behind = Object.keys(prog).filter((k) => isBehind(k)).map((k) => {
+                const e = prog[k];
+                return { name: e.seriesName, episode: e.episodeLabel, latest: latestKnownEpisode[k] || null, site: e.siteLabel, url: (newEpisodes[k] && newEpisodes[k].url) || e.episodeUrl };
+            });
+            const sites = SITES.map((s) => ({ label: s.label, url: SITE_HOMES[s.id] || 'https://' + s.id.replace(/^custom:/, '') + '/' }));
+            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), behind: behind, sites: sites }, () => void rt.lastError); } catch (e) { /* extension absente */ }
+        }
         // ---- Resume par site + fenetre de suivi (demande 2026-10-01) ----
         // Une ligne cliquable par site : nom, nb d'animes suivis, nb de
         // nouveaux episodes (somme dernier connu - vu quand les deux sont

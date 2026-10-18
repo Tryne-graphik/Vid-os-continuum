@@ -1288,3 +1288,13 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 - Suite : (1) verifier en vrai Opera + Tampermonkey les boutons Pas aime / Deja vu de la Fiche (simulation 12/17 sur Opera) ;
   (2) retours utilisateur sur les 12 themes / agencements (retouches = fichiers css/ seulement) ; (3) detail "ST auto FR ne marche
   pas" ; (4) blocage video ecran 1 (ianimes plein ecran / ED script coupe) ; (5) fenetres (Fiche, Historique, suivi) pas encore themees.
+
+## 2026-10-18 : v7.5 (liaison extension Chrome SideBar)
+- `pushToSidebar()` (src/40-panneau.js), appelée après chaque vérification des nouveaux épisodes : envoie à l'extension
+  SideBar (E:/DevProject/SideBar, ID pehcomonbbdeofffncancicelkcbgldi) les séries `isBehind` (nom, épisode, dernier connu,
+  site, lien du prochain épisode) et `SITES` (libellé + accueil). Passe par `unsafeWindow.chrome.runtime.sendMessage` :
+  n'existe que sur les 4 sites de base (externally_connectable de SideBar) ; sans l'extension, rien n'est envoyé.
+- Testé (Chromium Playwright sans fenêtre, SideBar chargée) : script construit injecté sur esprit-donghua.xyz avec GM simulés
+  -> SideBar reçoit les 4 sites (progression vide) ; message forgé : liens non https retirés, page non autorisée sans accès.
+  Erreur "Unexpected token '<'" vue sur la page = du site (présente sans le script).
+- PAS testé : vrai Chrome + Tampermonkey avec une vraie progression.
