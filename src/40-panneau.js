@@ -211,5 +211,12 @@
                 return { name: e.seriesName, episode: e.episodeLabel, latest: latestKnownEpisode[k] || null, site: e.siteLabel, url: (newEpisodes[k] && newEpisodes[k].url) || e.episodeUrl };
             });
             const sites = SITES.map((s) => ({ label: s.label, url: SITE_HOMES[s.id] || 'https://' + s.id.replace(/^custom:/, '') + '/' }));
-            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), behind: behind, sites: sites }, () => void rt.lastError); } catch (e) { /* extension absente */ }
+            // v7.6 : + toutes les series suivies et l'historique (lecture seule dans le panneau)
+            const excluded = loadExcludedSeries();
+            const series = Object.keys(prog).filter((k) => !excluded[k]).map((k) => {
+                const e = prog[k];
+                return { name: e.seriesName, site: e.siteLabel, tag: e.siteTag, ep: e.episodeLabel, url: e.episodeUrl, at: e.watchedAt, latest: latestKnownEpisode[k] || null, next: (newEpisodes[k] && newEpisodes[k].url) || null, behind: isBehind(k) };
+            });
+            const history = Object.values(loadHistory()).map((e) => ({ name: e.seriesName, site: e.siteLabel, ep: e.episodeLabel, url: e.episodeUrl, at: e.watchedAt }));
+            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), checkedAt: lastNewEpisodesCheckAt ? lastNewEpisodesCheckAt.getTime() : null, behind: behind, sites: sites, series: series, history: history }, () => void rt.lastError); } catch (e) { /* extension absente */ }
         }

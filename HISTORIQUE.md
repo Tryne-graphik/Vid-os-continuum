@@ -1298,3 +1298,18 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
   -> SideBar reçoit les 4 sites (progression vide) ; message forgé : liens non https retirés, page non autorisée sans accès.
   Erreur "Unexpected token '<'" vue sur la page = du site (présente sans le script).
 - PAS testé : vrai Chrome + Tampermonkey avec une vraie progression.
+
+## 2026-10-18 - v7.6 : séries et historique envoyés à SideBar
+`pushToSidebar()` ajoute `series` (suivies, non exclues), `history` (50) et `checkedAt`, en gardant `behind`/`sites`. Build OK (`node build.js`), test Playwright t_vc OK. Non testé avec une vraie progression dans Tampermonkey. Non poussé.
+
+## 2026-10-18 - v7.7 : panneau Continuum dans le panneau SideBar
+`isTopFrame` vaut aussi vrai pour la page affichée comme cadre direct de SideBar (`location.ancestorOrigins` = [chrome-extension://<ID SideBar>]) : le panneau Continuum s'y affiche ; les lecteurs (2 ancêtres) restent des cadres. Build OK. Non testé dans Tampermonkey (à valider : le userscript est-il injecté dans un cadre d'une page d'extension ?). Non poussé.
+
+### 2026-10-18 - installateur : textes plus clairs
+Etape 2 : repli "Mode developpeur" dans le texte. Etape 3 : "du code au lieu d un bouton -> retour etape 2" + "va sur esprit-donghua.xyz". Exe recompile (csc), apercu --preview verifie, SHA-256 README mis a jour (d3fa6140...). PAS teste : lancement reel complet. Non pousse (le README/exe sont sur GitHub : demander avant).
+
+## 2026-10-19 - sauvegarde avant /clear
+Rien de nouveau. Etat : 7.7 + installateur modifies, non pousses (demander avant). Suite : tester 7.6/7.7 dans vrai Chrome + Tampermonkey (progression reelle) ; Opera + Tampermonkey (boutons Fiche) ; fenetres Fiche/Historique a themer. pct 95.
+
+## 2026-10-20 - v7.8
+Bouton "Son coupe" cliquable (message unmute vers le lecteur) ; panneau estompe en plein ecran (focus retire, fade force). Build + node --check OK. NON teste en vrai Chrome + Tampermonkey. Pousse avec 7.5-7.7 + installateur.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.5
+// @version      7.8
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -150,7 +150,11 @@
         [window, document].forEach((t) => { try { t.addEventListener = proto.addEventListener; t.removeEventListener = proto.removeEventListener; } catch (e) { /* lecture seule */ } });
     })();
 
-    const isTopFrame = (window.top === window.self);
+    // v7.7 : la page affichée DANS le panneau SideBar (cadre direct d'une page d'extension) compte comme page principale,
+    // pour que le panneau Continuum s'y affiche ; les lecteurs dans cette page restent des cadres (2 ancêtres).
+    const SIDEBAR_ORIGIN = 'chrome-extension://pehcomonbbdeofffncancicelkcbgldi';
+    const inSideBar = window.top !== window.self && location.ancestorOrigins && location.ancestorOrigins.length === 1 && location.ancestorOrigins[0] === SIDEBAR_ORIGIN;
+    const isTopFrame = (window.top === window.self) || inSideBar;
     const PLAYER_ORIGIN_ODYSEE = 'https://odysee.com';
     const PLAYER_ORIGIN_SIBNET = 'https://video.sibnet.ru';
     const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';
@@ -432,6 +436,10 @@
                 const video = findVideo();
                 if (video) applyIntroSkipIfNeeded(video);
                 if (video) tryAutoUnmute(video);
+            }
+            if (type === 'unmute') {
+                const video = findVideo();
+                if (video) tryAutoUnmute(video, true);
             }
             if (type === 'pause') {
                 const video = findVideo();
@@ -2491,6 +2499,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.8', ['Bouton « Son coupé » cliquable pour réactiver le son ; le panneau s’estompe de nouveau en plein écran ; la liste des séries et l’historique sont envoyés à SideBar.']],
             ['7.5', ['Avec l’extension Chrome SideBar : les épisodes à rattraper et la liste de tes sites s’affichent aussi dans le panneau latéral du navigateur (rien ne change sans l’extension).']],
             ['7.4', ['Chaque thème reprend maintenant l’agencement de sa maquette : menus en liste (Parchemin, Laque, Inspecteur, Graphite), en tablettes (Stèle, Jade, Braise, Menthe), en onglets (Indigo, Nuit violette) ou en rail d’icônes à gauche (Tonal, Verre néon).',
                 'Nouveau réglage « Agencement » (Personnaliser) : garder celui du thème ou en choisir un autre.',
@@ -2744,7 +2753,7 @@
                 '<div id="ed-status" class="vc-status" role="status" aria-live="polite">En attente...</div>' +
                 '<div id="ed-aniskip" class="vc-status" style="display:none;"></div>' +
                 '<div id="ed-cross-site" class="vc-alert" style="display:none;"></div>' +
-                '<span id="ed-mute-indicator" class="vc-alert vc-alert--danger" style="display:none;">Son coupé : clique dans la vidéo</span>' +
+                '<button id="ed-mute-indicator" class="vc-alert vc-alert--danger" style="display:none;" title="Clic = geste utilisateur : le navigateur laisse le lecteur reprendre le son">&#128263; Son coupé : clique ici pour réactiver</button>' +
                 '<div class="vc-row vc-actions"><button id="ed-fullscreen-btn" class="vc-main">Plein écran</button>' +
                 '<button id="ed-close-btn">&#10005; Fermer</button></div>' +
                 '<div class="vc-row vc-goto">' +
@@ -2911,6 +2920,9 @@
                 goToPreviousEpisode();
             });
 
+            muteIndicatorEl.addEventListener('click', () => postToPlayerFrame({ type: MSG_PREFIX + 'unmute' }));
+            // Plein ecran : le bouton garde le focus et :focus-within empechait le panneau de s'estomper.
+            document.addEventListener('fullscreenchange', () => { if (topbar.contains(document.activeElement)) document.activeElement.blur(); panelWake(); });
             topbar.querySelector('#ed-fullscreen-btn').addEventListener('click', () => {
                 const req = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
                 if (req) req.call(overlay).catch(() => {});
@@ -2943,7 +2955,7 @@
             if (!tb) return;
             tb.classList.remove('vc-faded');
             clearTimeout(panelFadeTimer);
-            if (GM_getValue('panelAutoHide', false) === true) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+            if (GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
         }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
@@ -4131,7 +4143,14 @@
                 return { name: e.seriesName, episode: e.episodeLabel, latest: latestKnownEpisode[k] || null, site: e.siteLabel, url: (newEpisodes[k] && newEpisodes[k].url) || e.episodeUrl };
             });
             const sites = SITES.map((s) => ({ label: s.label, url: SITE_HOMES[s.id] || 'https://' + s.id.replace(/^custom:/, '') + '/' }));
-            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), behind: behind, sites: sites }, () => void rt.lastError); } catch (e) { /* extension absente */ }
+            // v7.6 : + toutes les series suivies et l'historique (lecture seule dans le panneau)
+            const excluded = loadExcludedSeries();
+            const series = Object.keys(prog).filter((k) => !excluded[k]).map((k) => {
+                const e = prog[k];
+                return { name: e.seriesName, site: e.siteLabel, tag: e.siteTag, ep: e.episodeLabel, url: e.episodeUrl, at: e.watchedAt, latest: latestKnownEpisode[k] || null, next: (newEpisodes[k] && newEpisodes[k].url) || null, behind: isBehind(k) };
+            });
+            const history = Object.values(loadHistory()).map((e) => ({ name: e.seriesName, site: e.siteLabel, ep: e.episodeLabel, url: e.episodeUrl, at: e.watchedAt }));
+            try { rt.sendMessage(SIDEBAR_ID, { type: 'vc', at: Date.now(), checkedAt: lastNewEpisodesCheckAt ? lastNewEpisodesCheckAt.getTime() : null, behind: behind, sites: sites, series: series, history: history }, () => void rt.lastError); } catch (e) { /* extension absente */ }
         }
         // ---- Resume par site + fenetre de suivi (demande 2026-10-01) ----
         // Une ligne cliquable par site : nom, nb d'animes suivis, nb de

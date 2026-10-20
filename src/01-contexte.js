@@ -118,7 +118,11 @@
         [window, document].forEach((t) => { try { t.addEventListener = proto.addEventListener; t.removeEventListener = proto.removeEventListener; } catch (e) { /* lecture seule */ } });
     })();
 
-    const isTopFrame = (window.top === window.self);
+    // v7.7 : la page affichée DANS le panneau SideBar (cadre direct d'une page d'extension) compte comme page principale,
+    // pour que le panneau Continuum s'y affiche ; les lecteurs dans cette page restent des cadres (2 ancêtres).
+    const SIDEBAR_ORIGIN = 'chrome-extension://pehcomonbbdeofffncancicelkcbgldi';
+    const inSideBar = window.top !== window.self && location.ancestorOrigins && location.ancestorOrigins.length === 1 && location.ancestorOrigins[0] === SIDEBAR_ORIGIN;
+    const isTopFrame = (window.top === window.self) || inSideBar;
     const PLAYER_ORIGIN_ODYSEE = 'https://odysee.com';
     const PLAYER_ORIGIN_SIBNET = 'https://video.sibnet.ru';
     const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';

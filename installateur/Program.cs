@@ -93,6 +93,7 @@ namespace EspritDonghuaInstaller
                 if (b.Exe != null) openExt();
                 if (!Page("Étape 2/3 - Autoriser les scripts",
                     "Dans la page des extensions (Tampermonkey), active \"Autoriser les scripts utilisateur\".\n" +
+                    "Option absente ? Active \"Mode développeur\" en haut à droite de la page.\n" +
                     "Sans ça, Tampermonkey n'exécute aucun script.",
                     "userscripts.png", b.Exe != null ? "Rouvrir la page" : null, openExt, "C'est fait")) return 1;
             }
@@ -101,8 +102,9 @@ namespace EspritDonghuaInstaller
             Action openScript = () => TryOpen(b.Exe, ScriptUrl);
             openScript();
             Page("Étape 3/3 - Installer Vidéo Continuum",
-                "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n\n" +
-                "Mises à jour automatiques. Un souci ? \"Signaler un problème\" dans le panneau.",
+                "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n" +
+                "Tu vois du code au lieu d'un bouton ? Reviens à l'étape 2.\n" +
+                "Ensuite, va sur esprit-donghua.xyz : le panneau apparaît sur un épisode.",
                 "install.png", "Rouvrir la page", openScript, "Terminer");
             return 0;
         }
@@ -144,13 +146,13 @@ namespace EspritDonghuaInstaller
         {
             Form f = NewForm(title);
             Label body = new Label();
-            body.Text = text; body.Location = new Point(24, 60); body.Size = new Size(532, image != null ? 90 : 300);
+            body.Text = text; body.Location = new Point(24, 60); body.Size = new Size(532, image != null ? 100 : 300);
             f.Controls.Add(body);
             if (image != null)
             {
                 PictureBox pic = new PictureBox();
                 pic.Image = LoadImage(image); pic.SizeMode = PictureBoxSizeMode.Zoom;
-                pic.Location = new Point(30, 155); pic.Size = new Size(520, 280);
+                pic.Location = new Point(30, 165); pic.Size = new Size(520, 280);
                 f.Controls.Add(pic);
             }
             FlowLayoutPanel bar = new FlowLayoutPanel();
@@ -232,8 +234,8 @@ namespace EspritDonghuaInstaller
             Form[] forms = {
                 BuildBrowserForm(out r, out br),
                 BuildPage("Étape 1/3 - Installer Tampermonkey", "Tampermonkey est l'extension qui fait tourner le script.\nSur la page qui vient de s'ouvrir, clique sur le bouton d'ajout, puis confirme.", "store.png", "Rouvrir la page", () => { }, "C'est fait"),
-                BuildPage("Étape 2/3 - Autoriser les scripts", "Dans la page des extensions (Tampermonkey), active \"Autoriser les scripts utilisateur\".\nSans ça, Tampermonkey n'exécute aucun script.", "userscripts.png", "Rouvrir la page", () => { }, "C'est fait"),
-                BuildPage("Étape 3/3 - Installer Vidéo Continuum", "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\n\nMises à jour automatiques. Un souci ? \"Signaler un problème\" dans le panneau.", "install.png", "Rouvrir la page", () => { }, "Terminer"),
+                BuildPage("Étape 2/3 - Autoriser les scripts", "Dans la page des extensions (Tampermonkey), active \"Autoriser les scripts utilisateur\".\nOption absente ? Active \"Mode développeur\" en haut à droite de la page.\nSans ça, Tampermonkey n'exécute aucun script.", "userscripts.png", "Rouvrir la page", () => { }, "C'est fait"),
+                BuildPage("Étape 3/3 - Installer Vidéo Continuum", "Tampermonkey affiche le script : clique sur \"Installer\". C'est tout !\nTu vois du code au lieu d'un bouton ? Reviens à l'étape 2.\nEnsuite, va sur esprit-donghua.xyz : le panneau apparaît sur un épisode.", "install.png", "Rouvrir la page", () => { }, "Terminer"),
             };
             for (int i = 0; i < forms.Length; i++)
             {

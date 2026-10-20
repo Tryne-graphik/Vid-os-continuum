@@ -274,6 +274,10 @@
                 if (video) applyIntroSkipIfNeeded(video);
                 if (video) tryAutoUnmute(video);
             }
+            if (type === 'unmute') {
+                const video = findVideo();
+                if (video) tryAutoUnmute(video, true);
+            }
             if (type === 'pause') {
                 const video = findVideo();
                 if (video) video.pause();

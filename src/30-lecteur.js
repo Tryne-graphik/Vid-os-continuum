@@ -36,7 +36,7 @@
                 '<div id="ed-status" class="vc-status" role="status" aria-live="polite">En attente...</div>' +
                 '<div id="ed-aniskip" class="vc-status" style="display:none;"></div>' +
                 '<div id="ed-cross-site" class="vc-alert" style="display:none;"></div>' +
-                '<span id="ed-mute-indicator" class="vc-alert vc-alert--danger" style="display:none;">Son coupé : clique dans la vidéo</span>' +
+                '<button id="ed-mute-indicator" class="vc-alert vc-alert--danger" style="display:none;" title="Clic = geste utilisateur : le navigateur laisse le lecteur reprendre le son">&#128263; Son coupé : clique ici pour réactiver</button>' +
                 '<div class="vc-row vc-actions"><button id="ed-fullscreen-btn" class="vc-main">Plein écran</button>' +
                 '<button id="ed-close-btn">&#10005; Fermer</button></div>' +
                 '<div class="vc-row vc-goto">' +
@@ -203,6 +203,9 @@
                 goToPreviousEpisode();
             });
 
+            muteIndicatorEl.addEventListener('click', () => postToPlayerFrame({ type: MSG_PREFIX + 'unmute' }));
+            // Plein ecran : le bouton garde le focus et :focus-within empechait le panneau de s'estomper.
+            document.addEventListener('fullscreenchange', () => { if (topbar.contains(document.activeElement)) document.activeElement.blur(); panelWake(); });
             topbar.querySelector('#ed-fullscreen-btn').addEventListener('click', () => {
                 const req = overlay.requestFullscreen || overlay.webkitRequestFullscreen;
                 if (req) req.call(overlay).catch(() => {});
@@ -235,7 +238,7 @@
             if (!tb) return;
             tb.classList.remove('vc-faded');
             clearTimeout(panelFadeTimer);
-            if (GM_getValue('panelAutoHide', false) === true) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+            if (GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
         }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
