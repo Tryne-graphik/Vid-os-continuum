@@ -25,9 +25,12 @@ génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
 - **Sauvegarde** : export / import d'un fichier qui contient ta progression,
   ton historique et tes réglages (séries abandonnées ou en attente,
   intro/outro, chaînes YouTube, sites ajoutés, reprises).
-- **Thèmes** (Réglages → Plus → Thème) : Métallique, Fibre de carbone,
-  Verre trempé, Pierre noire, Pierre bleue. Aperçus et textures à
-  télécharger dans le dossier [`themes/`](themes/).
+- **Thèmes** (Réglages → Plus → Affichage) : 12 thèmes (Stèle de cultivation
+  par défaut, Inspecteur, Indigo, Graphite, Tonal, Parchemin, Jade, Laque,
+  Verre néon, Nuit violette, Braise, Menthe néon) et 4 agencements du
+  panneau. Les anciens thèmes (Métallique, Fibre de carbone, Verre trempé,
+  Pierre noire, Pierre bleue) restent disponibles ; leurs aperçus et
+  textures sont dans le dossier [`themes/`](themes/).
 
 ## Installation
 
