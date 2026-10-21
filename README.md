@@ -34,7 +34,9 @@ génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
 
 ## Installation
 
-**Le plus simple** : lance `installateur/Vidéo-Continuum-Installateur.exe` et
+**Le plus simple** : télécharge l'installateur dans les
+[Releases](https://github.com/Tryne-graphik/Vid-os-continuum/releases/latest)
+(`Video-Continuum-Installateur.exe`), lance-le et
 suis les étapes (choix du navigateur → installation de Tampermonkey →
 installation du script).
 
