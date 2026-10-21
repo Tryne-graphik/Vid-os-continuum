@@ -1313,3 +1313,6 @@ Rien de nouveau. Etat : 7.7 + installateur modifies, non pousses (demander avant
 
 ## 2026-10-20 - v7.8
 Bouton "Son coupe" cliquable (message unmute vers le lecteur) ; panneau estompe en plein ecran (focus retire, fade force). Build + node --check OK. NON teste en vrai Chrome + Tampermonkey. Pousse avec 7.5-7.7 + installateur.
+
+## 2026-10-21 - installateur : version exe 7.8.0.0
+AssemblyVersion 6.17 -> 7.8.0.0, exe recompile (csc), SHA-256 README mis a jour (d303e52d...). Non pousse.

@@ -13,8 +13,8 @@ using System.Windows.Forms;
 [assembly: AssemblyProduct("Vidéo Continuum")]
 [assembly: AssemblyCompany("Tryne")]
 [assembly: AssemblyCopyright("Copyright (c) 2026 Tryne")]
-[assembly: AssemblyVersion("6.17.0.0")]
-[assembly: AssemblyFileVersion("6.17.0.0")]
+[assembly: AssemblyVersion("7.8.0.0")]
+[assembly: AssemblyFileVersion("7.8.0.0")]
 
 // 2026-10-01 : assistant en fenetre (au lieu de la console) avec un ecran
 // illustre par manipulation a faire par l'utilisateur. Illustrations :

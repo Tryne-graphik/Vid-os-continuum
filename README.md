@@ -54,7 +54,7 @@ Pour vérifier qu'il n'a pas été modifié, compare son empreinte SHA-256
 (PowerShell : `Get-FileHash Vidéo-Continuum-Installateur.exe`) :
 
 ```
-d3fa6140a8b9fab7bf4377d1601facfb6c0c0178692ff122608e0146146187d4
+d303e52d625ee2f7f1a2434e795c601cffb49f7b5b027917d965b490a00a618d
 ```
 
 Son code source est dans `installateur/Program.cs` : il ne fait qu'ouvrir
