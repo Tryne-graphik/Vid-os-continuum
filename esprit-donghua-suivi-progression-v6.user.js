@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.8
+// @version      7.9
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -1427,7 +1427,7 @@
         function isSeriesExcluded(key) { return !!loadExcludedSeries()[key]; }
         // Marques par nom, posees depuis la Fiche (suivie ou non) : { nom normalise: nom affiche }.
         // naime = pas aimee (v6.63), vu = deja vue avant le script (v6.64). [cle GM, bouton, couleur]
-        const NAME_MARKS = { naime: ['dislikedSeries', '\uD83D\uDC4E Pas aime', '#ff851b'], vu: ['seenSeries', '\u2713 Deja vu', '#c0c0c0'] };
+        const NAME_MARKS = { naime: ['dislikedSeries', '\uD83D\uDC4E Pas aime', '#ff851b'], vu: ['seenSeries', '\u2713 Deja vu', '#c0c0c0'], ensemble: ['togetherSeries', '\ud83d\udc65 Regarder ensemble', '#e040fb'] };
         function loadNameMark(st) { return GM_getValue(NAME_MARKS[st][0], {}); }
         function nameMarkKey(name) { return nameVariants(name)[0] || ''; }
         // Saison finie, en attente de la suite (v6.48) : { cle: dernier ep. connu au marquage }.
@@ -2120,7 +2120,7 @@
         }
         // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
-        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
+        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'togetherSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelLayout', 'panelAutoHide', 'panelHidden',
             'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked'];
@@ -2499,6 +2499,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.9', ['Nouveau bouton « Regarder ensemble » dans la Fiche : la série marquée a un cadre fuchsia sur toutes ses vignettes (une seule à la fois), pour la retrouver vite quand on la regarde à deux.']],
             ['7.8', ['Bouton « Son coupé » cliquable pour réactiver le son ; le panneau s’estompe de nouveau en plein écran ; la liste des séries et l’historique sont envoyés à SideBar.']],
             ['7.5', ['Avec l’extension Chrome SideBar : les épisodes à rattraper et la liste de tes sites s’affichent aussi dans le panneau latéral du navigateur (rien ne change sans l’extension).']],
             ['7.4', ['Chaque thème reprend maintenant l’agencement de sa maquette : menus en liste (Parchemin, Laque, Inspecteur, Graphite), en tablettes (Stèle, Jade, Braise, Menthe), en onglets (Indigo, Nuit violette) ou en rail d’icônes à gauche (Tonal, Verre néon).',
@@ -3437,11 +3438,14 @@
                     const st = btn.getAttribute('data-st');
                     const label = () => { btn.textContent = loadNameMark(st)[dk] ? 'Retirer "' + NAME_MARKS[st][1].replace(/^\S+ /, '') + '"' : NAME_MARKS[st][1]; };
                     label();
+                    btn.addEventListener('vc-label', label);
                     btn.addEventListener('click', () => {
                         const all = loadNameMark(st);
-                        if (all[dk]) delete all[dk]; else all[dk] = displayName(info.seriesName);
+                        if (all[dk]) delete all[dk];
+                        else if (st === 'ensemble') { Object.keys(all).forEach((k) => delete all[k]); all[dk] = displayName(info.seriesName); } // une seule serie a la fois
+                        else all[dk] = displayName(info.seriesName);
                         GM_setValue(NAME_MARKS[st][0], all);
-                        label();
+                        box.querySelectorAll('.ep-info-mark').forEach((b) => b.dispatchEvent(new CustomEvent('vc-label')));
                         refreshThumbnailBadges();
                     });
                 });
@@ -4756,7 +4760,8 @@
                 ailleurs: ['#ffd400', 'Suivi sur un autre site'],
                 exclu: ['#ff4136', 'Abandonne (exclu du suivi)'],
                 naime: ['#ff851b', 'Pas aime (bouton dans la Fiche)'],
-                vu: ['#c0c0c0', 'Deja vue avant le script (bouton dans la Fiche)']
+                vu: ['#c0c0c0', 'Deja vue avant le script (bouton dans la Fiche)'],
+                ensemble: ['#e040fb', 'Regardee a deux (bouton dans la Fiche)']
             }[state];
         }
         // Icone liste a cases (style Flaticon "lister") : cases a la couleur de
@@ -4773,7 +4778,7 @@
                 '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
         }
         function legendSectionHtml(open) {
-            return menuItem('legende', 'Légende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu'].map((st) =>
+            return menuItem('legende', 'Légende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu', 'ensemble'].map((st) =>
                 '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
                 '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
         }
@@ -4820,7 +4825,7 @@
             document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
-            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4, vu: 0 };
+            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4, ensemble: 5, vu: 0 };
             const seasonDone = loadSeasonDone();
             const newSeasons = loadNewSeasons();
             const byName = {};
@@ -4832,6 +4837,7 @@
             // "Deja vu" seulement si rien d'autre (une serie reprise garde son etat de suivi) ; "Pas aime" passe devant tout.
             Object.values(loadNameMark('vu')).forEach((name) => nameVariants(name).forEach((n) => { if (!byName[n]) byName[n] = 'vu'; }));
             Object.values(loadNameMark('naime')).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'naime'; }));
+            Object.values(loadNameMark('ensemble')).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'ensemble'; }));
             document.querySelectorAll('a[href] img').forEach((img) => {
                 const a = img.closest('a');
                 if (a.closest('[id^="ep-"],[id^="ed-"]')) return;

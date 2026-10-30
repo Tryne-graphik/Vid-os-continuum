@@ -106,11 +106,14 @@
                     const st = btn.getAttribute('data-st');
                     const label = () => { btn.textContent = loadNameMark(st)[dk] ? 'Retirer "' + NAME_MARKS[st][1].replace(/^\S+ /, '') + '"' : NAME_MARKS[st][1]; };
                     label();
+                    btn.addEventListener('vc-label', label);
                     btn.addEventListener('click', () => {
                         const all = loadNameMark(st);
-                        if (all[dk]) delete all[dk]; else all[dk] = displayName(info.seriesName);
+                        if (all[dk]) delete all[dk];
+                        else if (st === 'ensemble') { Object.keys(all).forEach((k) => delete all[k]); all[dk] = displayName(info.seriesName); } // une seule serie a la fois
+                        else all[dk] = displayName(info.seriesName);
                         GM_setValue(NAME_MARKS[st][0], all);
-                        label();
+                        box.querySelectorAll('.ep-info-mark').forEach((b) => b.dispatchEvent(new CustomEvent('vc-label')));
                         refreshThumbnailBadges();
                     });
                 });

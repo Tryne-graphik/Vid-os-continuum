@@ -602,7 +602,8 @@
                 ailleurs: ['#ffd400', 'Suivi sur un autre site'],
                 exclu: ['#ff4136', 'Abandonne (exclu du suivi)'],
                 naime: ['#ff851b', 'Pas aime (bouton dans la Fiche)'],
-                vu: ['#c0c0c0', 'Deja vue avant le script (bouton dans la Fiche)']
+                vu: ['#c0c0c0', 'Deja vue avant le script (bouton dans la Fiche)'],
+                ensemble: ['#e040fb', 'Regardee a deux (bouton dans la Fiche)']
             }[state];
         }
         // Icone liste a cases (style Flaticon "lister") : cases a la couleur de
@@ -619,7 +620,7 @@
                 '<path d="' + mark + '" stroke="' + c + '" stroke-dasharray="30" stroke-dashoffset="30"><animate attributeName="stroke-dashoffset" from="30" to="0" dur=".6s" begin=".1s" fill="freeze"/></path></svg>';
         }
         function legendSectionHtml(open) {
-            return menuItem('legende', 'Légende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu'].map((st) =>
+            return menuItem('legende', 'Légende', ['ici', 'retard', 'attente', 'ailleurs', 'exclu', 'naime', 'vu', 'ensemble'].map((st) =>
                 '<div style="display:flex;align-items:center;gap:8px;font-size:11px;color:#ddd;"><span style="display:inline-flex;background:rgba(10,10,18,.8);border-radius:4px;padding:2px;">' + badgeSvg(st, 18) + '</span>' + badgeInfo(st)[1] + '</div>').join('') +
                 '<div style="font-size:10px;color:#888;">Pause &#9208; dans la fenetre de suivi d\'un site = saison finie.</div>', open);
         }
@@ -666,7 +667,7 @@
             document.documentElement.classList.toggle('vc-dim-tracked', GM_getValue('dimTracked', false) === true);
             const progress = loadProgress();
             const excluded = loadExcludedSeries();
-            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4, vu: 0 };
+            const rank = { exclu: 1, ailleurs: 2, ici: 3, retard: 3, attente: 3, naime: 4, ensemble: 5, vu: 0 };
             const seasonDone = loadSeasonDone();
             const newSeasons = loadNewSeasons();
             const byName = {};
@@ -678,6 +679,7 @@
             // "Deja vu" seulement si rien d'autre (une serie reprise garde son etat de suivi) ; "Pas aime" passe devant tout.
             Object.values(loadNameMark('vu')).forEach((name) => nameVariants(name).forEach((n) => { if (!byName[n]) byName[n] = 'vu'; }));
             Object.values(loadNameMark('naime')).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'naime'; }));
+            Object.values(loadNameMark('ensemble')).forEach((name) => nameVariants(name).forEach((n) => { byName[n] = 'ensemble'; }));
             document.querySelectorAll('a[href] img').forEach((img) => {
                 const a = img.closest('a');
                 if (a.closest('[id^="ep-"],[id^="ed-"]')) return;

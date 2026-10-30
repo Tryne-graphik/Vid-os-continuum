@@ -1321,3 +1321,6 @@ AssemblyVersion 6.17 -> 7.8.0.0, exe recompile (csc), SHA-256 README mis a jour 
 - Exe 7.8.0.0 (SHA-256 d303e52d...) pousse + Release GitHub `installateur-7.8` (asset `Video-Continuum-Installateur.exe`, sans accent). README : 12 themes/4 agencements, chemin Reglages > Plus > Affichage, lien vers Releases. Pousse (d678891).
 - Choix : installateur reste "ouvre les pages, l'utilisateur clique" (version auto = registre+admin, bloquee par l'antivirus). Pas d'installation automatique.
 - Suite : un ami teste l'installateur en vrai (premier test complet jamais fait) -> corriger textes/etapes selon son retour. Si exe recompile : nouvelle Release + SHA-256 README. themes/README.md decrit encore seulement les 5 anciens themes (6.56). SideBar non mentionne dans README (volontaire).
+
+## 2026-10-30 - v7.9 : « Regarder ensemble »
+Nouvelle marque par nom `ensemble` (GM `togetherSeries`, dans BACKUP_SETTINGS) : bouton dans la Fiche, cadre fuchsia #e040fb + pastille sur toutes les vignettes de la série, prioritaire sur les autres états, UNE seule série à la fois (activer efface la précédente). Légende mise à jour. Build + node --check OK. NON testé dans Tampermonkey. Non poussé.
