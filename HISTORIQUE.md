@@ -1330,3 +1330,6 @@ Mis de cote (2026-10-23), a tester sur esprit-donghua (seul site dont les videos
 - Verdict : CONTINUER. Reste = tests utilisateur (TACHES). Prudence : tout push = MAJ auto chez les utilisateurs. Licences metal.jpg/pierre-bleue.jpg a trancher.
 - Details : G:\DevProject\_outils
 uit-chef\sorties‚6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
+
+## 2026-10-30 (nuit, vague 4 vitrine)
+- README : sections Captures/Limites ajoutees (ou README refait pour Rainmeter) ; LICENSE : existante conservee (tous droits reserves), Rainmeter : LICENSE ajoutee (a valider). Rien pousse. Captures reelles a faire avec donnees de demo.
