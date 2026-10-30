@@ -1348,3 +1348,7 @@ Menu « Mes series » (panneau + overlay) : options des series marquees `ensembl
 
 ## 2026-10-30 - v7.10.1 : nouveau degrade
 `togetherOptionBg` : a rattraper = linear-gradient(90deg,#882a9b 0%,#f3f70a 70%,#edd953 100%) ; a jour = #882a9b -> gris.
+
+## 2026-10-31 (nuit, vague 3 securite suite - revue seule, code NON modifie)
+- Revue des 22 innerHTML de src/ : 1 important (41-suivi.js:199->214 season.label venant d une sauvegarde importee, non echappe), 3 mineurs (05-sites.js:69 numero d episode brut, 32-fiche.js:89 et :583). Diffs proposes dans _outils/nuit-chef/sorties/2026-10-31/SECURITE_SUITE.md section 4.
+- Reste : appliquer 4.A (+4.B) dans la prochaine version publiee, apres validation utilisateur.
