@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.9
+// @version      7.10.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2499,6 +2499,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.10.0', ['Menu « Mes séries » : les séries marquées « Regarder ensemble » sont en dégradé violet vers jaune (à rattraper) ou violet vers gris (à jour).']],
             ['7.9', ['Nouveau bouton « Regarder ensemble » dans la Fiche : la série marquée a un cadre fuchsia sur toutes ses vignettes (une seule à la fois), pour la retrouver vite quand on la regarde à deux.']],
             ['7.8', ['Bouton « Son coupé » cliquable pour réactiver le son ; le panneau s’estompe de nouveau en plein écran ; la liste des séries et l’historique sont envoyés à SideBar.']],
             ['7.5', ['Avec l’extension Chrome SideBar : les épisodes à rattraper et la liste de tes sites s’affichent aussi dans le panneau latéral du navigateur (rien ne change sans l’extension).']],
@@ -4118,6 +4119,13 @@
             return '[' + (e.siteTag || '?') + '] ' + displayName(e.seriesName) + ' - Ep ' + epStr;
         }
 
+        // Menu "Mes séries" : séries marquées « Regarder ensemble » = dégradé violet -> jaune (à rattraper) ou violet -> gris (à jour).
+        function togetherOptionBg(e) {
+            const names = Object.values(loadNameMark('ensemble')).flatMap(nameVariants);
+            if (!nameVariants(e.seriesName).some((n) => names.includes(n))) return '';
+            return 'linear-gradient(90deg,#e040fb,' + (isBehind(e.key) ? '#ffb300' : '#9a9a9a') + ')';
+        }
+
         function getCurrentEpisodeDisplay() {
             if (!currentEpisode || !currentEpisode.seriesName) return null;
             const key = storageKey(currentEpisode);
@@ -4441,6 +4449,8 @@
                 opt.textContent = buildSeriesOptionLabel(e);
                 if (currentEpisode && e.key === storageKey(currentEpisode)) opt.selected = true;
                 if (isBehind(e.key)) { opt.style.color = '#ffb300'; opt.style.fontWeight = 'bold'; }
+                const tbg = togetherOptionBg(e);
+                if (tbg) { opt.style.backgroundImage = tbg; opt.style.color = '#1a1000'; opt.style.fontWeight = 'bold'; }
                 const since = formatRelativeDays(e.watchedAt);
                 if (since) opt.title = since;
                 select.appendChild(opt);
@@ -4559,7 +4569,8 @@
                 entries.forEach((e) => {
                     const label = buildSeriesOptionLabel(e);
                     const selected = currentEpisode && e.key === storageKey(currentEpisode) ? ' selected' : '';
-                    const style = isBehind(e.key) ? ' class="vc-behind"' : '';
+                    const tbg = togetherOptionBg(e);
+                    const style = tbg ? ' class="vc-behind" style="background-image:' + tbg + ';color:#1a1000"' : isBehind(e.key) ? ' class="vc-behind"' : '';
                     const since = formatRelativeDays(e.watchedAt);
                     const titleAttr = since ? ` title="${since}"` : '';
                     html += `<option value="${escapeHtml(e.episodeUrl)}"${selected}${style}${titleAttr}>${escapeHtml(label)}</option>`;

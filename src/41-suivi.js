@@ -283,6 +283,8 @@
                 opt.textContent = buildSeriesOptionLabel(e);
                 if (currentEpisode && e.key === storageKey(currentEpisode)) opt.selected = true;
                 if (isBehind(e.key)) { opt.style.color = '#ffb300'; opt.style.fontWeight = 'bold'; }
+                const tbg = togetherOptionBg(e);
+                if (tbg) { opt.style.backgroundImage = tbg; opt.style.color = '#1a1000'; opt.style.fontWeight = 'bold'; }
                 const since = formatRelativeDays(e.watchedAt);
                 if (since) opt.title = since;
                 select.appendChild(opt);
@@ -401,7 +403,8 @@
                 entries.forEach((e) => {
                     const label = buildSeriesOptionLabel(e);
                     const selected = currentEpisode && e.key === storageKey(currentEpisode) ? ' selected' : '';
-                    const style = isBehind(e.key) ? ' class="vc-behind"' : '';
+                    const tbg = togetherOptionBg(e);
+                    const style = tbg ? ' class="vc-behind" style="background-image:' + tbg + ';color:#1a1000"' : isBehind(e.key) ? ' class="vc-behind"' : '';
                     const since = formatRelativeDays(e.watchedAt);
                     const titleAttr = since ? ` title="${since}"` : '';
                     html += `<option value="${escapeHtml(e.episodeUrl)}"${selected}${style}${titleAttr}>${escapeHtml(label)}</option>`;

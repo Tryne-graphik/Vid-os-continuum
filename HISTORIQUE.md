@@ -1342,3 +1342,6 @@ uit-chef\sorties�6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
 
 ## 2026-10-30 - v7.9 : « Regarder ensemble »
 Nouvelle marque par nom `ensemble` (GM `togetherSeries`, dans BACKUP_SETTINGS) : bouton dans la Fiche, cadre fuchsia #e040fb + pastille sur toutes les vignettes de la série, prioritaire sur les autres états, UNE seule série à la fois (activer efface la précédente). Légende mise à jour. Build + node --check OK. NON testé dans Tampermonkey. Non poussé.
+
+## 2026-10-30 - v7.10.0 : degrade « ensemble » dans le menu
+Menu « Mes series » (panneau + overlay) : options des series marquees `ensemble` en degrade violet->jaune (a rattraper) ou violet->gris (a jour) via `togetherOptionBg` (40-panneau.js). Point ouvert : le degrade de fond d une <option> native depend du navigateur.
