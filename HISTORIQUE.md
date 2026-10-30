@@ -1325,3 +1325,8 @@ AssemblyVersion 6.17 -> 7.8.0.0, exe recompile (csc), SHA-256 README mis a jour 
 ## 2026-10-23 - prototype traduction de sous-titres YouTube (traduction/traduire.js)
 yt-dlp (sous-titres json3) -> Ollama (blocs de 40, glossaire possible) -> .vtt + .src.txt. Decision : reserve aux videos YouTube dont les sous-titres sont auto-generes / auto-traduits (mauvaise qualite). Test EP 141-160 (R6IJKMx0T9c, 80 repliques, qwen14b-32k) : OK mais 37 min (trop lent en local) et source anglaise deja mauvaise (pas de piste zh/ja d'origine). Suite : tester la vitesse via Groq/DeepSeek ; partir de la piste auto d'origine (pas la tlang) ; surimpression dans le lecteur pas commencee. Non integre au userscript.
 Mis de cote (2026-10-23), a tester sur esprit-donghua (seul site dont les videos viennent de YouTube, souvent en anglais seulement). Test de vitesse sur les memes 80 repliques : DeepSeek (ask_deepseek, deepseek-flash) 45 s et bien meilleur que Ollama local (37 min) ; il faut max_output_tokens ~32000 (8192 = reponse vide, le modele "reflechit" d'abord). Groq : 403 reseau. Reste a faire si on reprend : mode `--moteur deepseek` dans traduire.js (cle DEEPSEEK_API_KEY en variable d'environnement, blocs de 60), ignorer les pistes "from X" (traduites par YouTube), glossaire par serie, puis surimpression dans le lecteur. Rien d'integre au userscript.
+
+## 2026-10-30 (nuit, vague 1 verdicts)
+- Verdict : CONTINUER. Reste = tests utilisateur (TACHES). Prudence : tout push = MAJ auto chez les utilisateurs. Licences metal.jpg/pierre-bleue.jpg a trancher.
+- Details : G:\DevProject\_outils
+uit-chef\sorties‚6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
