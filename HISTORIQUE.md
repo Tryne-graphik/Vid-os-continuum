@@ -1291,7 +1291,7 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## 2026-10-18 : v7.5 (liaison extension Chrome SideBar)
 - `pushToSidebar()` (src/40-panneau.js), appelée après chaque vérification des nouveaux épisodes : envoie à l'extension
-  SideBar (E:/DevProject/SideBar, ID pehcomonbbdeofffncancicelkcbgldi) les séries `isBehind` (nom, épisode, dernier connu,
+  SideBar (G:/DevProject/SideBar, ID pehcomonbbdeofffncancicelkcbgldi) les séries `isBehind` (nom, épisode, dernier connu,
   site, lien du prochain épisode) et `SITES` (libellé + accueil). Passe par `unsafeWindow.chrome.runtime.sendMessage` :
   n'existe que sur les 4 sites de base (externally_connectable de SideBar) ; sans l'extension, rien n'est envoyé.
 - Testé (Chromium Playwright sans fenêtre, SideBar chargée) : script construit injecté sur esprit-donghua.xyz avec GM simulés
@@ -1322,6 +1322,24 @@ AssemblyVersion 6.17 -> 7.8.0.0, exe recompile (csc), SHA-256 README mis a jour 
 - Choix : installateur reste "ouvre les pages, l'utilisateur clique" (version auto = registre+admin, bloquee par l'antivirus). Pas d'installation automatique.
 - Suite : un ami teste l'installateur en vrai (premier test complet jamais fait) -> corriger textes/etapes selon son retour. Si exe recompile : nouvelle Release + SHA-256 README. themes/README.md decrit encore seulement les 5 anciens themes (6.56). SideBar non mentionne dans README (volontaire).
 
+## 2026-10-23 - prototype traduction de sous-titres YouTube (traduction/traduire.js)
+yt-dlp (sous-titres json3) -> Ollama (blocs de 40, glossaire possible) -> .vtt + .src.txt. Decision : reserve aux videos YouTube dont les sous-titres sont auto-generes / auto-traduits (mauvaise qualite). Test EP 141-160 (R6IJKMx0T9c, 80 repliques, qwen14b-32k) : OK mais 37 min (trop lent en local) et source anglaise deja mauvaise (pas de piste zh/ja d'origine). Suite : tester la vitesse via Groq/DeepSeek ; partir de la piste auto d'origine (pas la tlang) ; surimpression dans le lecteur pas commencee. Non integre au userscript.
+Mis de cote (2026-10-23), a tester sur esprit-donghua (seul site dont les videos viennent de YouTube, souvent en anglais seulement). Test de vitesse sur les memes 80 repliques : DeepSeek (ask_deepseek, deepseek-flash) 45 s et bien meilleur que Ollama local (37 min) ; il faut max_output_tokens ~32000 (8192 = reponse vide, le modele "reflechit" d'abord). Groq : 403 reseau. Reste a faire si on reprend : mode `--moteur deepseek` dans traduire.js (cle DEEPSEEK_API_KEY en variable d'environnement, blocs de 60), ignorer les pistes "from X" (traduites par YouTube), glossaire par serie, puis surimpression dans le lecteur. Rien d'integre au userscript.
+
+## 2026-10-30 (nuit, vague 1 verdicts)
+- Verdict : CONTINUER. Reste = tests utilisateur (TACHES). Prudence : tout push = MAJ auto chez les utilisateurs. Licences metal.jpg/pierre-bleue.jpg a trancher.
+- Details : G:\DevProject\_outils
+uit-chef\sorties�6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
+
+## 2026-10-30 (nuit, vague 4 vitrine)
+- README : sections Captures/Limites ajoutees (ou README refait pour Rainmeter) ; LICENSE : existante conservee (tous droits reserves), Rainmeter : LICENSE ajoutee (a valider). Rien pousse. Captures reelles a faire avec donnees de demo.
+
+## 2026-10-30 (nuit, vague 6 agence)
+- `node build.js` rejoue : le .user.js genere est identique (aucun diff) ; `node --check` OK. Aucun push.
+- Relecture securite rapide : pas d'eval/new Function dans src/ ; les 2 listeners `message` filtrent source/origine/prefixe (02-iframe-lecteur.js:265-267, 30-lecteur.js:444-449) ; innerHTML passe par escapeHtml (verifie par echantillon, 23 occurrences non toutes relues).
+- Non fait : tests Playwright (hors depot, fenetre navigateur interdite de nuit), recette.html (manuel). Taches "toi" inchangees.
+- Hors depot a trier : `.claude/`, `tests/analyse-site.js`, `traduction/` (non commites : outils de travail, a decider).
+
 ## 2026-10-30 - v7.9 : « Regarder ensemble »
 Nouvelle marque par nom `ensemble` (GM `togetherSeries`, dans BACKUP_SETTINGS) : bouton dans la Fiche, cadre fuchsia #e040fb + pastille sur toutes les vignettes de la série, prioritaire sur les autres états, UNE seule série à la fois (activer efface la précédente). Légende mise à jour. Build + node --check OK. NON testé dans Tampermonkey. Non poussé.
 
@@ -1330,3 +1348,10 @@ Menu « Mes series » (panneau + overlay) : options des series marquees `ensembl
 
 ## 2026-10-30 - v7.10.1 : nouveau degrade
 `togetherOptionBg` : a rattraper = linear-gradient(90deg,#882a9b 0%,#f3f70a 70%,#edd953 100%) ; a jour = #882a9b -> gris.
+
+## 2026-10-31 (nuit, vague 3 securite suite - revue seule, code NON modifie)
+- Revue des 22 innerHTML de src/ : 1 important (41-suivi.js:199->214 season.label venant d une sauvegarde importee, non echappe), 3 mineurs (05-sites.js:69 numero d episode brut, 32-fiche.js:89 et :583). Diffs proposes dans _outils/nuit-chef/sorties/2026-10-31/SECURITE_SUITE.md section 4.
+- Reste : appliquer 4.A (+4.B) dans la prochaine version publiee, apres validation utilisateur.
+
+## 2026-10-31 (rapport du matin)
+- Rapport de synthese : _outils/nuit-chef/sorties/2026-10-31/RAPPORT_NUIT.md. Branche nuit/2026-10-31 locale, rien de pousse. Decision attendue : fusion.

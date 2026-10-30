@@ -549,7 +549,7 @@
 
     // ================= Analyse pollution tierce (uBlock) =================
     //
-    // Port JS des heuristiques du script E:\UblockAnalyzer\analyse-site.ps1
+    // Port JS des heuristiques du script H:\UblockAnalyzer\analyse-site.ps1
     // (projet separe, meme logique validee dessus) : re-fetch la page en
     // HTML brut - le DOM deja parse par le navigateur ne garde pas l'ordre
     // d'origine des balises situees avant <!DOCTYPE>, indice cle pour

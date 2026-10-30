@@ -4,6 +4,20 @@ Script Tampermonkey qui retient où tu en es dans tes animes, saute les
 génériques et enchaîne les épisodes, avec un panneau de suivi des nouveaux
 épisodes.
 
+## Captures
+
+| Actuel | Métallique | Fibre de carbone | Verre trempé |
+|---|---|---|---|
+| <img src="themes/apercus/actuel.jpg" width="150"> | <img src="themes/apercus/metal.jpg" width="150"> | <img src="themes/apercus/carbone.jpg" width="150"> | <img src="themes/apercus/verre.jpg" width="150"> |
+
+*(Aperçus du panneau ; la liste complète des thèmes est dans [`themes/`](themes/).)*
+
+## Limites
+
+- Dépend de la structure des sites d'anime : un changement de leur part peut casser la détection (signale-le via « Signaler un problème »).
+- Testé surtout sous Chrome/Edge + Tampermonkey ; Opera et le plein écran restent à valider.
+- Installateur non signé (avertissement SmartScreen normal, voir plus bas).
+
 ## Ce qu'il fait
 
 - **Sites gérés** : Esprit Donghua, Anime-Sama, Animoflix, Odysee, plus les
