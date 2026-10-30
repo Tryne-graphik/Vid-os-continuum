@@ -70,7 +70,7 @@
         function isSeriesExcluded(key) { return !!loadExcludedSeries()[key]; }
         // Marques par nom, posees depuis la Fiche (suivie ou non) : { nom normalise: nom affiche }.
         // naime = pas aimee (v6.63), vu = deja vue avant le script (v6.64). [cle GM, bouton, couleur]
-        const NAME_MARKS = { naime: ['dislikedSeries', '\uD83D\uDC4E Pas aime', '#ff851b'], vu: ['seenSeries', '\u2713 Deja vu', '#c0c0c0'] };
+        const NAME_MARKS = { naime: ['dislikedSeries', '\uD83D\uDC4E Pas aime', '#ff851b'], vu: ['seenSeries', '\u2713 Deja vu', '#c0c0c0'], ensemble: ['togetherSeries', '\ud83d\udc65 Regarder ensemble', '#e040fb'] };
         function loadNameMark(st) { return GM_getValue(NAME_MARKS[st][0], {}); }
         function nameMarkKey(name) { return nameVariants(name)[0] || ''; }
         // Saison finie, en attente de la suite (v6.48) : { cle: dernier ep. connu au marquage }.

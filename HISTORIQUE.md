@@ -1339,3 +1339,6 @@ uit-chef\sorties�6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
 - Relecture securite rapide : pas d'eval/new Function dans src/ ; les 2 listeners `message` filtrent source/origine/prefixe (02-iframe-lecteur.js:265-267, 30-lecteur.js:444-449) ; innerHTML passe par escapeHtml (verifie par echantillon, 23 occurrences non toutes relues).
 - Non fait : tests Playwright (hors depot, fenetre navigateur interdite de nuit), recette.html (manuel). Taches "toi" inchangees.
 - Hors depot a trier : `.claude/`, `tests/analyse-site.js`, `traduction/` (non commites : outils de travail, a decider).
+
+## 2026-10-30 - v7.9 : « Regarder ensemble »
+Nouvelle marque par nom `ensemble` (GM `togetherSeries`, dans BACKUP_SETTINGS) : bouton dans la Fiche, cadre fuchsia #e040fb + pastille sur toutes les vignettes de la série, prioritaire sur les autres états, UNE seule série à la fois (activer efface la précédente). Légende mise à jour. Build + node --check OK. NON testé dans Tampermonkey. Non poussé.

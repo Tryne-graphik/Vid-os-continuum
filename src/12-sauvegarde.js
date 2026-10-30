@@ -172,7 +172,7 @@
         }
         // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
-        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
+        const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'togetherSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelLayout', 'panelAutoHide', 'panelHidden',
             'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked'];
