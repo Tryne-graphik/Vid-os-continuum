@@ -1291,7 +1291,7 @@ de la page ouverte, pas forcément à l'endroit où on s'était arrêté sur You
 
 ## 2026-10-18 : v7.5 (liaison extension Chrome SideBar)
 - `pushToSidebar()` (src/40-panneau.js), appelée après chaque vérification des nouveaux épisodes : envoie à l'extension
-  SideBar (E:/DevProject/SideBar, ID pehcomonbbdeofffncancicelkcbgldi) les séries `isBehind` (nom, épisode, dernier connu,
+  SideBar (G:/DevProject/SideBar, ID pehcomonbbdeofffncancicelkcbgldi) les séries `isBehind` (nom, épisode, dernier connu,
   site, lien du prochain épisode) et `SITES` (libellé + accueil). Passe par `unsafeWindow.chrome.runtime.sendMessage` :
   n'existe que sur les 4 sites de base (externally_connectable de SideBar) ; sans l'extension, rien n'est envoyé.
 - Testé (Chromium Playwright sans fenêtre, SideBar chargée) : script construit injecté sur esprit-donghua.xyz avec GM simulés
@@ -1321,3 +1321,7 @@ AssemblyVersion 6.17 -> 7.8.0.0, exe recompile (csc), SHA-256 README mis a jour 
 - Exe 7.8.0.0 (SHA-256 d303e52d...) pousse + Release GitHub `installateur-7.8` (asset `Video-Continuum-Installateur.exe`, sans accent). README : 12 themes/4 agencements, chemin Reglages > Plus > Affichage, lien vers Releases. Pousse (d678891).
 - Choix : installateur reste "ouvre les pages, l'utilisateur clique" (version auto = registre+admin, bloquee par l'antivirus). Pas d'installation automatique.
 - Suite : un ami teste l'installateur en vrai (premier test complet jamais fait) -> corriger textes/etapes selon son retour. Si exe recompile : nouvelle Release + SHA-256 README. themes/README.md decrit encore seulement les 5 anciens themes (6.56). SideBar non mentionne dans README (volontaire).
+
+## 2026-10-23 - prototype traduction de sous-titres YouTube (traduction/traduire.js)
+yt-dlp (sous-titres json3) -> Ollama (blocs de 40, glossaire possible) -> .vtt + .src.txt. Decision : reserve aux videos YouTube dont les sous-titres sont auto-generes / auto-traduits (mauvaise qualite). Test EP 141-160 (R6IJKMx0T9c, 80 repliques, qwen14b-32k) : OK mais 37 min (trop lent en local) et source anglaise deja mauvaise (pas de piste zh/ja d'origine). Suite : tester la vitesse via Groq/DeepSeek ; partir de la piste auto d'origine (pas la tlang) ; surimpression dans le lecteur pas commencee. Non integre au userscript.
+Mis de cote (2026-10-23), a tester sur esprit-donghua (seul site dont les videos viennent de YouTube, souvent en anglais seulement). Test de vitesse sur les memes 80 repliques : DeepSeek (ask_deepseek, deepseek-flash) 45 s et bien meilleur que Ollama local (37 min) ; il faut max_output_tokens ~32000 (8192 = reponse vide, le modele "reflechit" d'abord). Groq : 403 reseau. Reste a faire si on reprend : mode `--moteur deepseek` dans traduire.js (cle DEEPSEEK_API_KEY en variable d'environnement, blocs de 60), ignorer les pistes "from X" (traduites par YouTube), glossaire par serie, puis surimpression dans le lecteur. Rien d'integre au userscript.
