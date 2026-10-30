@@ -196,7 +196,7 @@
                 const season = !newEpisodes[e.key] && newSeasons[e.key];
                 const latest = latestKnownEpisode[e.key];
                 const link = nb ? (season ? season.url : newEpisodes[e.key].url) : e.episodeUrl;
-                const action = nb ? (season ? 'Regarder (' + season.label + ')' : 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')') : 'Reprendre';
+                const action = nb ? (season ? 'Regarder (' + escapeHtml(season.label) + ')' : 'Regarder (' + nb + ' nouveau' + (nb > 1 ? 'x' : '') + ')') : 'Reprendre';
                 html += '<tr style="border-bottom:1px solid #222;' + (nb ? 'color:#ffb300;font-weight:bold;' : waiting ? 'color:#b07cff;' : '') + '">' +
                     '<td style="padding:6px 4px;" title="' + escapeHtml(e.seriesName) + '">' + escapeHtml(displayName(e.seriesName)) + (curSeason ? ' &middot; ' + escapeHtml(seasonLabel(curSeason.n)) : '') + (waiting ? ' <span style="font-size:10px;">(' + (ignored ? escapeHtml(seasonLabel(ignored)) + ' ignoree' : 'saison finie, en attente') + ')</span>' : '') + '</td>' +
                     '<td style="padding:6px 4px;">' + (e.episodeNumber || '?') + '</td>' +
@@ -387,7 +387,7 @@
             if (onEpisode) {
                 const disp = getCurrentEpisodeDisplay();
                 html += '<section class="vc-card vc-ep"><div class="vc-name" title="' + escapeHtml(disp.fullName) + '">' + escapeHtml(disp.name) + '</div>' +
-                    '<div class="vc-epline"><div class="vc-epnum" style="color:' + disp.color + ';">' + disp.epText + '</div>' +
+                    '<div class="vc-epline"><div class="vc-epnum" style="color:' + disp.color + ';">' + escapeHtml(disp.epText) + '</div>' +
                     '<button id="ep-info-btn" class="vc-chip" title="Fiche de l\'anime : synopsis, genres, note...">&#8505; Fiche</button></div>' +
                     '<div class="vc-row vc-actions"><button id="ep-open-player" class="vc-main">&#9654; Regarder</button></div>' +
                     '<div id="ep-player-status" class="vc-status"></div></section>';

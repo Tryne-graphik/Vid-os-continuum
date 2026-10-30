@@ -66,7 +66,7 @@
                 embedSrc: embedSrc, pageUrl: pageUrl, resumeUrl: pageUrl,
                 seriesUrl: seriesUrl, seriesName: seriesName,
                 episodeLabel: titleEl ? titleEl.textContent.trim() : null,
-                episodeNumber: episodeMeta ? episodeMeta.getAttribute('content') : null,
+                episodeNumber: episodeMeta ? ((episodeMeta.getAttribute('content') || '').match(/\d+(?:\.\d+)?/) || [null])[0] : null,
                 latestEpisodeNumber: latestEpisodeNumber, latestEpisodeUrl: latestEpisodeUrl, episodeUrlsByNumber: episodeUrlsByNumber,
                 nextPageUrl: nextLink ? resolveUrl(nextLink, pageUrl) : null,
                 prevPageUrl: prevLink ? resolveUrl(prevLink, pageUrl) : null
