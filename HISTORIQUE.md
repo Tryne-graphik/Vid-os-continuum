@@ -1345,3 +1345,6 @@ Nouvelle marque par nom `ensemble` (GM `togetherSeries`, dans BACKUP_SETTINGS) :
 
 ## 2026-10-30 - v7.10.0 : degrade « ensemble » dans le menu
 Menu « Mes series » (panneau + overlay) : options des series marquees `ensemble` en degrade violet->jaune (a rattraper) ou violet->gris (a jour) via `togetherOptionBg` (40-panneau.js). Point ouvert : le degrade de fond d une <option> native depend du navigateur.
+
+## 2026-10-30 - v7.10.1 : nouveau degrade
+`togetherOptionBg` : a rattraper = linear-gradient(90deg,#882a9b 0%,#f3f70a 70%,#edd953 100%) ; a jour = #882a9b -> gris.

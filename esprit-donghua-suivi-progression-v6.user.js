@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.10.0
+// @version      7.10.1
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -2499,6 +2499,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.10.1', ['Menu « Mes séries » : nouveau dégradé violet vers jaune pour les séries « Regarder ensemble » à rattraper.']],
             ['7.10.0', ['Menu « Mes séries » : les séries marquées « Regarder ensemble » sont en dégradé violet vers jaune (à rattraper) ou violet vers gris (à jour).']],
             ['7.9', ['Nouveau bouton « Regarder ensemble » dans la Fiche : la série marquée a un cadre fuchsia sur toutes ses vignettes (une seule à la fois), pour la retrouver vite quand on la regarde à deux.']],
             ['7.8', ['Bouton « Son coupé » cliquable pour réactiver le son ; le panneau s’estompe de nouveau en plein écran ; la liste des séries et l’historique sont envoyés à SideBar.']],
@@ -4119,11 +4120,11 @@
             return '[' + (e.siteTag || '?') + '] ' + displayName(e.seriesName) + ' - Ep ' + epStr;
         }
 
-        // Menu "Mes séries" : séries marquées « Regarder ensemble » = dégradé violet -> jaune (à rattraper) ou violet -> gris (à jour).
+        // Menu "Mes séries" : séries marquées « Regarder ensemble » = dégradé violet (#882a9b) -> jaune (à rattraper) ou violet -> gris (à jour).
         function togetherOptionBg(e) {
             const names = Object.values(loadNameMark('ensemble')).flatMap(nameVariants);
             if (!nameVariants(e.seriesName).some((n) => names.includes(n))) return '';
-            return 'linear-gradient(90deg,#e040fb,' + (isBehind(e.key) ? '#ffb300' : '#9a9a9a') + ')';
+            return isBehind(e.key) ? 'linear-gradient(90deg,#882a9b 0%,#f3f70a 70%,#edd953 100%)' : 'linear-gradient(90deg,#882a9b,#9a9a9a)';
         }
 
         function getCurrentEpisodeDisplay() {
