@@ -1333,3 +1333,9 @@ uit-chef\sorties‚6-10-30\VERDICTS.md. Aucune modification de code cette nuit.
 
 ## 2026-10-30 (nuit, vague 4 vitrine)
 - README : sections Captures/Limites ajoutees (ou README refait pour Rainmeter) ; LICENSE : existante conservee (tous droits reserves), Rainmeter : LICENSE ajoutee (a valider). Rien pousse. Captures reelles a faire avec donnees de demo.
+
+## 2026-10-30 (nuit, vague 6 agence)
+- `node build.js` rejoue : le .user.js genere est identique (aucun diff) ; `node --check` OK. Aucun push.
+- Relecture securite rapide : pas d'eval/new Function dans src/ ; les 2 listeners `message` filtrent source/origine/prefixe (02-iframe-lecteur.js:265-267, 30-lecteur.js:444-449) ; innerHTML passe par escapeHtml (verifie par echantillon, 23 occurrences non toutes relues).
+- Non fait : tests Playwright (hors depot, fenetre navigateur interdite de nuit), recette.html (manuel). Taches "toi" inchangees.
+- Hors depot a trier : `.claude/`, `tests/analyse-site.js`, `traduction/` (non commites : outils de travail, a decider).
