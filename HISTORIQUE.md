@@ -1352,3 +1352,6 @@ Menu « Mes series » (panneau + overlay) : options des series marquees `ensembl
 ## 2026-10-31 (nuit, vague 3 securite suite - revue seule, code NON modifie)
 - Revue des 22 innerHTML de src/ : 1 important (41-suivi.js:199->214 season.label venant d une sauvegarde importee, non echappe), 3 mineurs (05-sites.js:69 numero d episode brut, 32-fiche.js:89 et :583). Diffs proposes dans _outils/nuit-chef/sorties/2026-10-31/SECURITE_SUITE.md section 4.
 - Reste : appliquer 4.A (+4.B) dans la prochaine version publiee, apres validation utilisateur.
+
+## 2026-10-31 (rapport du matin)
+- Rapport de synthese : _outils/nuit-chef/sorties/2026-10-31/RAPPORT_NUIT.md. Branche nuit/2026-10-31 locale, rien de pousse. Decision attendue : fusion.
