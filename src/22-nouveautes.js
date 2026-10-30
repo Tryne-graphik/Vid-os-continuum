@@ -1,6 +1,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.10.1', ['Menu « Mes séries » : nouveau dégradé violet vers jaune pour les séries « Regarder ensemble » à rattraper.']],
             ['7.10.0', ['Menu « Mes séries » : les séries marquées « Regarder ensemble » sont en dégradé violet vers jaune (à rattraper) ou violet vers gris (à jour).']],
             ['7.9', ['Nouveau bouton « Regarder ensemble » dans la Fiche : la série marquée a un cadre fuchsia sur toutes ses vignettes (une seule à la fois), pour la retrouver vite quand on la regarde à deux.']],
             ['7.8', ['Bouton « Son coupé » cliquable pour réactiver le son ; le panneau s’estompe de nouveau en plein écran ; la liste des séries et l’historique sont envoyés à SideBar.']],

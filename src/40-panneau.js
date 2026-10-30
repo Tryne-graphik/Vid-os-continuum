@@ -182,11 +182,11 @@
             return '[' + (e.siteTag || '?') + '] ' + displayName(e.seriesName) + ' - Ep ' + epStr;
         }
 
-        // Menu "Mes séries" : séries marquées « Regarder ensemble » = dégradé violet -> jaune (à rattraper) ou violet -> gris (à jour).
+        // Menu "Mes séries" : séries marquées « Regarder ensemble » = dégradé violet (#882a9b) -> jaune (à rattraper) ou violet -> gris (à jour).
         function togetherOptionBg(e) {
             const names = Object.values(loadNameMark('ensemble')).flatMap(nameVariants);
             if (!nameVariants(e.seriesName).some((n) => names.includes(n))) return '';
-            return 'linear-gradient(90deg,#e040fb,' + (isBehind(e.key) ? '#ffb300' : '#9a9a9a') + ')';
+            return isBehind(e.key) ? 'linear-gradient(90deg,#882a9b 0%,#f3f70a 70%,#edd953 100%)' : 'linear-gradient(90deg,#882a9b,#9a9a9a)';
         }
 
         function getCurrentEpisodeDisplay() {
