@@ -1355,3 +1355,9 @@ Menu « Mes series » (panneau + overlay) : options des series marquees `ensembl
 
 ## 2026-10-31 (rapport du matin)
 - Rapport de synthese : _outils/nuit-chef/sorties/2026-10-31/RAPPORT_NUIT.md. Branche nuit/2026-10-31 locale, rien de pousse. Decision attendue : fusion.
+
+## 2026-10-30 - traduction : mode DeepSeek ajouté (traduction/traduire.js)
+`--moteur deepseek` (modèle deepseek-flash, blocs de 60, max_tokens 32000, clé dans l'env DEEPSEEK_API_KEY). node --check OK. NON testé : la variable n'était pas définie (lecture du .env d'ai-delegate bloquée par le hook ; l'utilisateur doit faire `setx DEEPSEEK_API_KEY`). Suite : lancer le test sur R6IJKMx0T9c, puis ignorer les pistes "from X", glossaire par série, surimpression dans le lecteur. Dossier traduction/ toujours non commité.
+
+## 2026-10-31 - v7.10.2 : correctif securite publie
+Echappement du libelle de saison et du numero d episode (41-suivi.js, 05-sites.js, deja commite en 5479525) ; version montee, encart Nouveautes ajoute, .user.js reconstruit, node --check OK. Pousse (MAJ auto Tampermonkey).
