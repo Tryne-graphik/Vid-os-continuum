@@ -1361,3 +1361,6 @@ Menu « Mes series » (panneau + overlay) : options des series marquees `ensembl
 
 ## 2026-10-31 - v7.10.2 : correctif securite publie
 Echappement du libelle de saison et du numero d episode (41-suivi.js, 05-sites.js, deja commite en 5479525) ; version montee, encart Nouveautes ajoute, .user.js reconstruit, node --check OK. Pousse (MAJ auto Tampermonkey).
+
+## 2026-11-01 (nuit, vague 6)
+- `src/32-fiche.js` : echappement (`escapeHtml`) de `m.nextAiringEpisode.episode` (fiche, "Prochain episode") et de `e.siteTag` (tableau Reglages). Le 3e point (`epText`, 41-suivi) etait deja echappe (l.390). Rebuild `node build.js` + `node --check` OK. Version NON montee (7.10.2), rien pousse. Non teste dans le navigateur.

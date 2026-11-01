@@ -86,7 +86,7 @@
                     if (STATUS_FR[m.status]) meta.push(STATUS_FR[m.status]);
                     if (m.averageScore) meta.push('note ' + (m.averageScore / 10).toFixed(1) + '/10');
                     html += '<div style="color:#aaa;font-size:12px;margin:2px 0 6px;">' + escapeHtml(meta.join(' \u00b7 ')) + '</div>';
-                    if (m.nextAiringEpisode) html += '<div style="color:#ffb300;font-size:12px;">Prochain episode (' + m.nextAiringEpisode.episode + ') dans ' + Math.max(1, Math.round(m.nextAiringEpisode.timeUntilAiring / 86400)) + ' j</div>';
+                    if (m.nextAiringEpisode) html += '<div style="color:#ffb300;font-size:12px;">Prochain episode (' + escapeHtml(String(m.nextAiringEpisode.episode)) + ') dans ' + Math.max(1, Math.round(m.nextAiringEpisode.timeUntilAiring / 86400)) + ' j</div>';
                     html += '<div style="margin-top:6px;">' + (m.genres || []).map((g) => chip(GENRES_FR[g] || g, '#1f3a4d')).join('') + '</div>';
                     const tags = (m.tags || []).filter((t) => !t.isMediaSpoiler && !t.isGeneralSpoiler && t.rank >= 60).slice(0, 8);
                     if (tags.length) html += '<div>' + tags.map((t) => chip(t.name, '#2a2a35')).join('') + '</div>';
@@ -565,7 +565,7 @@
                     const unconfigured = !io.introEnd && !io.outroStart;
                     const rowStyle = unconfigured ? 'background:rgba(255,179,0,.08);' : '';
                     html += '<tr style="border-bottom:1px solid #222;' + rowStyle + '" data-key="' + escapeHtml(e.key) + '">' +
-                        '<td style="padding:6px 4px;color:#888;">' + (e.siteTag || '') + '</td>' +
+                        '<td style="padding:6px 4px;color:#888;">' + escapeHtml(e.siteTag || '') + '</td>' +
                         '<td style="padding:6px 4px;">' + (unconfigured ? '&#9888; ' : '') + escapeHtml(e.seriesName) + '</td>' +
                         '<td style="padding:6px 4px;"><input type="text" class="ep-set-introStart-input" aria-label="Début intro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introStart) + '"></td>' +
                         '<td style="padding:6px 4px;"><input type="text" class="ep-set-introEnd-input" aria-label="Fin intro" placeholder="mm:ss" style="width:60px;background:#000;color:#eee;border:1px solid #333;border-radius:4px;padding:3px;" value="' + formatTimecode(io.introEnd) + '"></td>' +
