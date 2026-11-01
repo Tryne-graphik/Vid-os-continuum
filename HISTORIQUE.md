@@ -1364,3 +1364,6 @@ Echappement du libelle de saison et du numero d episode (41-suivi.js, 05-sites.j
 
 ## 2026-11-01 (nuit, vague 6)
 - `src/32-fiche.js` : echappement (`escapeHtml`) de `m.nextAiringEpisode.episode` (fiche, "Prochain episode") et de `e.siteTag` (tableau Reglages). Le 3e point (`epText`, 41-suivi) etait deja echappe (l.390). Rebuild `node build.js` + `node --check` OK. Version NON montee (7.10.2), rien pousse. Non teste dans le navigateur.
+
+## 2026-11-01 (matin) - v7.10.3 : correctif echappement fusionne, NON publie
+Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -> 7.10.3 + entree CHANGELOG (src/22-nouveautes.js), `node build.js` + `node --check` OK. NON teste dans le navigateur, NON pousse : le push = MAJ auto Tampermonkey chez les utilisateurs, a faire avec accord explicite.
