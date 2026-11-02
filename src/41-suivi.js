@@ -429,19 +429,21 @@
                     (currentEpisode.site === 'esprit-donghua' ? '<button id="ep-open-odysee" title="Ouvre cet episode directement sur odysee.com dans un nouvel onglet (playlist/suivant-precedent geres la-bas independamment).">Ouvrir sur Odysee</button>' : '') +
                     '<div class="vc-row"><button id="ep-youtube-auto-btn" title="Cherche cet episode sur YouTube et propose les videos en vignettes (compilations : bon moment via les chapitres). La chaine choisie est retenue pour la suite.">YouTube</button>' +
                     '<button id="ep-youtube-off-btn" title="Revenir a la source du site">Source du site</button></div>'),
-                menuItem('sauvegarde', 'Sauvegarde',
+                subsSectionHtml('ep'),
+                plusMenuItem([menuItem('sauvegarde', 'Sauvegarde',
                     '<div class="vc-row"><button id="ep-export-panel">Exporter</button><button id="ep-import-panel">Importer</button></div>' +
                     '<button id="ep-choose-backup">Fichier de sauvegarde</button>' +
                     '<button id="ep-reauth-backup">Redonner l\'accès</button>' +
                     '<span id="ep-backup-status" class="vc-note"></span>' +
                     '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">'),
-                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), legendSectionHtml(false)
+                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), legendSectionHtml(false)])
             ]);
             html += '<footer class="vc-foot"><select id="ep-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div class="vc-summary">' + renderTrackingSummary() + '</div>' + siteLinksHtml() + openModeSelectHtml() + '</footer>';
 
             panel.innerHTML = html;
             bindMenus(panel, 'ep', onEpisode ? 'reglages' : '');
+            bindSubs(panel, 'ep');
             panel.querySelector('#ep-history-btn').addEventListener('click', openHistoryPopup);
             refreshIntroOutroButtons();
 

@@ -32,8 +32,8 @@
 .vc-thm.vc-thm [hidden] { display: none !important; }
 
 /* ---------- En-tete ---------- */
-.vc-thm .vc-head { display: flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; font-size: 15px; color: var(--vc-acct); }
-.vc-thm .vc-brand { font-family: var(--vc-tfont); }
+.vc-thm .vc-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; font-weight: 700; font-size: 15px; color: var(--vc-acct); }
+.vc-thm .vc-brand { font-family: var(--vc-tfont); white-space: nowrap; }
 
 /* ---------- Cartes ---------- */
 .vc-thm .vc-card {

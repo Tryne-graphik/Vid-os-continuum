@@ -394,7 +394,7 @@
                     const r = await gmRequest({ method: 'GET', url: url + '&t=' + Math.floor(v ? v.currentTime : 0), timeout: 8000 });
                     if (r.status === 200 || r.status === 206) { cues = parse(r.responseText); if (cues.length && !box) activate(); }
                     if (r.status === 200 || (r.status >= 400 && r.status !== 429)) return; // complet, ou service sans clé / en échec : repli YouTube
-                } catch (e) { return; } // service éteint
+                } catch (e) { if (++tries < 400) setTimeout(poll, 15000); return; } // service éteint : on revient voir (démarrage manuel ou automatique après coup)
                 if (++tries < 400) setTimeout(poll, 6000); // 202/206/429 : traduction en cours, on revient voir
             };
             setTimeout(poll, 1500);

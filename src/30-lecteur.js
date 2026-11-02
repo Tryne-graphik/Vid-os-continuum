@@ -64,18 +64,20 @@
                             groupLabel('Page') +
                             '<div class="vc-row"><button id="ed-reload-btn" title="Recharger la page">&#8635; Recharger</button>' +
                             '<button id="ed-delete-btn" class="vc-danger" title="Retire de la progression la série choisie dans la liste">Ne plus suivre</button></div>', false, true)),
-                    menuItem('sauvegarde', 'Sauvegarde',
+                    subsSectionHtml('ed'),
+                    plusMenuItem([menuItem('sauvegarde', 'Sauvegarde',
                         '<div class="vc-row"><button id="ed-export-btn">Exporter</button><button id="ed-import-btn">Importer</button></div>' +
                         '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
                         '<button id="ed-choose-backup-btn">Fichier de sauvegarde</button>' +
                         '<button id="ed-reauth-backup-btn">Redonner l\'accès</button>' +
                         '<span id="ed-backup-status" class="vc-note"></span>'),
-                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), legendSectionHtml(false)
+                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), legendSectionHtml(false)])
                 ]) +
                 '<footer class="vc-foot"><select id="ed-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" class="vc-summary"></div>' +
                 siteLinksHtml() + openModeSelectHtml() + '</footer>';
             bindMenus(topbar, 'ed', 'reglages');
+            bindSubs(topbar, 'ed');
             overlay.appendChild(topbar);
             topbar.id = 'ed-topbar';
             overlay.addEventListener('mousemove', panelWake);

@@ -3,3 +3,6 @@ save/
 
 # maquettes et planches tirees du NAS (images personnelles) : jamais dans le depot public
 design/
+traduction/usage.log
+traduction/*.vtt
+traduction/*.src.txt

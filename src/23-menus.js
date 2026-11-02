@@ -8,6 +8,8 @@
             sauvegarde: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3M8 21v-7h8v7"/>',
             nouveautes: '<path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/>',
             incident: '<path d="M5 21V4h11l-1.5 4L16 12H5"/>',
+            plus: '<circle cx="6" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="18" cy="12" r="1.5"/>',
+            soustitres: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 14h4M13 14h4M7 10h2M11 10h6"/>',
             legende: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'
         }; }
         function vcIcon(key) {
@@ -16,6 +18,11 @@
         // Element de menu : { key, label, html, badge }. 4e argument (ancien "open") ignore.
         function menuItem(key, label, html, extra) {
             return Object.assign({ key: key, label: label, html: html }, extra && typeof extra === 'object' ? extra : {});
+        }
+        // Onglet « Plus » : regroupe des menus (Sauvegarde, Nouveautés, Signaler, Légende) en sections repliables ; badge (!) conservé.
+        function plusMenuItem(items) {
+            items = items.filter(Boolean);
+            return menuItem('plus', 'Plus', items.map((m) => collapsibleSection(m.key, m.label + (m.badge ? ' ' + m.badge : ''), m.html, false, true)).join(''), { badge: items.some((m) => m.badge) ? '(!)' : '' });
         }
         function menusHtml(items) {
             items = items.filter(Boolean);
