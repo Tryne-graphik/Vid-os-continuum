@@ -1387,3 +1387,8 @@ Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -
 - Contenu : raccourcis de lecture N/P/S/Echap, cache de fiches 24 h (`ficheCache`), sous-titres YouTube traduits via le service local (src/02-iframe-lecteur.js).
 - Teste : cache + N/P/Echap (12/12 Playwright, voir entree precedente). `node build.js` + `node --check` OK.
 - NON teste : touche S (message `skip` vers l'iframe), decompte « episode suivant » + Echap, sous-titres YouTube, Tampermonkey reel (Opera/Chrome).
+
+## 2026-11-02 - tests partie A (v7.11.0)
+- Playwright (_outils/videocontinuum-tests/test-s-decompte.js, 9/9 OK) : S envoie bien `skip` a l'iframe ; decompte « Episode suivant » ; Echap l'annule sans fermer le lecteur ; sans Echap il enchaine.
+- Touche S : saut en avant CONFIRME a la main par l'utilisateur (Tampermonkey reel).
+- Reste a verifier : N/P/Echap + boutons Fiche sur Opera, sous-titres YouTube (service local).
