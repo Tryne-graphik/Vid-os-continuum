@@ -1392,3 +1392,8 @@ Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -
 - Playwright (_outils/videocontinuum-tests/test-s-decompte.js, 9/9 OK) : S envoie bien `skip` a l'iframe ; decompte « Episode suivant » ; Echap l'annule sans fermer le lecteur ; sans Echap il enchaine.
 - Touche S : saut en avant CONFIRME a la main par l'utilisateur (Tampermonkey reel).
 - Reste a verifier : N/P/Echap + boutons Fiche sur Opera, sous-titres YouTube (service local).
+
+## 2026-11-02 - sous-titres FR : moteur et service testes (DeepSeek retenu)
+- DeepL ecarte : plan API Free non souscriptible, Developer = 1 M caracteres au total sans renouvellement. Decision utilisateur : garder DeepSeek (non compare a d'autres moteurs, qualite jugee bonne sur 100 repliques zh).
+- `traduire.js --moteur deepseek --src zh` OK (copie hors depot). `serve.js` OK sur nouvelle video (pUokjG3i9kA, ~7 min) : 202 -> 206 -> 200, 429 a la 3e demande, 500 memorise pour id invalide, 400 pour id mal forme.
+- Reste : priorite de `t=` non verifiee ; affichage dans le navigateur (boite de sous-titres, repli YouTube service eteint) a tester par l'utilisateur avec `node serve.js` ; N/P/Echap + boutons Fiche sur Opera.
