@@ -1381,3 +1381,9 @@ Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -
 - Page Ten Thousand Worlds s2-e149, .user.js v6 reconstruit. 12/12 OK : lecteur ouvert ; fiche affichee et mise en cache (ficheCache) ; 2e ouverture sans nouvel appel AniList ; cache conserve apres rechargement de la page (0 appel AniList) ; N (199 -> 200) et P (200 -> 199) ; N ignore dans un champ de saisie et quand la fiche est ouverte ; Echap ferme la fiche d'abord puis le lecteur ; N sans lecteur ouvert = rien.
 - Piege du test : le changement d'episode met 3 a 6 s a s'afficher (statut « Chargement… ») : attendre la stabilisation du texte, pas un delai fixe. `#ed-goto-input` est masque (largeur 0) : ne pas s'en servir pour tester le focus.
 - NON couvert : la touche S (message `skip` vers l'iframe du lecteur, iframe d'un autre domaine, pas de lecture video en mode sans fenetre) ; le decompte « episode suivant » + Echap ; Tampermonkey reel (Opera/Chrome). Version toujours non montee, rien de pousse.
+
+## 2026-11-02 - v7.11.0 : publiee
+- @version 7.10.3 -> 7.11.0 + entree CHANGELOG (src/22-nouveautes.js). Commit 2c9a6d8, pousse sur master (MAJ auto Tampermonkey).
+- Contenu : raccourcis de lecture N/P/S/Echap, cache de fiches 24 h (`ficheCache`), sous-titres YouTube traduits via le service local (src/02-iframe-lecteur.js).
+- Teste : cache + N/P/Echap (12/12 Playwright, voir entree precedente). `node build.js` + `node --check` OK.
+- NON teste : touche S (message `skip` vers l'iframe), decompte « episode suivant » + Echap, sous-titres YouTube, Tampermonkey reel (Opera/Chrome).
