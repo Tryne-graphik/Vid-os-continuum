@@ -51,6 +51,31 @@
             }).catch(() => null);
         }
         const ficheCache = {}; // fiche deja chargee pendant la visite -> reaffichee sans recharger (v6.61)
+        // Cache PERSISTANT entre les visites (GM_setValue, partage par tous les sites ; pas IndexedDB, limite a l'origine du site).
+        // 24 h, 60 fiches max ; jamais une fiche sans AniList (echec reseau) ; "prochain episode" recalcule. Hors sauvegarde : c'est un cache.
+        const FICHE_TTL = 24 * 3600 * 1000, FICHE_MAX = 60;
+        function loadFicheCache(key) {
+            try {
+                const c = (GM_getValue('ficheCache', {}) || {})[key];
+                if (!c || !c.m || !(Date.now() - c.at < FICHE_TTL)) return null;
+                let m = c.m;
+                if (m.nextAiringEpisode) {
+                    const left = m.nextAiringEpisode.timeUntilAiring - (Date.now() - c.at) / 1000;
+                    if (!(left > 0)) return null; // l'episode est sorti depuis : on recharge
+                    m = Object.assign({}, m, { nextAiringEpisode: Object.assign({}, m.nextAiringEpisode, { timeUntilAiring: left }) });
+                }
+                return [m, c.syn || null];
+            } catch (e) { return null; }
+        }
+        function saveFicheCache(key, media, syn) {
+            if (!media) return;
+            try {
+                const all = GM_getValue('ficheCache', {}) || {};
+                all[key] = { at: Date.now(), m: media, syn: syn || null };
+                Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(FICHE_MAX).forEach((k) => { delete all[k]; });
+                GM_setValue('ficheCache', all);
+            } catch (e) { /* cache seulement : on ignore */ }
+        }
         function openSeriesInfo(info) {
             const key = storageKey(info);
             const old = document.getElementById('ep-info-overlay');
@@ -64,6 +89,8 @@
             focusDialog(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
             const box = pop.querySelector('#ep-info-box');
+            const cached = ficheCache[key] ? null : loadFicheCache(key);
+            if (cached) ficheCache[key] = Promise.resolve(cached);
             if (!ficheCache[key]) {
                 // Serie suivie : meme anime qu'AniSkip (modifiable). Sinon recherche directe par nom romanise
                 // (la recherche AniSkip, anglais + id MAL obligatoire, donnait un special pour Wanmei Shijie).
@@ -71,7 +98,7 @@
                 const media = (loadProgress()[key]
                     ? resolveAniLink(key, info).then((link) => (link && link.idMal ? anilistDetails({ idMal: link.idMal }) : byName()))
                     : byName()).catch(() => null);
-                ficheCache[key] = Promise.all([media, siteSynopsis(info)]);
+                ficheCache[key] = Promise.all([media, siteSynopsis(info)]).then((r) => { saveFicheCache(key, r[0], r[1]); return r; });
             }
             ficheCache[key].then(([m, frSyn]) => {
                 if (!document.body.contains(pop)) return;

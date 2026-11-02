@@ -751,7 +751,12 @@
                 // v7.0 : la fenetre du dessus (la derniere dans le document), puis le lecteur.
                 const top = Array.from(document.querySelectorAll('#ep-info-overlay, #ep-settings-overlay, #vc-history-overlay, #ep-tracking-overlay')).pop();
                 if (top) { ev.preventDefault(); top.remove(); }
+                else if (cancelCountdown) { ev.preventDefault(); cancelCountdown(); } // v7.11 : Echap annule d'abord le decompte "episode suivant"
                 else if (overlayEls && overlayEls.overlay.style.display !== 'none' && !document.fullscreenElement) { ev.preventDefault(); overlayEls.overlay.querySelector('#ed-close-btn').click(); }
+            } else if (/^[nps]$/i.test(ev.key) && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !ev.shiftKey
+                && !(ev.target.matches && ev.target.matches('input,textarea,select,[contenteditable]'))
+                && !document.querySelector('#ep-info-overlay, #ep-settings-overlay, #vc-history-overlay, #ep-tracking-overlay')) {
+                playerShortcut(ev.key.toLowerCase()); // v7.11 : N suivant, P precedent, S saut (seulement si le lecteur est ouvert)
             } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn, .ep-thumb-info')) {
                 ev.preventDefault(); ev.target.click();
             }

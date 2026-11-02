@@ -1367,3 +1367,17 @@ Echappement du libelle de saison et du numero d episode (41-suivi.js, 05-sites.j
 
 ## 2026-11-01 (matin) - v7.10.3 : correctif echappement fusionne, NON publie
 Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -> 7.10.3 + entree CHANGELOG (src/22-nouveautes.js), `node build.js` + `node --check` OK. NON teste dans le navigateur, NON pousse : le push = MAJ auto Tampermonkey chez les utilisateurs, a faire avec accord explicite.
+
+## 2026-11-02 - cache de fiches persistant (NON publie, version non montee)
+- `src/32-fiche.js` : `loadFicheCache` / `saveFicheCache` (GM_setValue `ficheCache`, 24 h, 60 fiches max, jamais sans AniList, "prochain episode" recalcule, recharge si l'episode est sorti). Hors BACKUP_SETTINGS (c'est un cache). IndexedDB ecarte : limite a l'origine de chaque site. `node build.js` + `node --check` OK ; logique testee en Node avec un GM_* simule (cache nul, compte a rebours, TTL, plafond). NON teste dans le navigateur, NON pousse (push = MAJ auto Tampermonkey). Issu de la recherche IA (RechercheIA, projet 03).
+- Constat : AniSkip est deja integre (src/31-aniskip.js) ; les IA l'ont propose comme nouveaute.
+
+## 2026-11-02 - raccourcis de lecture (NON publie, version non montee)
+- Touches (sans modificateur, hors champs de saisie, lecteur ouvert) : N episode suivant (annule le decompte et enchaine), P precedent, S saut (jusqu'a la fin du generique reglee, sinon +85 s), Echap annule le decompte "Episode suivant dans Ns" avant de fermer le lecteur. Rien ne bloque aux extremites (message d'etat, pas d'alert).
+- `src/30-lecteur.js` : `playerShortcut(k)` ; message `key` recu de l'iframe. `src/02-iframe-lecteur.js` : relais keydown (N/P/S/Echap) vers le calque (le focus reste souvent dans le lecteur, ou la page ne voit pas le clavier) + message `skip`. `src/41-suivi.js` : branche clavier de la page. Infobulles des boutons ⏮ ⏭ mises a jour.
+- Constat : le decompte avant l'episode suivant existait deja (showNextToast, annulable) ; ce qui manquait : le clavier. `node build.js` + `node --check` OK ; NON teste dans le navigateur, NON pousse (push = MAJ auto Tampermonkey).
+
+## 2026-11-02 - test navigateur du cache de fiches et des raccourcis (Playwright, Chromium sans fenetre, shim GM_*)
+- Page Ten Thousand Worlds s2-e149, .user.js v6 reconstruit. 12/12 OK : lecteur ouvert ; fiche affichee et mise en cache (ficheCache) ; 2e ouverture sans nouvel appel AniList ; cache conserve apres rechargement de la page (0 appel AniList) ; N (199 -> 200) et P (200 -> 199) ; N ignore dans un champ de saisie et quand la fiche est ouverte ; Echap ferme la fiche d'abord puis le lecteur ; N sans lecteur ouvert = rien.
+- Piege du test : le changement d'episode met 3 a 6 s a s'afficher (statut « Chargement… ») : attendre la stabilisation du texte, pas un delai fixe. `#ed-goto-input` est masque (largeur 0) : ne pas s'en servir pour tester le focus.
+- NON couvert : la touche S (message `skip` vers l'iframe du lecteur, iframe d'un autre domaine, pas de lecture video en mode sans fenetre) ; le decompte « episode suivant » + Echap ; Tampermonkey reel (Opera/Chrome). Version toujours non montee, rien de pousse.

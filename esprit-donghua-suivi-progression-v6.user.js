@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.10.3
+// @version      7.11.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -27,6 +27,7 @@
 // @connect      script.googleusercontent.com
 // @connect      graphql.anilist.co
 // @connect      api.aniskip.com
+// @connect      127.0.0.1
 // @updateURL    https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // @downloadURL  https://raw.githubusercontent.com/Tryne-graphik/Vid-os-continuum/master/esprit-donghua-suivi-progression-v6.user.js
 // ==/UserScript==
@@ -324,6 +325,15 @@
             tryAutoUnmute(video, true);
         }, true);
 
+        // Raccourcis (v7.11) : le focus est souvent DANS le lecteur, ou la page ne voit pas le clavier -> on relaie N / P / S / Echap au calque.
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+            const t = e.target;
+            if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+            const k = String(e.key).toLowerCase();
+            if (k === 'n' || k === 'p' || k === 's' || k === 'escape') window.parent.postMessage({ type: MSG_PREFIX + 'key', key: k }, '*');
+        }, true);
+
         waitForVideo((video) => {
             console.log('[AnimeTracker v6] (' + cfg.label + ') element video trouve');
             video.addEventListener('play', () => { playbackStarted = true; }, { once: true });
@@ -445,6 +455,14 @@
                 const video = findVideo();
                 if (video) video.pause();
             }
+            if (type === 'skip') {
+                const video = findVideo();
+                if (video) {
+                    const t = video.currentTime;
+                    const to = config && config.introEnd && t < config.introEnd ? config.introEnd : t + 85;
+                    video.currentTime = isFinite(video.duration) ? Math.min(to, video.duration - 1) : to;
+                }
+            }
             if (type === 'play') {
                 const video = findVideo();
                 if (video) {
@@ -491,6 +509,7 @@
         const hideCss = doc.createElement('style');
         hideCss.textContent = '.fullscreen-watch-next-entrypoint-wrapper,.ytp-pause-overlay{display:none!important}';
         (doc.head || doc.documentElement).appendChild(hideCss);
+        let localSubsOn = false; // v7.11 : sous-titres du service local actifs -> on laisse ceux de YouTube tranquilles
         let tries = 0;
         const timer = setInterval(() => {
             if (++tries > 40) { clearInterval(timer); return; }
@@ -499,6 +518,7 @@
             try { if (p.loadModule) p.loadModule('captions'); } catch (e) {}
             let list = [];
             try { list = p.getOption('captions', 'tracklist') || []; } catch (e) {}
+            if (localSubsOn) { clearInterval(timer); return; }
             if (!list.length) return;
             const fr = list.find((x) => x.languageCode === 'fr');
             const src = fr || list.find((x) => /^en/.test(x.languageCode)) || list[0];
@@ -508,6 +528,41 @@
                 console.log('[AnimeTracker v6] (YouTube) sous-titres en francais' + (fr ? '' : ' (traduction automatique depuis ' + src.languageCode + ')'));
             } catch (e) {}
         }, 1000);
+
+        // v7.11 : sous-titres FR traduits depuis la piste chinoise par le service local (traduction/serve.js, 127.0.0.1:8787).
+        // Service éteint ou en erreur -> on garde ceux de YouTube (ci-dessus), sans rien changer d'autre.
+        (function localSubs() {
+            const idm = location.pathname.match(/\/embed\/([\w-]{11})/);
+            if (!idm) return;
+            const url = 'http://127.0.0.1:8787/sub?v=' + idm[1];
+            const sec = (h, mi, s, ms) => +h * 3600 + +mi * 60 + +s + +ms / 1000;
+            const parse = (txt) => txt.split(/\r?\n\r?\n/).map((b) => { const x = b.match(/(\d+):(\d+):(\d+)\.(\d+) --> (\d+):(\d+):(\d+)\.(\d+)\r?\n([\s\S]+)/); return x && { s: sec(x[1], x[2], x[3], x[4]), e: sec(x[5], x[6], x[7], x[8]), t: x[9].trim() }; }).filter(Boolean);
+            let cues = [], box = null, tries = 0;
+            const tick = () => {
+                const v = doc.querySelector('video'); if (!v || !box) return;
+                const t = v.currentTime, c = cues.find((q) => t >= q.s && t <= q.e + 0.3);
+                box.textContent = c ? c.t : '';
+            };
+            const activate = () => {
+                localSubsOn = true;
+                try { const p = doc.getElementById('movie_player'); if (p && p.unloadModule) p.unloadModule('captions'); } catch (e) {}
+                box = doc.createElement('div');
+                box.style.cssText = 'position:fixed;left:8%;right:8%;bottom:9%;text-align:center;z-index:2147483647;pointer-events:none;font:600 clamp(16px,3.2vw,30px)/1.3 Arial,sans-serif;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000,1px 1px 2px #000';
+                (doc.body || doc.documentElement).appendChild(box);
+                setInterval(tick, 200);
+                console.log('[AnimeTracker v6] (YouTube) sous-titres FR du service local');
+            };
+            const poll = async () => {
+                const v = doc.querySelector('video');
+                try {
+                    const r = await gmRequest({ method: 'GET', url: url + '&t=' + Math.floor(v ? v.currentTime : 0), timeout: 8000 });
+                    if (r.status === 200 || r.status === 206) { cues = parse(r.responseText); if (cues.length && !box) activate(); }
+                    if (r.status === 200 || (r.status >= 400 && r.status !== 429)) return; // complet, ou service sans clé / en échec : repli YouTube
+                } catch (e) { return; } // service éteint
+                if (++tries < 400) setTimeout(poll, 6000); // 202/206/429 : traduction en cours, on revient voir
+            };
+            setTimeout(poll, 1500);
+        })();
     }
 
     function runInsidePlayerFrame_ansembed() {
@@ -2499,6 +2554,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.11.0', ['Raccourcis clavier du lecteur : N épisode suivant, P précédent, S saut, Échap annule le décompte.', 'Fiches des séries gardées 24 h en mémoire : elles s’ouvrent aussitôt, sans rappeler AniList.', 'YouTube : sous-titres français traduits depuis la piste chinoise par un service local (traduction/serve.js), bien plus fidèles que la traduction automatique de YouTube ; sans le service, rien ne change.']],
             ['7.10.3', ['Sécurité : le prochain épisode de la Fiche et l’étiquette de site des Réglages sont désormais échappés.']],
             ['7.10.2', ['Sécurité : le nom de saison et le numéro d’épisode d’une sauvegarde importée sont désormais échappés.']],
             ['7.10.1', ['Menu « Mes séries » : nouveau dégradé violet vers jaune pour les séries « Regarder ensemble » à rattraper.']],
@@ -2825,10 +2881,10 @@
             // bouge, disparaissent apres 3 s, comme lecture/pause.
             const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
             const navPrev = document.createElement('button');
-            navPrev.type = 'button'; navPrev.title = 'Épisode précédent'; navPrev.textContent = '⏮';
+            navPrev.type = 'button'; navPrev.title = 'Épisode précédent (P)'; navPrev.textContent = '⏮';
             navPrev.style.cssText = NAV + 'left:calc(50% - 90px);';
             const navNext = document.createElement('button');
-            navNext.type = 'button'; navNext.title = 'Épisode suivant'; navNext.textContent = '⏭';
+            navNext.type = 'button'; navNext.title = 'Épisode suivant (N) · saut du générique (S)'; navNext.textContent = '⏭';
             navNext.style.cssText = NAV + 'left:calc(50% + 90px);';
             overlay.appendChild(navPrev);
             overlay.appendChild(navNext);
@@ -2993,6 +3049,20 @@
                 overlayEls.statusEl.style.color = warning ? '#ffb020' : '#ccc';
             }
             updatePanelStatus(text);
+        }
+
+        // Raccourcis de lecture (v7.11) : N suivant (aussi pendant le decompte), P precedent, S saut (fin du generique reglee, sinon +85 s),
+        // Echap annule le decompte. Appele par le clavier de la page ET par l'iframe du lecteur (la touche y reste quand le focus y est).
+        function playerShortcut(k) {
+            if (!overlayEls || overlayEls.overlay.style.display === 'none') return;
+            if (k === 'escape') { if (cancelCountdown) cancelCountdown(); return; }
+            if (k === 's') { postToPlayerFrame({ type: MSG_PREFIX + 'skip' }); return; }
+            const id = k === 'n' ? 'ed-next-btn' : k === 'p' ? 'ed-prev-btn' : '';
+            if (!id || !currentEpisode) return;
+            const ok = k === 'n' ? (ytActive || hasNextEpisode(currentEpisode)) : (ytActive || hasPrevEpisode(currentEpisode));
+            if (!ok) { setStatus(k === 'n' ? 'Pas d\'episode suivant' : 'Pas d\'episode precedent'); return; }
+            const b = document.getElementById(id);
+            if (b) b.click();
         }
 
         function postToPlayerFrame(data) {
@@ -3204,6 +3274,7 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
+            if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();
@@ -3387,6 +3458,31 @@
             }).catch(() => null);
         }
         const ficheCache = {}; // fiche deja chargee pendant la visite -> reaffichee sans recharger (v6.61)
+        // Cache PERSISTANT entre les visites (GM_setValue, partage par tous les sites ; pas IndexedDB, limite a l'origine du site).
+        // 24 h, 60 fiches max ; jamais une fiche sans AniList (echec reseau) ; "prochain episode" recalcule. Hors sauvegarde : c'est un cache.
+        const FICHE_TTL = 24 * 3600 * 1000, FICHE_MAX = 60;
+        function loadFicheCache(key) {
+            try {
+                const c = (GM_getValue('ficheCache', {}) || {})[key];
+                if (!c || !c.m || !(Date.now() - c.at < FICHE_TTL)) return null;
+                let m = c.m;
+                if (m.nextAiringEpisode) {
+                    const left = m.nextAiringEpisode.timeUntilAiring - (Date.now() - c.at) / 1000;
+                    if (!(left > 0)) return null; // l'episode est sorti depuis : on recharge
+                    m = Object.assign({}, m, { nextAiringEpisode: Object.assign({}, m.nextAiringEpisode, { timeUntilAiring: left }) });
+                }
+                return [m, c.syn || null];
+            } catch (e) { return null; }
+        }
+        function saveFicheCache(key, media, syn) {
+            if (!media) return;
+            try {
+                const all = GM_getValue('ficheCache', {}) || {};
+                all[key] = { at: Date.now(), m: media, syn: syn || null };
+                Object.keys(all).sort((a, b) => all[b].at - all[a].at).slice(FICHE_MAX).forEach((k) => { delete all[k]; });
+                GM_setValue('ficheCache', all);
+            } catch (e) { /* cache seulement : on ignore */ }
+        }
         function openSeriesInfo(info) {
             const key = storageKey(info);
             const old = document.getElementById('ep-info-overlay');
@@ -3400,6 +3496,8 @@
             focusDialog(pop);
             pop.addEventListener('click', (ev) => { if (ev.target === pop || ev.target.id === 'ep-info-close') pop.remove(); });
             const box = pop.querySelector('#ep-info-box');
+            const cached = ficheCache[key] ? null : loadFicheCache(key);
+            if (cached) ficheCache[key] = Promise.resolve(cached);
             if (!ficheCache[key]) {
                 // Serie suivie : meme anime qu'AniSkip (modifiable). Sinon recherche directe par nom romanise
                 // (la recherche AniSkip, anglais + id MAL obligatoire, donnait un special pour Wanmei Shijie).
@@ -3407,7 +3505,7 @@
                 const media = (loadProgress()[key]
                     ? resolveAniLink(key, info).then((link) => (link && link.idMal ? anilistDetails({ idMal: link.idMal }) : byName()))
                     : byName()).catch(() => null);
-                ficheCache[key] = Promise.all([media, siteSynopsis(info)]);
+                ficheCache[key] = Promise.all([media, siteSynopsis(info)]).then((r) => { saveFicheCache(key, r[0], r[1]); return r; });
             }
             ficheCache[key].then(([m, frSyn]) => {
                 if (!document.body.contains(pop)) return;
@@ -4920,7 +5018,12 @@
                 // v7.0 : la fenetre du dessus (la derniere dans le document), puis le lecteur.
                 const top = Array.from(document.querySelectorAll('#ep-info-overlay, #ep-settings-overlay, #vc-history-overlay, #ep-tracking-overlay')).pop();
                 if (top) { ev.preventDefault(); top.remove(); }
+                else if (cancelCountdown) { ev.preventDefault(); cancelCountdown(); } // v7.11 : Echap annule d'abord le decompte "episode suivant"
                 else if (overlayEls && overlayEls.overlay.style.display !== 'none' && !document.fullscreenElement) { ev.preventDefault(); overlayEls.overlay.querySelector('#ed-close-btn').click(); }
+            } else if (/^[nps]$/i.test(ev.key) && !ev.ctrlKey && !ev.altKey && !ev.metaKey && !ev.shiftKey
+                && !(ev.target.matches && ev.target.matches('input,textarea,select,[contenteditable]'))
+                && !document.querySelector('#ep-info-overlay, #ep-settings-overlay, #vc-history-overlay, #ep-tracking-overlay')) {
+                playerShortcut(ev.key.toLowerCase()); // v7.11 : N suivant, P precedent, S saut (seulement si le lecteur est ouvert)
             } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('[data-yt], .ep-summary-line, .ep-fiche-btn, .ep-thumb-info')) {
                 ev.preventDefault(); ev.target.click();
             }

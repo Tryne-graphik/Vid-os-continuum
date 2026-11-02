@@ -103,10 +103,10 @@
             // bouge, disparaissent apres 3 s, comme lecture/pause.
             const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
             const navPrev = document.createElement('button');
-            navPrev.type = 'button'; navPrev.title = 'Épisode précédent'; navPrev.textContent = '⏮';
+            navPrev.type = 'button'; navPrev.title = 'Épisode précédent (P)'; navPrev.textContent = '⏮';
             navPrev.style.cssText = NAV + 'left:calc(50% - 90px);';
             const navNext = document.createElement('button');
-            navNext.type = 'button'; navNext.title = 'Épisode suivant'; navNext.textContent = '⏭';
+            navNext.type = 'button'; navNext.title = 'Épisode suivant (N) · saut du générique (S)'; navNext.textContent = '⏭';
             navNext.style.cssText = NAV + 'left:calc(50% + 90px);';
             overlay.appendChild(navPrev);
             overlay.appendChild(navNext);
@@ -271,6 +271,20 @@
                 overlayEls.statusEl.style.color = warning ? '#ffb020' : '#ccc';
             }
             updatePanelStatus(text);
+        }
+
+        // Raccourcis de lecture (v7.11) : N suivant (aussi pendant le decompte), P precedent, S saut (fin du generique reglee, sinon +85 s),
+        // Echap annule le decompte. Appele par le clavier de la page ET par l'iframe du lecteur (la touche y reste quand le focus y est).
+        function playerShortcut(k) {
+            if (!overlayEls || overlayEls.overlay.style.display === 'none') return;
+            if (k === 'escape') { if (cancelCountdown) cancelCountdown(); return; }
+            if (k === 's') { postToPlayerFrame({ type: MSG_PREFIX + 'skip' }); return; }
+            const id = k === 'n' ? 'ed-next-btn' : k === 'p' ? 'ed-prev-btn' : '';
+            if (!id || !currentEpisode) return;
+            const ok = k === 'n' ? (ytActive || hasNextEpisode(currentEpisode)) : (ytActive || hasPrevEpisode(currentEpisode));
+            if (!ok) { setStatus(k === 'n' ? 'Pas d\'episode suivant' : 'Pas d\'episode precedent'); return; }
+            const b = document.getElementById(id);
+            if (b) b.click();
         }
 
         function postToPlayerFrame(data) {
@@ -482,6 +496,7 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
+            if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
                 if (event.data.stage === 'echec') tryNextPlayer();

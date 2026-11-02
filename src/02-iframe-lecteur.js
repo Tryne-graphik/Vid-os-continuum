@@ -161,6 +161,15 @@
             tryAutoUnmute(video, true);
         }, true);
 
+        // Raccourcis (v7.11) : le focus est souvent DANS le lecteur, ou la page ne voit pas le clavier -> on relaie N / P / S / Echap au calque.
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+            const t = e.target;
+            if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
+            const k = String(e.key).toLowerCase();
+            if (k === 'n' || k === 'p' || k === 's' || k === 'escape') window.parent.postMessage({ type: MSG_PREFIX + 'key', key: k }, '*');
+        }, true);
+
         waitForVideo((video) => {
             console.log('[AnimeTracker v6] (' + cfg.label + ') element video trouve');
             video.addEventListener('play', () => { playbackStarted = true; }, { once: true });
@@ -282,6 +291,14 @@
                 const video = findVideo();
                 if (video) video.pause();
             }
+            if (type === 'skip') {
+                const video = findVideo();
+                if (video) {
+                    const t = video.currentTime;
+                    const to = config && config.introEnd && t < config.introEnd ? config.introEnd : t + 85;
+                    video.currentTime = isFinite(video.duration) ? Math.min(to, video.duration - 1) : to;
+                }
+            }
             if (type === 'play') {
                 const video = findVideo();
                 if (video) {
@@ -328,6 +345,7 @@
         const hideCss = doc.createElement('style');
         hideCss.textContent = '.fullscreen-watch-next-entrypoint-wrapper,.ytp-pause-overlay{display:none!important}';
         (doc.head || doc.documentElement).appendChild(hideCss);
+        let localSubsOn = false; // v7.11 : sous-titres du service local actifs -> on laisse ceux de YouTube tranquilles
         let tries = 0;
         const timer = setInterval(() => {
             if (++tries > 40) { clearInterval(timer); return; }
@@ -336,6 +354,7 @@
             try { if (p.loadModule) p.loadModule('captions'); } catch (e) {}
             let list = [];
             try { list = p.getOption('captions', 'tracklist') || []; } catch (e) {}
+            if (localSubsOn) { clearInterval(timer); return; }
             if (!list.length) return;
             const fr = list.find((x) => x.languageCode === 'fr');
             const src = fr || list.find((x) => /^en/.test(x.languageCode)) || list[0];
@@ -345,6 +364,41 @@
                 console.log('[AnimeTracker v6] (YouTube) sous-titres en francais' + (fr ? '' : ' (traduction automatique depuis ' + src.languageCode + ')'));
             } catch (e) {}
         }, 1000);
+
+        // v7.11 : sous-titres FR traduits depuis la piste chinoise par le service local (traduction/serve.js, 127.0.0.1:8787).
+        // Service éteint ou en erreur -> on garde ceux de YouTube (ci-dessus), sans rien changer d'autre.
+        (function localSubs() {
+            const idm = location.pathname.match(/\/embed\/([\w-]{11})/);
+            if (!idm) return;
+            const url = 'http://127.0.0.1:8787/sub?v=' + idm[1];
+            const sec = (h, mi, s, ms) => +h * 3600 + +mi * 60 + +s + +ms / 1000;
+            const parse = (txt) => txt.split(/\r?\n\r?\n/).map((b) => { const x = b.match(/(\d+):(\d+):(\d+)\.(\d+) --> (\d+):(\d+):(\d+)\.(\d+)\r?\n([\s\S]+)/); return x && { s: sec(x[1], x[2], x[3], x[4]), e: sec(x[5], x[6], x[7], x[8]), t: x[9].trim() }; }).filter(Boolean);
+            let cues = [], box = null, tries = 0;
+            const tick = () => {
+                const v = doc.querySelector('video'); if (!v || !box) return;
+                const t = v.currentTime, c = cues.find((q) => t >= q.s && t <= q.e + 0.3);
+                box.textContent = c ? c.t : '';
+            };
+            const activate = () => {
+                localSubsOn = true;
+                try { const p = doc.getElementById('movie_player'); if (p && p.unloadModule) p.unloadModule('captions'); } catch (e) {}
+                box = doc.createElement('div');
+                box.style.cssText = 'position:fixed;left:8%;right:8%;bottom:9%;text-align:center;z-index:2147483647;pointer-events:none;font:600 clamp(16px,3.2vw,30px)/1.3 Arial,sans-serif;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000,1px 1px 2px #000';
+                (doc.body || doc.documentElement).appendChild(box);
+                setInterval(tick, 200);
+                console.log('[AnimeTracker v6] (YouTube) sous-titres FR du service local');
+            };
+            const poll = async () => {
+                const v = doc.querySelector('video');
+                try {
+                    const r = await gmRequest({ method: 'GET', url: url + '&t=' + Math.floor(v ? v.currentTime : 0), timeout: 8000 });
+                    if (r.status === 200 || r.status === 206) { cues = parse(r.responseText); if (cues.length && !box) activate(); }
+                    if (r.status === 200 || (r.status >= 400 && r.status !== 429)) return; // complet, ou service sans clé / en échec : repli YouTube
+                } catch (e) { return; } // service éteint
+                if (++tries < 400) setTimeout(poll, 6000); // 202/206/429 : traduction en cours, on revient voir
+            };
+            setTimeout(poll, 1500);
+        })();
     }
 
     function runInsidePlayerFrame_ansembed() {

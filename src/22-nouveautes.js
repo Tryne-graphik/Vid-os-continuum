@@ -1,6 +1,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.11.0', ['Raccourcis clavier du lecteur : N épisode suivant, P précédent, S saut, Échap annule le décompte.', 'Fiches des séries gardées 24 h en mémoire : elles s’ouvrent aussitôt, sans rappeler AniList.', 'YouTube : sous-titres français traduits depuis la piste chinoise par un service local (traduction/serve.js), bien plus fidèles que la traduction automatique de YouTube ; sans le service, rien ne change.']],
             ['7.10.3', ['Sécurité : le prochain épisode de la Fiche et l’étiquette de site des Réglages sont désormais échappés.']],
             ['7.10.2', ['Sécurité : le nom de saison et le numéro d’épisode d’une sauvegarde importée sont désormais échappés.']],
             ['7.10.1', ['Menu « Mes séries » : nouveau dégradé violet vers jaune pour les séries « Regarder ensemble » à rattraper.']],
