@@ -1,6 +1,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.13.0', ['Le panneau se masque tout seul 5 s après le début de la lecture (il revient au survol, au moindre mouvement de souris ou en pause).']],
             ['7.12.0', ['Nouvel onglet « Sous-titres » : démarrer / arrêter le service de traduction FR, voyant de couleur (gris éteint, vert prêt, orange en cours, rouge erreur), progression et temps restant, coût du mois, démarrage automatique sur YouTube, bouton « Traduire cet épisode », message à la fin.', 'Sauvegarde, Nouveautés, Signaler et Légende sont regroupés dans un onglet « Plus ». Le titre du panneau tient sur une ligne, version et mise à jour en dessous.']],
             ['7.11.0', ['Raccourcis clavier du lecteur : N épisode suivant, P précédent, S saut, Échap annule le décompte.', 'Fiches des séries gardées 24 h en mémoire : elles s’ouvrent aussitôt, sans rappeler AniList.', 'YouTube : sous-titres français traduits depuis la piste chinoise par un service local (traduction/serve.js), bien plus fidèles que la traduction automatique de YouTube ; sans le service, rien ne change.']],
             ['7.10.3', ['Sécurité : le prochain épisode de la Fiche et l’étiquette de site des Réglages sont désormais échappés.']],

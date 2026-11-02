@@ -235,12 +235,14 @@
         // Panneau discret (v6.58) : 4 s sans souris -> 12 % d'opacite ; revient au survol, au focus,
         // ou a un mouvement dans le lecteur (message 'activity' de l'iframe).
         let panelFadeTimer = null;
+        let playerPlaying = false; // vrai tant que la vidéo du lecteur joue (message 'playstate' de l'iframe)
         function panelWake() {
             const tb = document.getElementById('ed-topbar');
             if (!tb) return;
             tb.classList.remove('vc-faded');
             clearTimeout(panelFadeTimer);
-            if (GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+            // v7.13 : lecture détectée (message 'playstate') -> le panneau se masque aussi tout seul ; en pause il reste visible
+            if (playerPlaying || GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), playerPlaying ? 5000 : 4000);
         }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
@@ -465,7 +467,7 @@
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
-            if (type === 'ready') { clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
                 if (ytSegment) {
@@ -498,6 +500,7 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
+            if (type === 'playstate') { playerPlaying = !!event.data.playing; panelWake(); }
             if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {

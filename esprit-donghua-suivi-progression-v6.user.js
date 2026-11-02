@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.12.0
+// @version      7.13.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -337,6 +337,12 @@
         waitForVideo((video) => {
             console.log('[AnimeTracker v6] (' + cfg.label + ') element video trouve');
             video.addEventListener('play', () => { playbackStarted = true; }, { once: true });
+            // v7.13 : état de lecture réel vers le panneau (il se masque quelques secondes après le début de la lecture)
+            const postPlay = (on) => window.parent.postMessage({ type: MSG_PREFIX + 'playstate', playing: on }, '*');
+            video.addEventListener('playing', () => postPlay(true));
+            video.addEventListener('pause', () => postPlay(false));
+            video.addEventListener('ended', () => postPlay(false));
+            if (!video.paused && !video.ended && video.readyState > 2) postPlay(true);
 
             window.parent.postMessage({ type: MSG_PREFIX + 'ready' }, '*');
             window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'video-trouvee' }, '*');
@@ -2554,6 +2560,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.13.0', ['Le panneau se masque tout seul 5 s après le début de la lecture (il revient au survol, au moindre mouvement de souris ou en pause).']],
             ['7.12.0', ['Nouvel onglet « Sous-titres » : démarrer / arrêter le service de traduction FR, voyant de couleur (gris éteint, vert prêt, orange en cours, rouge erreur), progression et temps restant, coût du mois, démarrage automatique sur YouTube, bouton « Traduire cet épisode », message à la fin.', 'Sauvegarde, Nouveautés, Signaler et Légende sont regroupés dans un onglet « Plus ». Le titre du panneau tient sur une ligne, version et mise à jour en dessous.']],
             ['7.11.0', ['Raccourcis clavier du lecteur : N épisode suivant, P précédent, S saut, Échap annule le décompte.', 'Fiches des séries gardées 24 h en mémoire : elles s’ouvrent aussitôt, sans rappeler AniList.', 'YouTube : sous-titres français traduits depuis la piste chinoise par un service local (traduction/serve.js), bien plus fidèles que la traduction automatique de YouTube ; sans le service, rien ne change.']],
             ['7.10.3', ['Sécurité : le prochain épisode de la Fiche et l’étiquette de site des Réglages sont désormais échappés.']],
@@ -3023,12 +3030,14 @@
         // Panneau discret (v6.58) : 4 s sans souris -> 12 % d'opacite ; revient au survol, au focus,
         // ou a un mouvement dans le lecteur (message 'activity' de l'iframe).
         let panelFadeTimer = null;
+        let playerPlaying = false; // vrai tant que la vidéo du lecteur joue (message 'playstate' de l'iframe)
         function panelWake() {
             const tb = document.getElementById('ed-topbar');
             if (!tb) return;
             tb.classList.remove('vc-faded');
             clearTimeout(panelFadeTimer);
-            if (GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), 4000);
+            // v7.13 : lecture détectée (message 'playstate') -> le panneau se masque aussi tout seul ; en pause il reste visible
+            if (playerPlaying || GM_getValue('panelAutoHide', false) === true || document.fullscreenElement) panelFadeTimer = setTimeout(() => tb.classList.add('vc-faded'), playerPlaying ? 5000 : 4000);
         }
         function showNavButtons() {
             if (!overlayEls || !currentEpisode) return;
@@ -3253,7 +3262,7 @@
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
-            if (type === 'ready') { clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
                 if (ytSegment) {
@@ -3286,6 +3295,7 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
+            if (type === 'playstate') { playerPlaying = !!event.data.playing; panelWake(); }
             if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {

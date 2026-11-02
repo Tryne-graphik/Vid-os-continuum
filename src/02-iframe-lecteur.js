@@ -173,6 +173,12 @@
         waitForVideo((video) => {
             console.log('[AnimeTracker v6] (' + cfg.label + ') element video trouve');
             video.addEventListener('play', () => { playbackStarted = true; }, { once: true });
+            // v7.13 : état de lecture réel vers le panneau (il se masque quelques secondes après le début de la lecture)
+            const postPlay = (on) => window.parent.postMessage({ type: MSG_PREFIX + 'playstate', playing: on }, '*');
+            video.addEventListener('playing', () => postPlay(true));
+            video.addEventListener('pause', () => postPlay(false));
+            video.addEventListener('ended', () => postPlay(false));
+            if (!video.paused && !video.ended && video.readyState > 2) postPlay(true);
 
             window.parent.postMessage({ type: MSG_PREFIX + 'ready' }, '*');
             window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'video-trouvee' }, '*');
