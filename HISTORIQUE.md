@@ -1406,3 +1406,14 @@ Branche nuit/2026-11-01 fusionnee dans master (avance rapide). @version 7.10.2 -
 ## 2026-11-02 - v7.13.0 : panneau masque a la lecture
 - Le lecteur (iframe) envoie `playstate` (events video playing / pause / ended) ; le panneau (src/30-lecteur.js, `playerPlaying`) se fond a 12 % d'opacite 5 s apres le debut de la lecture, revient au survol / mouvement / pause.
 - Teste (Playwright, _outils/videocontinuum-tests/test-panneau-masque.js 4/4) avec message `playstate` simule depuis l'iframe. NON teste : vraie lecture video, Tampermonkey reel.
+
+
+## Nuit 2026-11-03 - tests reels (Tampermonkey reel, Opera 137 / Chromium 145)
+Aucun code du depot modifie. Rapport complet : `_outils/nuit-chef/sorties/2026-11-03/RAPPORT_VC.md` ; tests et captures dans `_outils/videocontinuum-tests/` (hors depot). Version testee : 7.13.0.
+- Teste, OK : 5 suites Playwright (38/38) ; vrai Tampermonkey (5.5.1 Chromium, 5.6.6242 Opera) dans des profils de test avec le script 7.13.0 : N/P/S (saut +86 a +88 s sur video Odysee qui joue)/Echap/Fiche, decompte "episode suivant" + Echap, fondu du panneau a 0,12, aucune erreur JS du script ; sous-titres FR sur 2 videos deja traduites (Opera + Chromium), repli YouTube service eteint, relance du service en cours de lecture ; 4 adaptateurs de sites (21 controles, 2 executions identiques) ; protocole `videocontinuum://` depuis l'OS (~2 s).
+- Experience T1 : `GM_xmlhttpRequest` envoie `X-VC-Client` sans Origin ni Referer, sans invite, dans Opera et Chromium (`@connect 127.0.0.1` requis). Le `fetch()` de page declenche l'invite LNA et exige CORS. Un service durci par en-tete seul bloque les pages web (13/13 sur copie `serve-durci.js`, 3 navigateurs) : etape 1 du plan faisable sans jeton.
+- Defaut confirme (non corrige) : `serve.js:17,24` - une page web arrete le service (`<img src=/stop>`) et lit `/status` (CORS `*`).
+- KO : T2.4 Chromium (recherche d'id AniList refaite, 1 cas sur 3) ; demarrage par le lien `videocontinuum://` depuis un navigateur (invite acceptee, lanceur non execute sous Playwright ; aucune invite en Chrome reel pilote) - cause non tranchee.
+- Navigateurs reels de l'utilisateur : Chrome (c656) execute 7.12.0, pas 7.13.0 ; script desactive dans Opera et absent dans Chrome 2911.
+- Defauts mineurs (visuel, selecteurs, calque pub z-max) : voir RAPPORT_VC.md (e).
+- Reste NON teste : plein ecran reel en Tampermonkey reel ; S5 (priorite de `t=`, traduction d'une video courte) ; clic reel sur Demarrer dans le vrai Opera/Chrome ; Opera reel (script desactive) ; Firefox/Violentmonkey ; secours YouTube v6.4/6.5 ; reprise de position v6.14 en TM reel ; installateur C# ; `anime-tracker-generique.user.js`. Cout DeepSeek de la nuit : 0,00 USD. Rien pousse.
