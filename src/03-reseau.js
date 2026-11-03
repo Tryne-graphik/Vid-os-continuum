@@ -2,6 +2,7 @@
 
     function gmRequest(details) {
         return new Promise((resolve, reject) => {
+            if (String(details.url).startsWith("http://127.0.0.1:8787/")) details = Object.assign({}, details, { headers: Object.assign({ "X-VC-Client": "1" }, details.headers) }); // service local : en-tête exigé par serve.js (7.13.1)
             GM_xmlhttpRequest(Object.assign({}, details, { onload: resolve, onerror: reject, ontimeout: reject }));
         });
     }

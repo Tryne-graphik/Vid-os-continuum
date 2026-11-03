@@ -1417,3 +1417,7 @@ Aucun code du depot modifie. Rapport complet : `_outils/nuit-chef/sorties/2026-1
 - Navigateurs reels de l'utilisateur : Chrome (c656) execute 7.12.0, pas 7.13.0 ; script desactive dans Opera et absent dans Chrome 2911.
 - Defauts mineurs (visuel, selecteurs, calque pub z-max) : voir RAPPORT_VC.md (e).
 - Reste NON teste : plein ecran reel en Tampermonkey reel ; S5 (priorite de `t=`, traduction d'une video courte) ; clic reel sur Demarrer dans le vrai Opera/Chrome ; Opera reel (script desactive) ; Firefox/Violentmonkey ; secours YouTube v6.4/6.5 ; reprise de position v6.14 en TM reel ; installateur C# ; `anime-tracker-generique.user.js`. Cout DeepSeek de la nuit : 0,00 USD. Rien pousse.
+
+## 2026-11-03 - v7.13.1 : service local durci (non pousse)
+
+`traduction/serve.js` : CORS `*` retire, Host exact 127.0.0.1:8787, en-tete `X-VC-Client: 1` obligatoire (pose par `gmRequest` pour ce service, `src/03-reseau.js`), `/stop` en POST, `apiVersion: 1` dans `/status`. Teste a la main (curl) : sans en-tete 403, Host different 403, GET /stop 405, aucun en-tete CORS, POST /stop arrete le service. NON teste : userscript 7.13.1 dans un vrai navigateur avec le service durci (a faire la prochaine nuit, vague 4/5). Basee sur la nuit 2026-11-03 (T1).

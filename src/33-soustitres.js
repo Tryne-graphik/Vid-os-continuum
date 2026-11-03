@@ -83,7 +83,7 @@
             ui.tabDot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:#777;margin-left:5px;flex:0 0 auto;';
             if (tab) tab.appendChild(ui.tabDot);
             ui.bStart.addEventListener('click', () => { subsStart(); ui.txt.textContent = 'Démarrage…'; });
-            ui.bStop.addEventListener('click', () => { gmRequest({ method: 'GET', url: SUBS_URL + 'stop', timeout: 2500 }).catch(() => {}); setTimeout(subsTick, 800); });
+            ui.bStop.addEventListener('click', () => { gmRequest({ method: 'POST', url: SUBS_URL + 'stop', timeout: 2500 }).catch(() => {}); setTimeout(subsTick, 800); });
             q('now').addEventListener('click', () => {
                 const id = subsYtId();
                 if (!id) { ui.prog.textContent = 'Aucune vidéo YouTube dans le lecteur : ouvre l\'épisode via la source YouTube.'; return; }

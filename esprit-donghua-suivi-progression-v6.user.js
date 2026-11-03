@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.13.0
+// @version      7.13.1
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -582,6 +582,7 @@
 
     function gmRequest(details) {
         return new Promise((resolve, reject) => {
+            if (String(details.url).startsWith("http://127.0.0.1:8787/")) details = Object.assign({}, details, { headers: Object.assign({ "X-VC-Client": "1" }, details.headers) }); // service local : en-tête exigé par serve.js (7.13.1)
             GM_xmlhttpRequest(Object.assign({}, details, { onload: resolve, onerror: reject, ontimeout: reject }));
         });
     }
@@ -4143,7 +4144,7 @@
             ui.tabDot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:#777;margin-left:5px;flex:0 0 auto;';
             if (tab) tab.appendChild(ui.tabDot);
             ui.bStart.addEventListener('click', () => { subsStart(); ui.txt.textContent = 'Démarrage…'; });
-            ui.bStop.addEventListener('click', () => { gmRequest({ method: 'GET', url: SUBS_URL + 'stop', timeout: 2500 }).catch(() => {}); setTimeout(subsTick, 800); });
+            ui.bStop.addEventListener('click', () => { gmRequest({ method: 'POST', url: SUBS_URL + 'stop', timeout: 2500 }).catch(() => {}); setTimeout(subsTick, 800); });
             q('now').addEventListener('click', () => {
                 const id = subsYtId();
                 if (!id) { ui.prog.textContent = 'Aucune vidéo YouTube dans le lecteur : ouvre l\'épisode via la source YouTube.'; return; }
