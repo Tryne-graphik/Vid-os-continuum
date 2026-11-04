@@ -13,6 +13,7 @@
             subsMon().starting = Date.now() + 15000;
             const a = document.createElement('a'); a.href = 'videocontinuum://start'; a.click(); // 1re fois : le navigateur demande d'autoriser le lien
         }
+        function subsMsg(text) { const m = subsMon(); m.msg = { text: text, until: Date.now() + 8000 }; m.uis.forEach((u) => { u.prog.textContent = text; }); }
         function subsToast(text) {
             const d = document.createElement('div');
             d.textContent = text;
@@ -51,18 +52,27 @@
             // démarrage automatique : le lecteur est sur YouTube et le service éteint (au plus un essai par minute)
             if (!st && subsYtId() && GM_getValue('subsAuto', true) === true && Date.now() > m.autoAt && Date.now() > m.starting) { m.autoAt = Date.now() + 60000; subsStart(); }
             // « Traduire cet épisode » demandé pendant que le service était éteint
-            if (st && m.pendingId) { const id = m.pendingId; m.pendingId = ''; gmRequest({ method: 'GET', url: SUBS_URL + 'sub?v=' + id + '&t=0', timeout: 8000 }).catch(() => {}); }
+            if (st && m.pendingId) {
+                const id = m.pendingId; m.pendingId = '';
+                gmRequest({ method: 'GET', url: SUBS_URL + 'sub?v=' + id + '&t=0', timeout: 8000 }).then((r) => {
+                    subsMsg(r.status === 200 ? '✓ Déjà traduit' : r.status === 202 || r.status === 206 ? '✓ Traduction lancée' : r.status === 429 ? 'Service occupé (2 traductions max), réessaie plus tard' : r.status === 403 ? 'Refusé : script pas à jour (7.13.1 ou plus requis)' : 'Échec côté service (' + r.status + ')');
+                }).catch(() => subsMsg('Service injoignable'));
+            } else if (!st && m.pendingId && Date.now() > m.pendingUntil) { m.pendingId = ''; subsMsg('Service injoignable : le lanceur n’a pas démarré (voir installer-lanceur.ps1)'); }
             const v = subsView(st), cost = subsCost(st);
             m.uis = m.uis.filter((u) => { if (u.root.isConnected) u.seen = true; return u.root.isConnected || !u.seen; }); // rattaché après bindSubs : on ne retire qu'un panneau vu puis disparu
             m.uis.forEach((u) => {
-                u.dot.style.background = v.color; u.txt.textContent = v.text; u.prog.textContent = v.extra; u.cost.textContent = cost;
+                u.dot.style.background = v.color; u.txt.textContent = v.text; u.prog.textContent = (m.msg && Date.now() < m.msg.until && !v.extra) ? m.msg.text : v.extra; u.cost.textContent = cost;
                 u.tabDot.style.background = v.color;
+                if (u.tabRing) { u.tabRing.classList.toggle('vc-spin', !!(st && st.jobs.some((j) => !j.failed))); u.tabRing.classList.toggle('on', !!st); }
                 u.bStart.disabled = !!st; u.bStop.disabled = !st;
             });
             if (!m.uis.length) { clearInterval(m.timer); m.timer = 0; }
         }
         function subsSectionHtml(prefix) {
+            const rng = (k, label, min, max, def) => '<label class="vc-note" style="display:flex;align-items:center;gap:6px;">' + label + '<input type="range" id="' + prefix + '-subs-' + k + '" min="' + min + '" max="' + max + '" value="' + (+GM_getValue({ size: 'subsSize', bottom: 'subsBottom', stroke: 'subsStroke' }[k], def)) + '" style="flex:1;min-width:0;"></label>';
+            const flag = '<span title="Traduction chinois → français uniquement" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;"><svg viewBox="0 0 30 20" width="21" height="14" aria-hidden="true"><rect width="30" height="20" fill="#de2910"/><path fill="#ffde00" d="M5 2l1.2 3.7H10L7 8l1.2 3.7L5 9.4l-3.2 2.3L3 8 0 5.7h3.8zM11 1l.6 1.2 1.3.2-.9.9.2 1.3L11 3.9l-1.2.7.2-1.3-.9-.9 1.3-.2zM13.5 4l.5 1.2h1.3l-1 .8.4 1.3-1.2-.8-1.1.8.4-1.3-1-.8h1.3zM13.5 8.5l.6 1.1 1.2.1-.9.9.3 1.2-1.2-.6-1.1.7.2-1.3-.9-.8 1.2-.2zM11 11.2l.5 1.2 1.3.1-1 .9.3 1.2-1.1-.7-1.2.7.3-1.2-1-.9 1.3-.1z"/></svg>&rarr; FR</span>';
             return menuItem('soustitres', 'Sous-titres',
+                '<div class="vc-row" style="align-items:center;justify-content:space-between;">' + flag + '</div>' +
                 '<div class="vc-row" style="align-items:center;gap:6px;"><span id="' + prefix + '-subs-dot" style="width:11px;height:11px;border-radius:50%;background:#777;flex:0 0 auto;"></span><span id="' + prefix + '-subs-txt" style="font-size:12px;">Service : ...</span></div>' +
                 '<div id="' + prefix + '-subs-prog" class="vc-note"></div>' +
                 '<div class="vc-row"><button id="' + prefix + '-subs-start" title="Lance le service de traduction (nécessite le lanceur : traduction/installer-lanceur.ps1)">Démarrer</button>' +
@@ -70,6 +80,7 @@
                 '<button id="' + prefix + '-subs-now" title="Lance tout de suite la traduction de la vidéo YouTube du lecteur (démarre le service si besoin)">Traduire cet épisode</button>' +
                 '<label class="vc-track" title="Quand le lecteur passe sur YouTube et que le service est éteint, le démarrer tout seul"><input type="checkbox" id="' + prefix + '-subs-auto"' + (GM_getValue('subsAuto', true) === true ? ' checked' : '') + '><span class="off">Démarrage automatique</span><span class="on">&#10003; Démarrage automatique</span></label>' +
                 '<div id="' + prefix + '-subs-cost" class="vc-note"></div>' +
+                rng('size', 'Taille', 60, 160, 100) + rng('bottom', 'Hauteur', 0, 30, 4) + rng('stroke', 'Contour', 0, 20, 13) +
                 '<span class="vc-note">Gris : éteint · Vert : prêt · Orange : traduction en cours · Rouge : erreur</span>');
         }
         function bindSubs(root, prefix) {
@@ -81,17 +92,20 @@
             const tab = root.querySelector('.vc-tab[data-menu="soustitres"]');
             ui.tabDot = document.createElement('span');
             ui.tabDot.style.cssText = 'display:inline-block;width:8px;height:8px;border-radius:50%;background:#777;margin-left:5px;flex:0 0 auto;';
-            if (tab) tab.appendChild(ui.tabDot);
+            ui.tabRing = document.createElement('span'); ui.tabRing.className = 'vc-rgb'; ui.tabRing.title = 'Traduction : tourne pendant le chargement, fixe une fois terminée';
+            if (tab) { tab.appendChild(ui.tabDot); tab.appendChild(ui.tabRing); }
             ui.bStart.addEventListener('click', () => { subsStart(); ui.txt.textContent = 'Démarrage…'; });
             ui.bStop.addEventListener('click', () => { gmRequest({ method: 'POST', url: SUBS_URL + 'stop', timeout: 2500 }).catch(() => {}); setTimeout(subsTick, 800); });
             q('now').addEventListener('click', () => {
                 const id = subsYtId();
                 if (!id) { ui.prog.textContent = 'Aucune vidéo YouTube dans le lecteur : ouvre l\'épisode via la source YouTube.'; return; }
-                m.pendingId = id;
+                m.pendingId = id; m.pendingUntil = Date.now() + 20000;
+                subsMsg(m.st ? 'Demande envoyée…' : 'Démarrage du service…');
                 if (!m.st) subsStart();
                 subsTick();
             });
             q('auto').addEventListener('change', (e) => GM_setValue('subsAuto', e.target.checked));
+            [['size', 'subsSize'], ['bottom', 'subsBottom'], ['stroke', 'subsStroke']].forEach(([k, g]) => { const r = q(k); if (r) r.addEventListener('input', () => GM_setValue(g, +r.value)); });
             m.uis.push(ui);
             if (!m.timer) m.timer = setInterval(subsTick, 3000);
             subsTick();

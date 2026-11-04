@@ -25,14 +25,12 @@
             applyTheme(topbar);
             const scriptVersion = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '6.0';
             topbar.innerHTML =
-                '<header class="vc-head"><span class="vc-brand">Vidéo Continuum</span>' + versionButtonHtml('ed', scriptVersion) + '</header>' +
+                '<header class="vc-head"><span class="vc-brand">Vidéo Continuum<span id="ed-src-ico" class="vc-srcico"></span></span>' + versionButtonHtml('ed', scriptVersion) + '</header>' +
                 '<section class="vc-card vc-ep">' +
                 '<div id="ed-current-name" class="vc-name"></div>' +
                 '<div class="vc-epline"><div id="ed-current-ep" class="vc-epnum"></div>' +
                 '<button id="ed-info-btn" class="vc-chip" title="Fiche de l\'anime : synopsis, genres, note...">&#8505; Fiche</button></div>' +
                 // v7.1 : source en cours toujours visible + un seul bouton pour en changer (demande : "confus avec les autres sources").
-                '<div id="ed-source" class="vc-src" style="display:none;"><span id="ed-source-label" class="vc-src-label"></span>' +
-                '<button id="ed-source-btn" class="vc-chip" title="Lecteurs du site, autres sites, YouTube">&#8644; Changer</button></div>' +
                 '<div id="ed-status" class="vc-status" role="status" aria-live="polite">En attente...</div>' +
                 '<div id="ed-aniskip" class="vc-status" style="display:none;"></div>' +
                 '<div id="ed-cross-site" class="vc-alert" style="display:none;"></div>' +
@@ -52,7 +50,7 @@
                 toggleButtonsHtml('ed-', false, false) + '</section>' +
                 menusHtml([
                     menuItem('reglages', 'Réglages',
-                        '<div class="vc-row vc-wrap"><button id="ed-set-intro-btn">Fin intro ici</button><button id="ed-set-outro-btn">Début outro ici</button></div>' +
+                        '<div class="vc-row vc-wrap"><button id="ed-set-intro-btn" class="vc-mini">Fin intro ici</button><button id="ed-set-outro-btn" class="vc-mini">Début outro ici</button></div>' +
                         collapsibleSection('plus', 'Avancé',
                             groupLabel('Intro / outro') +
                             '<div class="vc-row"><button id="ed-set-introstart-btn">Début intro</button><button id="ed-set-outroend-btn">Fin outro</button></div>' +
@@ -65,6 +63,10 @@
                             '<div class="vc-row"><button id="ed-reload-btn" title="Recharger la page">&#8635; Recharger</button>' +
                             '<button id="ed-delete-btn" class="vc-danger" title="Retire de la progression la série choisie dans la liste">Ne plus suivre</button></div>', false, true)),
                     subsSectionHtml('ed'),
+                    menuItem('youtube', 'Sources',
+                        '<div id="ed-source" class="vc-src" style="display:none;"><span id="ed-source-label" class="vc-src-label"></span>' +
+                        '<button id="ed-source-btn" class="vc-chip" title="Lecteurs du site, autres sites, YouTube">&#8644; Changer</button></div>' +
+                        '<button id="ed-source-main" style="display:none;" title="Revenir à la source principale du site">&#8617; Source principale</button>'),
                     plusMenuItem([menuItem('sauvegarde', 'Sauvegarde',
                         '<div class="vc-row"><button id="ed-export-btn">Exporter</button><button id="ed-import-btn">Importer</button></div>' +
                         '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
@@ -103,16 +105,24 @@
 
             // Prec./Suiv. sur la video (v6.38) : apparaissent quand la souris
             // bouge, disparaissent apres 3 s, comme lecture/pause.
-            const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:32px;height:32px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:14px;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;';
+            const NAV = 'position:absolute;bottom:6px;z-index:9;transform:translateX(-50%);width:46px;height:46px;padding:0;border-radius:50%;border:none;background:rgba(0,0,0,.6);color:#fff;cursor:pointer;opacity:0;pointer-events:none;transition:opacity .3s;display:flex;align-items:center;justify-content:center;';
+            const NAV_SVG = (d) => '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true">' + d + '</svg>';
+            const ICO_PREV = NAV_SVG('<path d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/>'), ICO_NEXT = NAV_SVG('<path d="M15.5 5H18v14h-2.5zM4 5v14l10.5-7z"/>');
+            const ICO_PAUSE = NAV_SVG('<path d="M7 5h3.6v14H7zM13.4 5H17v14h-3.4z"/>'), ICO_PLAY = NAV_SVG('<path d="M8 5v14l11-7z"/>');
             const navPrev = document.createElement('button');
-            navPrev.type = 'button'; navPrev.title = 'Épisode précédent (P)'; navPrev.textContent = '⏮';
-            navPrev.style.cssText = NAV + 'left:calc(50% - 90px);';
+            navPrev.type = 'button'; navPrev.title = 'Épisode précédent (P)'; navPrev.innerHTML = ICO_PREV;
+            navPrev.style.cssText = NAV + 'left:calc(50% - 64px);';
+            const navPause = document.createElement('button');
+            navPause.type = 'button'; navPause.title = 'Pause / lecture'; navPause.innerHTML = ICO_PAUSE;
+            navPause.style.cssText = NAV + 'left:50%;';
             const navNext = document.createElement('button');
-            navNext.type = 'button'; navNext.title = 'Épisode suivant (N) · saut du générique (S)'; navNext.textContent = '⏭';
-            navNext.style.cssText = NAV + 'left:calc(50% + 90px);';
+            navNext.type = 'button'; navNext.title = 'Épisode suivant (N) · saut du générique (S)'; navNext.innerHTML = ICO_NEXT;
+            navNext.style.cssText = NAV + 'left:calc(50% + 64px);';
             overlay.appendChild(navPrev);
+            overlay.appendChild(navPause);
             overlay.appendChild(navNext);
             navPrev.addEventListener('click', () => topbar.querySelector('#ed-prev-btn').click());
+            navPause.addEventListener('click', () => { postToPlayerFrame({ type: MSG_PREFIX + (playerPlaying ? 'pause' : 'play') }); playerPlaying = !playerPlaying; navPause.innerHTML = playerPlaying ? ICO_PAUSE : ICO_PLAY; });
             navNext.addEventListener('click', () => (ytActive || hasNextEpisode(currentEpisode)) && topbar.querySelector('#ed-next-btn').click());
             overlay.addEventListener('mousemove', showNavButtons);
 
@@ -218,6 +228,10 @@
                 postToPlayerFrame({ type: MSG_PREFIX + 'pause' });
                 if (document.fullscreenElement === overlay) document.exitFullscreen().catch(() => {});
             });
+            topbar.querySelector('#ed-source-main').addEventListener('click', () => { if (ytActive) leaveYoutubeMode(); else selectPlayer(0); });
+            const cfgTab = topbar.querySelector('.vc-tab[data-menu="reglages"]');
+            if (cfgTab) cfgTab.insertAdjacentHTML('beforeend', '<span class="vc-cfgdots" title="Repères : début intro · fin intro · début outro · fin outro (allumé = réglé)"><i data-k="introStart" style="--c:#03d0fc"></i><i data-k="introEnd" style="--c:#43a047"></i><i data-k="outroStart" style="--c:#fb8c00"></i><i data-k="outroEnd" style="--c:#ec407a"></i></span>');
+            refreshIntroOutroButtons();
             topbar.querySelector('#ed-source-btn').addEventListener('click', () => { if (currentEpisode) showSourceChooser(currentEpisode); });
             toast.querySelector('#ed-toast-cancel').addEventListener('click', () => { if (cancelCountdown) cancelCountdown(); });
             toast.querySelector('#ed-toast-now').addEventListener('click', () => { if (cancelCountdown && nextNowCountdown) nextNowCountdown(); });
@@ -226,7 +240,7 @@
                 overlay: overlay, playerFrame: playerFrame, toast: toast, statusEl: statusEl, muteIndicatorEl: muteIndicatorEl,
                 seriesSelect: seriesSelectEl, siteFilterSelect: siteFilterSelectEl, autoNextCb: autoNextCb, autoOpenCb: autoOpenCb, trackCb: trackCb,
                 backupStatusEl: backupStatusEl, currentNameEl: currentNameEl, currentEpEl: currentEpEl, siteErrorBox: siteErrorBox,
-                navPrev: navPrev, navNext: navNext
+                navPrev: navPrev, navNext: navNext, navPause: navPause, icoPause: ICO_PAUSE, icoPlay: ICO_PLAY
             };
             return overlayEls;
         }
@@ -251,11 +265,13 @@
             // Suiv. toujours visible, grise s'il n'y a rien apres (v6.39)
             const hasNext = ytActive || hasNextEpisode(currentEpisode);
             show(overlayEls.navNext, true);
+            show(overlayEls.navPause, true);
+            overlayEls.navPause.innerHTML = playerPlaying ? overlayEls.icoPause : overlayEls.icoPlay;
             overlayEls.navNext.style.opacity = hasNext ? '1' : '.35';
             overlayEls.navNext.style.cursor = hasNext ? 'pointer' : 'default';
             overlayEls.navNext.title = hasNext ? 'Épisode suivant' : 'Pas encore sorti';
             clearTimeout(navHideTimer);
-            navHideTimer = setTimeout(() => { show(overlayEls.navPrev, false); show(overlayEls.navNext, false); }, 3000);
+            navHideTimer = setTimeout(() => { show(overlayEls.navPrev, false); show(overlayEls.navNext, false); show(overlayEls.navPause, false); }, 3000);
         }
 
         function hasNextEpisode(info) {
@@ -369,6 +385,15 @@
             label.title = 'Source en cours : ' + (ytActive ? '' : (currentEpisode.siteLabel || 'site') + ', ') + text;
             label.style.borderLeftColor = ytActive ? '#ff4e45' : '#03d0fc';
             line.style.display = 'flex';
+            const away = ytActive || playerCandidateIndex > 0; // hors de la source principale du site
+            const mainBtn = overlayEls.overlay.querySelector('#ed-source-main');
+            if (mainBtn) mainBtn.style.display = away ? '' : 'none';
+            const ico = overlayEls.overlay.querySelector('#ed-src-ico');
+            if (ico) {
+                const col = ytActive ? '#ff4e45' : away ? '#fb8c00' : '#03d0fc';
+                ico.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="' + col + '" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg>';
+                ico.title = (ytActive ? 'Source : YouTube' : away ? 'Source de secours (lecteur ' + (playerCandidateIndex + 1) + ')' : 'Source principale du site') + (away ? ' — Sources > Source principale pour revenir' : '');
+            }
         }
 
         // Demande utilisateur : dire clairement que c'est le site (video

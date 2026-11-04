@@ -175,7 +175,7 @@
         const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'togetherSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
             'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelLayout', 'panelAutoHide', 'panelHidden',
-            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto'];
+            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto', 'subsSize', 'subsBottom', 'subsStroke'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });

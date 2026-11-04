@@ -192,6 +192,7 @@
                 const b = document.getElementById(id);
                 if (b) b.classList.toggle('vc-set', !!on);
             });
+            document.querySelectorAll('.vc-cfgdots i').forEach((d) => { const k = d.getAttribute('data-k'); d.classList.toggle('on', !!(currentConfig[k] || manual[k])); });
         }
 
         function triggerNextEpisode(reason, remaining) {

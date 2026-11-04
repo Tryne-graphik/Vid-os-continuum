@@ -4,7 +4,7 @@ New-Item $k -Force | Out-Null
 Set-ItemProperty $k '(default)' 'URL:Video Continuum'
 New-ItemProperty $k 'URL Protocol' -Value '' -Force | Out-Null
 New-Item "$k\shell\open\command" -Force | Out-Null
-$cmd = '"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f (Get-Command pwsh -ErrorAction SilentlyContinue).Source, "$PSScriptRoot\lanceur.ps1"
-if ($cmd.StartsWith('"" ')) { $cmd = $cmd.Replace('"" ', '"powershell.exe" ') }
+# powershell.exe (5.1) : pwsh.exe est un alias du Store (WindowsApps) que le lancement par protocole n'execute pas.
+$cmd = '"{0}\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}"' -f $env:SystemRoot, "$PSScriptRoot\lanceur.ps1"
 Set-ItemProperty "$k\shell\open\command" '(default)' $cmd
 Write-Host "Enregistre : $cmd"

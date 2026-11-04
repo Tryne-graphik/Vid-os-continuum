@@ -382,14 +382,28 @@
             let cues = [], box = null, tries = 0;
             const tick = () => {
                 const v = doc.querySelector('video'); if (!v || !box) return;
+                applyBoxStyle();
                 const t = v.currentTime, c = cues.find((q) => t >= q.s && t <= q.e + 0.3);
                 box.textContent = c ? c.t : '';
             };
+            // Réglages du panneau (Sous-titres) : taille %, hauteur % du bas, contour px. Contour = cercle d'ombres noires (arrondi), liseré turquoise 1 px dehors.
+            let styleKey = '';
+            const applyBoxStyle = () => {
+                if (!box) return;
+                const gv = (n, d) => { try { const x = +GM_getValue(n, d); return isFinite(x) ? x : d; } catch (e) { return d; } };
+                const k = (gv('subsSize', 100) || 100) / 100, bt = gv('subsBottom', 4), st = gv('subsStroke', 13);
+                const key = k + '|' + bt + '|' + st; if (key === styleKey) return; styleKey = key;
+                const sh = []; for (let i = 0; i < 24; i++) { const an = i * Math.PI / 12; sh.push((st * Math.cos(an)).toFixed(1) + 'px ' + (st * Math.sin(an)).toFixed(1) + 'px 0 #000'); }
+                box.style.cssText = 'position:fixed;left:8%;right:8%;bottom:' + bt + '%;text-align:center;z-index:2147483647;pointer-events:none;font:800 clamp(' + 24 * k + 'px,' + 4.6 * k + 'vw,' + 44 * k + 'px)/1.5 Arial,sans-serif;color:#fff;text-shadow:' + sh.join(',') + ';filter:drop-shadow(1px 0 0 #1de9d6) drop-shadow(-1px 0 0 #1de9d6) drop-shadow(0 1px 0 #1de9d6) drop-shadow(0 -1px 0 #1de9d6)';
+            };
             const activate = () => {
                 localSubsOn = true;
+                // le minuteur ci-dessus peut recharger les sous-titres YouTube après le unload : on les masque aussi (v7.13.2)
+                const noYt = doc.createElement('style'); noYt.textContent = '.ytp-caption-window-container{display:none!important}';
+                (doc.head || doc.documentElement).appendChild(noYt);
                 try { const p = doc.getElementById('movie_player'); if (p && p.unloadModule) p.unloadModule('captions'); } catch (e) {}
                 box = doc.createElement('div');
-                box.style.cssText = 'position:fixed;left:8%;right:8%;bottom:9%;text-align:center;z-index:2147483647;pointer-events:none;font:600 clamp(16px,3.2vw,30px)/1.3 Arial,sans-serif;color:#fff;text-shadow:0 0 4px #000,0 0 4px #000,1px 1px 2px #000';
+                applyBoxStyle();
                 (doc.body || doc.documentElement).appendChild(box);
                 setInterval(tick, 200);
                 console.log('[AnimeTracker v6] (YouTube) sous-titres FR du service local');

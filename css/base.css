@@ -161,3 +161,12 @@
 /* Vignettes des sites : option "Estomper les series suivies" (le cadre .ep-thumb-frame reste net). */
 .vc-dim-tracked img[data-vc-st] { opacity: .35; filter: grayscale(.85); transition: opacity .2s, filter .2s; }
 .vc-dim-tracked a:hover img[data-vc-st] { opacity: 1; filter: none; }
+.vc-thm button.vc-mini { min-height: 20px; padding: 2px 4px !important; font-size: 10px !important; line-height: 1.2; }
+.vc-srcico { display: inline-flex; margin-left: 4px; vertical-align: middle; }
+.vc-cfgdots { display: inline-flex; gap: 3px; margin-left: 5px; vertical-align: middle; }
+.vc-cfgdots i { width: 7px; height: 7px; border-radius: 50%; background: #555; display: inline-block; }
+.vc-cfgdots i.on { background: var(--c); box-shadow: 0 0 6px var(--c), 0 0 2px var(--c); }
+.vc-rgb { display: inline-block; width: 11px; height: 11px; margin-left: 5px; vertical-align: middle; border-radius: 50%; background: conic-gradient(#ff2d2d, #2dff55, #2d6bff, #ff2d2d); -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px); mask: radial-gradient(circle, transparent 3px, #000 3.5px); opacity: .35; }
+.vc-rgb.on { opacity: 1; }
+.vc-rgb.vc-spin { animation: vcspin 1s linear infinite; }
+@keyframes vcspin { to { transform: rotate(360deg); } }

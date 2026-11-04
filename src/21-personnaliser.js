@@ -126,6 +126,8 @@
         // "Chargement... 42%" -> fine barre ; tout autre message reste en texte.
         function statusHtml(text) {
             const m = /^Chargement\.\.\.(?: (\d+)%)?$/.exec(text || '');
+            const slow = /^Chargement tres lent \((\d+)%\)/.exec(text || '');
+            if (slow) return '<span title="' + escapeHtml(text) + '" style="display:inline-flex;align-items:center;gap:5px;color:#ffb020;"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/></svg><span style="font-size:11px;">' + slow[1] + '%</span></span>';
             if (!m) return escapeHtml(text || '');
             const pct = m[1] ? Number(m[1]) : 0;
             return '<div style="display:flex;align-items:center;gap:6px;" title="Chargement de la video"><div style="flex:1;height:4px;background:#333;border-radius:2px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:#03d0fc;"></div></div><span style="font-size:10px;color:#aaa;">' + pct + '%</span></div>';
