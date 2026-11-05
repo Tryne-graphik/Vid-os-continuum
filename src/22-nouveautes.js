@@ -1,6 +1,19 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
+            ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
+            ['7.17.2', ['Turbo : 6 essais par morceau (avec pause) au lieu de 3, et chaque échec est écrit dans la console.']],
+            ['7.17.1', ['Turbo : la taille du fichier est lue dans l’API Odysee (l’en-tête Content-Range n’est pas visible depuis la page).']],
+            ['7.17.0', ['Test « turbo » : le fichier Odysee est téléchargé en 6 morceaux parallèles puis lu depuis la mémoire (la lecture démarre quand il est entier). Repli automatique sur la lecture normale en cas d’échec ; la console (« (turbo) ») donne le débit.']],
+            ['7.16.4', ['Diagnostic : pendant un gel, la console écrit « ETAT GEL » (readyState, networkState, tampon, erreur) pour comprendre pourquoi Chrome ne redemande rien.']],
+            ['7.16.3', ['Préchargement de l’épisode suivant désactivé : le test a coïncidé avec des lags (14:49, 15:05).']],
+            ['7.16.2', ['Un saut dans la vidéo enregistre tout de suite sa position : si la lecture se fige juste après, F5 reprend là où tu as sauté (et non à l’ancienne position).']],
+            ['7.16.1', ['Lecture qui cale sur un fichier Odysee direct : jusqu’à 4 rechargements automatiques du lecteur (2 avant), comme un F5 manuel qui débloque le gel.']],
+            ['7.16.0', ['Saut d’intro : un seul saut, une fois la lecture stable (plus de saut dès le chargement qui bloquait le lecteur).', 'Test : à mi-épisode, l’épisode suivant est préchargé en cachette (iframe muette, 2 min) pour réchauffer le CDN Odysee.']],
+            ['7.15.3', ['Lecture qui cale sur un fichier Odysee direct sans repli YouTube : le lecteur est rechargé tout seul (2 essais, position conservée) au lieu d’afficher tout de suite l’erreur.']],
+            ['7.15.2', ['Lecture qui cale (flux Odysee suspendu) : reprise automatique après 5 s (nouveau seek) puis 10 s (rechargement de la vidéo à la même position), sans recharger la page ni perdre la place.']],
+            ['7.15.1', ['Sous-titres : un repère « passage non sous-titré » s’affiche quand la vidéo n’a aucun sous-titre pendant plus de 5 s (traduction terminée), pour savoir que ce n’est pas un bug.']],
             ['7.15.0', ['Sous-titres : curseurs Taille / Hauteur / Contour dans l’onglet Sous-titres, contour arrondi, drapeau chinois → FR (la traduction ne gère plus que le chinois).', '« Traduire cet épisode » affiche maintenant un retour (demande envoyée, déjà traduit, service injoignable, occupé…).']],
             ['7.14.0', ['Boutons du lecteur plus gros et centrés, avec un bouton pause entre précédent et suivant.', 'Réglages : 4 ronds lumineux (début intro, fin intro, début outro, fin outro) qui s’allument quand le repère est réglé ; boutons Fin intro / Début outro plus petits.', 'Sous-titres : cercle RVB qui tourne pendant la traduction et se fige ensuite.', 'Nouveau menu Sources (changement de source + bouton Source principale), icône de source à côté du titre, « chargement très lent » remplacé par une icône avec infobulle.']],
             ['7.13.2', ['Sous-titres FR plus gros, contour noir et liseré turquoise ; fin du doublon (sous-titres YouTube en plus des nôtres) ; le service local est durci (en-tête X-VC-Client).']],

@@ -1431,3 +1431,68 @@ Aucun code du depot modifie. Rapport complet : `_outils/nuit-chef/sorties/2026-1
 - Teste (Chromium sans fenetre, shim GM_*, _outils/videocontinuum-tests/test-v714.js + test-soustitres-yt.js 4/4 + test-panneau-soustitres.js) : ronds, anneau, boutons reduits, 3 boutons du lecteur, bascule pause, icone de source, rendu du contour (capture). Les 2 KO de test-panneau-soustitres sont des attentes de test perimees (onglet Sources ajoute, voyant = dernier span).
 - NON teste : bouton Demarrer clique dans le vrai navigateur ; curseurs et position (4 % du bas = estimation sur capture) en lecture reelle ; Source principale (n'apparait qu'apres changement de source) ; anneau pendant une vraie traduction ; Tampermonkey reel.
 - Note : 7.13.1 est en fait POUSSEE (master = origin/master, @version 7.13.1). Livraison du script par `_outils/copier-code/generer.js` (page a bouton Copier) et non plus par le Bloc-notes.
+
+## 2026-11-04 - v7.15.1 : repere « passage non sous-titre » (local, non commite)
+- Constat sur pUokjG3i9kA : aucune replique entre 5:05 et 5:15 ; la piste source (zh, aussi zh-Hant, en, fr) est vide a cet endroit (1349 repliques source = 1349 traduites) : limite de la video, pas de la traduction.
+- src/02-iframe-lecteur.js : entre deux repliques separees de plus de 5 s (GAP_MIN), repere « passage non sous-titre » (icone + texte, liseré turquoise), seulement si le service a repondu 200 (traduction complete ; en 206 les blocs manquants ressembleraient a des trous).
+- Piege : YouTube impose Trusted Types -> `innerHTML` echoue en silence dans l'iframe (le repere n'apparaissait jamais). Icone construite avec createElementNS.
+- Teste (Playwright, _outils/videocontinuum-tests/test-trou.js 6/6) : repere visible a 5:10, masque a 38 s, texte FR normal. NON teste : rendu visuel reel, Tampermonkey reel.
+- Piste « combler les trous » (2026-11-04) : sur pUokjG3i9kA la piste zh a 96 trous de plus de 5 s ; les pistes en / fr / zh-Hant ont les memes (l'anglais n'a des repliques que dans 2 trous, 1 chacune) : les pistes ont ete faites sur le meme decoupage. Seule voie connue : transcrire l'audio des trous (Whisper local) puis traduire, ou trouver une autre source plus complete. Decision de l'utilisateur : en reflexion, a reprendre plus tard. Aucun code.
+- Essai « autre source plus complete » (2026-11-04) : 4 autres versions de pUokjG3i9kA trouvees sur YouTube (Anime Pulse 70 min, Tencent 74 min et resume 52 min, repost 7LLuo6b48R8). Les 3 premieres n'ont aucune piste (sous-titres incrustes) ; le repost a des pistes IDENTIQUES (1349/1349 repliques, memes textes et temps, memes 96 trous). Rien de plus complet sur YouTube. Pistes restantes : plateformes chinoises (non testees) ou transcription audio (Whisper).
+- Recherche web « sous-titre plus complet » pour l'episode 75 (2026-11-04) : episodes = compilation YouTube pUokjG3i9kA (10 episodes egaux de 419 s ; vides aux limites) ; Odysee NTZZE75:9 = mp4 sans piste de texte (hardsub vostfr). Autres versions YouTube : Anime Pulse / Tencent = aucune piste ; Alur Donghua t8-HHl95G9w = resume narre du roman, inutilisable. WeTV (Tencent, yt-dlp liste 10 langues dont en, pas de zh ni fr) : piste en de l'EP75 = 141 repliques, 13 trous > 5 s = 288 s sur 757 s (38 %) : meme profil de trous que la compilation -> beaucoup de « trous » sont probablement des passages sans dialogue. Prochaine etape possible : detection de voix dans les trous (sans transcrire). Rien de code. Pas de recherche IA lancee.
+
+## 2026-11-05 - v7.15.2 : reprise rapide d'une lecture Odysee qui cale (local, non commite)
+- Mesure reelle (releve CPU/GPU/RAM/reseau/latence/processus Chrome, PC sain) : le debit video tombe a ~0 Mb/s pendant ~3 min (10:55:50 -> 10:58:56) alors que les latences (box 1-2 ms, CDN Odysee ~30 ms) sont bonnes et sans perte ; le message `lecture bloquee depuis 15 s a 439s` le confirme ; F5 relance tout de suite (debit 33-67 Mb/s) => la requete Range vers player.odycdn.com reste suspendue, une nouvelle requete la debloque. Fichier : H.264 High 8 bits 1080p25 ~10 Mb/s, moov en fin de fichier, PAS de HLS 720p (master.m3u8 renvoie le mp4 original) : on ne peut pas forcer 720p.
+- src/02-iframe-lecteur.js : dans la surveillance de blocage (1 s), a 5 s `video.currentTime = video.currentTime` (nouveau seek), a 10 s rechargement de la source en gardant temps et etat lecture (fichier direct seulement, jamais un flux blob:). Au-dela de 15 s : circuit d'avant (rechargement iframe, YouTube).
+- Teste : `node build.js` + `node --check` seulement. NON teste en vrai lag : a valider par les releves (journal console `reprise rapide 1/2 a Ns`). Observation utilisateur : parfois F5 ne suffit pas alors que l'episode passe dans un autre navigateur sans script -> piste separee (extension, bloqueur, QUIC/HTTP3, cache), non traitee ici.
+
+## 2026-11-05 - v7.15.3 : rechargement auto du lecteur sur un fichier direct qui cale
+- Constat 11:05-11:08 (ep. 131) : les reprises rapides 7.15.2 (seek a 5 s, rechargement de la source a 10 s) se sont bien declenchees (console `reprise rapide 1/2 a 180s`) sans debloquer ; le flux etait ralenti (389 Ko/s au gestionnaire de taches, 1,5-12 Mb/s au releve ; `time_to_start` Odysee 21,7 s puis 102,6 s). Un clic manuel (rechargement complet du lecteur) a relance a 15-20 Mb/s en continu. F5 a deja debloque trois fois.
+- src/30-lecteur.js (message `stall` de l'iframe) : la regle v6.39 « fichier direct = jamais de rechargement, YouTube direct » est assouplie : pour un fichier direct SANS repli YouTube, rechargement du lecteur (positionArmed=false, position reprise), 2 essais au plus (`stallRetriedN`, remis a 0 sur `pret`) ; avec repli YouTube : bascule comme avant. Fichier non direct : 1 essai comme avant.
+- Teste : build + `node --check`. NON teste en vrai lag.
+- Pistes restantes : QUIC/HTTP3 de Chrome (test `chrome://flags/#enable-quic` par l'utilisateur, non fait au 2026-11-05 11:08), boucle de retentatives anime-sama `episodes.js` statut 403 (dizaines de lignes en console), extension odysee-referer / bloqueur de pub (`watchman…/reports/playback` ERR_BLOCKED_BY_CLIENT).
+
+## 2026-11-05 - v7.15.4 : TEST saut d'intro desactive
+Piste : les gels apparaissent juste apres le saut a introEnd (log : demarrage a 180s, reprise rapide 1 et 2 sans effet, lecture bloquee). NetLog : aucune requete video pendant 3 a 6 min, cache disque desactive sans effet. Saut coupe dans src/02-iframe-lecteur.js (applyIntroSkipIfNeeded, marque TEST) ; a retirer si les gels persistent. Reste : QUIC non teste, boucle 403 anime-sama.
+
+
+## 2026-11-05 - v7.16.0 : saut d'intro retarde + TEST prechargement de l'episode suivant
+Constat (NetLog, 13:36-13:49) : un fichier Odysee froid chez le CDN (x-77-cache MISS) est livre au compte-gouttes pendant 3 a 5 min (silences 6-23 s, 502, ERR -337) ; deux sauts manuels rapproches pendant cette phase font planter le lecteur ; le cache disque de Chrome et le saut d'intro auto ne sont pas en cause (gel a zero requete apres un saut, F5 relance). Fichier deja chaud (ouvert avant dans Firefox) : 84 % HIT, micro-lags seulement.
+Fait : applyIntroSkipIfNeeded attend 4 s de lecture stable (8 s de tampon) puis saute UNE fois (abandon d'attente 90 s) ; le test 'saut coupe' de 7.15.4 est retire. TEST : a 50 % de l'episode, 30-lecteur.js cree une iframe cachee nommee continuum-preload sur l'embed Odysee suivant ; 02-iframe-lecteur.js y clique lecture en muet ; retiree apres 120 s. A mesurer : part de HIT sur l'episode suivant (x-77-cache) avec/sans prechargement. Retirer si inutile ou si 429.
+
+
+## 2026-11-05 - v7.16.1 : 4 rechargements auto au lieu de 2
+NetLog 14:36-14:39 (Chrome sans QUIC) : un seul saut sur un fichier neuf (503 Mo) -> derniere requete Range coupee a 14:37:28 apres 79,7 Mo sur 169 demandes, puis AUCUNE requete jusqu'au F5 de 14:39:48 (rafale immediate, lecture reprise). Gel a zero requete confirme sans cache disque, sans QUIC, sans saut d'intro auto. Cause cote Chrome/lecteur non trouvee ; contournement = recharger comme F5 : 4 essais (30-lecteur.js, stallRetriedN).
+
+
+## 2026-11-05 - v7.16.2 : position enregistree a chaque saut
+Constat : saut manuel a ~3:00, lecture figee, F5 -> reprise a 1:10 (derniere position enregistree par le timeupdate toutes les 5 s). Ajout d'un ecouteur 'seeking' dans 02-iframe-lecteur.js qui poste la position tout de suite (le parent l'enregistre si t >= 30 s).
+
+
+## 2026-11-05 - v7.16.3 : prechargement DESACTIVE (PRELOAD_ENABLED=false)
+NetLog : le prechargement part bien a mi-episode (d5ef0a 14:41, 3dda95 14:48, b5ec49 14:57, ed119c 15:05) mais les lags signales a 14:49 et 15:05 tombent pile a son demarrage ; a 15:05:19 la derniere requete du lecteur visible se termine et plus aucune requete du fichier visible ne part, seul le fichier precharge (lent, MISS) est demande. Hypothese : la 2e video (meme si cachee et muette) prive la premiere de ses requetes ou de sa connexion. Code laisse, desactive par le drapeau.
+
+
+## 2026-11-05 - v7.16.4 : journal ETAT GEL
+Recherche web (TinyFish/Brave/You) : mecanismes connus (cache CDN froid et Range, MP4 moov en fin = allers-retours, tampon Chrome fixe pour gros debits) mais aucun rapport du gel a zero requete. Ajout dans 02-iframe-lecteur.js : a 3 s de blocage, log readyState/networkState/preload/buffered/error. Pistes non testees : extension FastStream (lecteur MSE a requetes paralleles, MP4 pris en charge), rechauffage par GM_xmlhttpRequest (bloque : le CDN exige un Referer odysee.com, ne pas le falsifier). Fichiers Odysee de cette serie : ~450-480 Mo pour ~717 s, soit ~5,2 Mb/s (API resolve : sources.size).
+
+
+
+## 2026-11-05 - v7.17.0 : turbo (TURBO_ENABLED)
+FastStream (installe par l'utilisateur) charge vite et supporte les sauts ; Firefox lagge aussi sur fichier froid -> pas un probleme de Chrome. Licence FastStream = tous droits reserves, code NON reutilisable : technique reecrite (Range paralleles 6 x 8 Mo, Blob, video.src). Etape 1 seulement : lecture apres telechargement complet (moov en fin = pas de lecture progressive sans mp4box). Abandon -> lecture normale apres 240 s, erreur CORS/taille, etc. Inconnus : CORS de odycdn.com depuis odysee.com, le CDN accepte-t-il 6 connexions. Logs console '(turbo)'.
+
+
+## 2026-11-05 - v7.17.1 : taille via l'API
+Essai 7.17.0 : 'abandon : taille inconnue (HTTP 206)'. Le CDN repond 206 en CORS (OK) mais Content-Range n'est pas expose. Taille lue par claim_search (claim_id dans l'URL du flux).
+
+
+## 2026-11-05 - v7.17.2 : essais par morceau
+Essai 7.17.1 sur episode neuf : 26 Mb/s moyens (5x la lecture normale), mais abandon a 98 % ('TypeError: Failed to fetch', 3 essais epuises sur un morceau) -> lecture normale, fichier alors chaud chez le CDN donc sauts instantanes. 6 essais avec pause croissante, log de chaque echec.
+
+
+## 2026-11-05 - v7.17.3 : reprise a la position courante
+Essai 7.17.2 : epsiode froid 470 Mo termine en 136 s (29 Mb/s), lecture depuis la memoire OK, mais redemarrage au debut : la position etait relevee au DEBUT du turbo (0 s) alors que le lecteur Odysee avait relance la lecture normale pendant le telechargement. Position et etat releves au moment du changement de source. Chunks 10 et 11 : 1 echec 'Failed to fetch' puis OK (les 6 essais servent).
+
+
+## 2026-11-05 - v7.18.0 : episode suivant telecharge en arriere-plan (PRELOAD_ENABLED=true, nouveau sens)
+Essais 7.17.2/7.17.3 : 3 episodes froids en 96-136 s a 29-36 Mb/s, sauts instantanes. Ajout : quand le lecteur poste 'turbo-done' (episode en memoire, bande passante libre), 30-lecteur.js cree l'iframe cachee de l'episode suivant (PRELOAD_FRAME_NAME). Dans cette iframe, runPreloadFrame() lit l'adresse du MP4 (lecture muette puis coupee), telecharge avec turboFetch et garde le Blob (URL blob: valable tant que l'iframe vit). Le lecteur de l'episode suivant demande par BroadcastChannel 'vc-turbo' (turboAsk, 0,6 s) : URL prete -> il l'utilise ; telechargement en cours -> il attend (200 s max) ; pas de reponse -> telechargement normal. L'iframe cachee est retiree 90 s apres le 'ready' de l'episode suivant. Blob inutilisable (erreur video) -> retour au flux d'origine. Refactor : turboFetch/turboAsk/turboKey/runPreloadFrame sont des fonctions declarees en fin de 02-iframe-lecteur.js (pas de const au niveau fichier : TDZ). NON teste : partage du Blob entre iframes (meme origine odysee.com), memoire ~1 Go, chainage N+2.

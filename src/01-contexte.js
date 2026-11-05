@@ -128,4 +128,7 @@
     const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';
     const MSG_PREFIX = 'anime-tracker-v6-';
     const PLAYER_FRAME_NAME = 'continuum-player';
+    const PRELOAD_FRAME_NAME = 'continuum-preload';
+    const TURBO_ENABLED = true; // v7.17.0 : telechargement parallele du MP4 Odysee (test) ; false pour le couper
+    const PRELOAD_ENABLED = true; // v7.18.0 : telechargement turbo de l episode suivant en arriere-plan (ancien test de prechargement par lecture : abandonne) ; false pour couper
 

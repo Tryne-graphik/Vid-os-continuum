@@ -343,7 +343,28 @@
         // passe au lecteur suivant de la page.
         let playerCandidates = [], playerCandidateIndex = 0, playerReadyTimer = null;
         let ytActive = false, ytSegment = null; // lecture YouTube en cours (v6.27)
-        let stallRetriedSrc = null; // un seul essai auto par lecteur (v6.33)
+        let preloadedEmbed = null; // v7.15.4 : dernier embed precharge (une fois par episode)
+        let preloadFrame = null; // v7.18.0 : { el, key } iframe cachee qui telecharge l'episode suivant (doit rester en vie : elle detient le Blob)
+        function startNextPreload() {
+            try {
+                const ce = currentEpisode, key = ce.site + '|' + ce.episodeNumber;
+                if (preloadedEmbed === key || ce.navigate) return;
+                preloadedEmbed = key;
+                const nextInfo = ce.navStyle === 'index' ? buildNextEpisodeInfo() : (ce.nextPageUrl ? buildNextEpisodeInfo() : null);
+                Promise.resolve(nextInfo).then((info) => {
+                    const url = info && info.embedSrc;
+                    if (!url || !/^https:\/\/odysee\.com\//.test(url)) return;
+                    if (preloadFrame) { preloadFrame.el.remove(); preloadFrame = null; }
+                    console.log('[AnimeTracker v6] prechargement turbo de l episode suivant : ' + url);
+                    const f = document.createElement('iframe');
+                    f.name = PRELOAD_FRAME_NAME; f.src = url;
+                    f.style.cssText = 'position:fixed;left:-9999px;top:0;width:320px;height:180px;opacity:0;pointer-events:none;border:0';
+                    document.body.appendChild(f);
+                    preloadFrame = { el: f, key: key };
+                }).catch((e) => console.log('[AnimeTracker v6] prechargement impossible : ' + e));
+            } catch (e) { console.log('[AnimeTracker v6] prechargement impossible : ' + e); }
+        }
+        let stallRetriedSrc = null, stallRetriedN = 0; // essais auto de rechargement par lecteur (v6.33 ; 2 pour un fichier direct sans repli YouTube, v7.15.3 ; remis a 0 quand la video repart)
         function armPlayerReadyTimer() {
             clearTimeout(playerReadyTimer);
             playerReadyTimer = setTimeout(tryNextPlayer, 25000);
@@ -492,6 +513,9 @@
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
+            if (type === 'ready' && preloadFrame && currentEpisode && preloadFrame.key !== currentEpisode.site + '|' + currentEpisode.episodeNumber) {
+                const pf = preloadFrame; preloadFrame = null; setTimeout(() => pf.el.remove(), 90000);
+            }
             if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
@@ -508,6 +532,8 @@
                 if (t >= 30 && (!isFinite(d) || d - t > 120)) setResumePosition(currentEpisode, t);
                 else if (isFinite(d) && d - t <= 120) setResumePosition(currentEpisode, null);
             }
+            // v7.18.0 : l'episode courant est en memoire (turbo) -> la bande passante est libre : on telecharge l'episode suivant en cachette.
+            if (type === 'turbo-done' && PRELOAD_ENABLED && currentEpisode) startNextPreload();
             if (type === 'outro-reached' || type === 'ended' || type === 'near-end') { if (currentEpisode) setResumePosition(currentEpisode, null); }
             if (type === 'outro-reached') {
                 if (outroSkipSuspended || outroSignalSent) return;
@@ -536,13 +562,18 @@
                     // seul avant d'afficher l'encadre.
                     // Fichier d'origine sans choix de qualite (pas de flux HLS en blob:) :
                     // recharger ne sert a rien, on passe direct a YouTube (v6.39).
-                    if (!event.data.direct && stallRetriedSrc !== overlayEls.playerFrame.src) {
-                        stallRetriedSrc = overlayEls.playerFrame.src;
-                        setStatus('La video cale, nouvel essai...');
+                    // v7.15.3 : sur un fichier direct, recharger le lecteur SERT (constat 2026-11-05 : F5 / clic manuel
+                    // relancent la lecture, la requete Range du CDN etant suspendue ou ralentie) : on le recharge donc aussi,
+                    // 4 fois au plus (v7.16.1, 2 avant : un F5 manuel debloque a coup sur le gel a zero requete, constat 2026-11-05), quand YouTube n'a pas de repli ; sinon bascule YouTube comme avant (v6.39).
+                    if (stallRetriedSrc !== overlayEls.playerFrame.src) { stallRetriedSrc = overlayEls.playerFrame.src; stallRetriedN = 0; }
+                    const ytReplacement = !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
+                    if ((!event.data.direct || !ytReplacement) && stallRetriedN < (event.data.direct ? 4 : 1)) {
+                        stallRetriedN++;
+                        setStatus('La video cale, nouvel essai ' + stallRetriedN + '...');
                         positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src;
                         return;
                     }
-                    if (!ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode)) {
+                    if (ytReplacement) {
                         setStatus('La video cale chez l\'hebergeur : bascule automatique sur YouTube...');
                         switchToYoutube(currentEpisode, 'auto, video bloquee');
                     } else showSiteError(0, 'stall');
@@ -556,7 +587,7 @@
                     }
                     renderLoadStatus();
                 }
-                else if (event.data.stage === 'pret') { stopBufferStallTracking(); setStatus('Lecture'); }
+                else if (event.data.stage === 'pret') { stallRetriedN = 0; stopBufferStallTracking(); setStatus('Lecture'); }
             }
         });
 

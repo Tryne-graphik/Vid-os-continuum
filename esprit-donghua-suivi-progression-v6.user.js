@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.15.0
+// @version      7.18.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -161,12 +161,17 @@
     const PLAYER_ORIGIN_ANSEMBED = 'https://ansembed.net';
     const MSG_PREFIX = 'anime-tracker-v6-';
     const PLAYER_FRAME_NAME = 'continuum-player';
+    const PRELOAD_FRAME_NAME = 'continuum-preload';
+    const TURBO_ENABLED = true; // v7.17.0 : telechargement parallele du MP4 Odysee (test) ; false pour le couper
+    const PRELOAD_ENABLED = true; // v7.18.0 : telechargement turbo de l episode suivant en arriere-plan (ancien test de prechargement par lecture : abandonne) ; false pour couper
 
     // ================= Contexte : DANS l'iframe du lecteur =================
     if (!isTopFrame) {
         // Seulement dans NOTRE iframe (nommee dans buildOverlay) : anime-sama
         // charge desormais lui-meme ansembed dans #playerDF, et le clic
         // automatique y lancait une 2e lecture en arriere-plan (v6.13).
+        // v7.18.0 : iframe cachee qui TELECHARGE l'episode suivant (turbo) pendant qu'on regarde le courant (voir 30-lecteur.js)
+        if (window.name === PRELOAD_FRAME_NAME && location.hostname.indexOf('odysee.com') !== -1) { runPreloadFrame(); return; }
         if (window.name !== PLAYER_FRAME_NAME) return;
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
@@ -248,7 +253,7 @@
 
         const reloadWatchdogMs = cfg.reloadWatchdogMs || 10000;
         setTimeout(() => {
-            if (playbackStarted) return;
+            if (playbackStarted || turboBusy) return;
             const reloadKey = 'anime-tracker-reload-' + location.href;
             if (sessionStorage.getItem(reloadKey)) {
                 console.log('[AnimeTracker v6] (' + cfg.label + ') video toujours non demarree apres rechargement, abandon');
@@ -272,17 +277,29 @@
             console.log('[AnimeTracker v6] (' + cfg.label + ') reprise a ' + Math.round(config.resumeAt) + 's');
         }
 
+        let introSkipTimer = null;
         function applyIntroSkipIfNeeded(video) {
             applyResumeIfNeeded(video);
             // introStart > 0 (resume avant le generique) : gere au fil de la
             // lecture par le timeupdate plus bas, pas au demarrage.
             if (!config || !config.introEnd || config.introStart) return;
-            if (video.currentTime < config.introEnd) {
+            if (introSkipTimer || video.currentTime >= config.introEnd) return;
+            // v7.15.4 : UN seul saut, et seulement quand la lecture est stable (constat 2026-11-05 : un saut des
+            // le chargement, sur un fichier encore froid chez le CDN, bloque le lecteur). Stable = en lecture,
+            // 8 s d'avance en tampon, depuis 4 s. Abandon de l'attente apres 90 s : on saute quand meme.
+            const t0 = Date.now(); let okSince = 0;
+            console.log('[AnimeTracker v6] (' + cfg.label + ') saut d\'intro en attente d\'une lecture stable');
+            introSkipTimer = setInterval(() => {
+                if (!config || !config.introEnd || video.currentTime >= config.introEnd) { clearInterval(introSkipTimer); return; }
+                const b = video.buffered, ahead = b.length ? b.end(b.length - 1) - video.currentTime : 0;
+                okSince = (!video.paused && video.readyState >= 3 && ahead >= 8) ? (okSince || Date.now()) : 0;
+                if (!(okSince && Date.now() - okSince >= 4000) && Date.now() - t0 < 90000) return;
+                clearInterval(introSkipTimer);
                 video.currentTime = config.introEnd;
                 const p = video.play();
                 if (p && p.catch) p.catch(() => {});
                 console.log('[AnimeTracker v6] (' + cfg.label + ') intro sautee, demarrage a ' + config.introEnd + 's');
-            }
+            }, 500);
         }
 
         let autoUnmuteAttempted = false;
@@ -334,8 +351,56 @@
             if (k === 'n' || k === 'p' || k === 's' || k === 'escape') window.parent.postMessage({ type: MSG_PREFIX + 'key', key: k }, '*');
         }, true);
 
+        // v7.17.0 : telechargement "turbo" d'un MP4 direct Odysee (voir turboFetch en bas de fichier). Le fichier est
+        // tire en morceaux Range paralleles, assemble en Blob puis donne a la balise video (la pile media de Chrome,
+        // qui gelait, n'est plus en cause). v7.18.0 : si l'episode a deja ete telecharge par l'iframe de prechargement
+        // (turboAsk), on reprend son Blob. Echec (CORS, taille, delai) -> lecture normale.
+        let turboBusy = false;
+        function turboLoad(video) {
+            if (!TURBO_ENABLED || !/odysee\.com$/.test(location.hostname)) return;
+            let tries = 0;
+            const iv = setInterval(() => {
+                const src = video.currentSrc || '';
+                if (++tries > 120) { clearInterval(iv); return; }
+                if (!/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src)) return;
+                clearInterval(iv);
+                turboRun(video, src);
+            }, 500);
+        }
+        async function turboRun(video, src) {
+            const L = (m) => console.log('[AnimeTracker v6] (turbo) ' + m);
+            turboBusy = true;
+            const wasPlaying = !video.paused;
+            const giveUp = (why) => { turboBusy = false; L('abandon : ' + why + ' -> lecture normale'); if (wasPlaying) video.play().catch(() => {}); };
+            try {
+                video.pause();
+                let url = await turboAsk(turboKey(src), L);
+                if (url) L('episode deja telecharge par le prechargement -> lecture depuis la memoire');
+                else {
+                    const blob = await turboFetch(src, L, (pct) => window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'buffering', pct: pct }, '*'));
+                    url = URL.createObjectURL(blob);
+                }
+                // position et etat A CET INSTANT (le lecteur Odysee peut avoir relance la lecture normale pendant le telechargement)
+                const nowT = video.currentTime, play = wasPlaying || !video.paused;
+                video.addEventListener('loadedmetadata', () => {
+                    try { if (nowT > 1) video.currentTime = nowT; } catch (e) {}
+                    turboBusy = false;
+                    if (play) video.play().catch(() => {});
+                    window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*');
+                }, { once: true });
+                video.addEventListener('error', () => { // Blob inutilisable (prechargement ferme trop tot ?) -> flux d'origine
+                    L('lecture depuis la memoire impossible -> flux d\'origine');
+                    const t = video.currentTime;
+                    video.addEventListener('loadedmetadata', () => { try { video.currentTime = t; } catch (e) {} video.play().catch(() => {}); }, { once: true });
+                    video.src = src; video.load(); turboBusy = false;
+                }, { once: true });
+                video.src = url;
+            } catch (e) { giveUp(String(e)); }
+        }
+
         waitForVideo((video) => {
             console.log('[AnimeTracker v6] (' + cfg.label + ') element video trouve');
+            turboLoad(video);
             video.addEventListener('play', () => { playbackStarted = true; }, { once: true });
             // v7.13 : état de lecture réel vers le panneau (il se masque quelques secondes après le début de la lecture)
             const postPlay = (on) => window.parent.postMessage({ type: MSG_PREFIX + 'playstate', playing: on }, '*');
@@ -368,6 +433,11 @@
             }, { once: true });
 
             let lastPositionPost = 0;
+            // v7.16.2 : un saut (clic sur la barre) enregistre sa cible tout de suite ; sans ca, si la lecture se fige juste apres,
+            // un F5 / rechargement auto reprend a l'ancienne position (constat 2026-11-05 : reprise a 1:10 apres un saut a ~3:00)
+            video.addEventListener('seeking', () => {
+                if (video.currentTime > 1) window.parent.postMessage({ type: MSG_PREFIX + 'position', t: video.currentTime, d: video.duration }, '*');
+            });
             video.addEventListener('timeupdate', () => {
                 const now = Date.now();
                 if (now - lastPositionPost > 5000) {
@@ -419,14 +489,41 @@
             // bruts mal prepares sur certaines chaines Odysee (index en fin de
             // fichier, ~8 Mbit/s) - le navigateur n'arrive pas a les lire.
             let stallLastT = -1, stallFor = 0, stallSent = false;
+            // v7.15.2 : reprise rapide. Constat reel (2026-11-05) : la requete du fichier Odysee reste suspendue
+            // (0 Mb/s pendant ~3 min, reseau sain) et une NOUVELLE requete (F5) relance tout de suite. On la
+            // force sans recharger la page : a 5 s on se replace sur la position courante (nouveau seek = nouvelle
+            // requete Range), a 10 s on recharge la source en gardant le temps (fichier direct seulement : un flux
+            // blob: est gere par le lecteur Odysee, on n'y touche pas). Au-dela de 15 s, le circuit d'avant reprend.
+            const stallRetry = (n) => {
+                const t = video.currentTime;
+                console.log('[AnimeTracker v6] (' + cfg.label + ') reprise rapide ' + n + ' a ' + Math.round(t) + 's');
+                try {
+                    if (n === 1) { video.currentTime = t; return; }
+                    const src = video.currentSrc;
+                    if (!src || /^blob:/.test(src)) return;
+                    const play = !video.paused;
+                    video.addEventListener('loadedmetadata', () => { try { video.currentTime = t; if (play) video.play().catch(() => {}); } catch (e) {} }, { once: true });
+                    video.src = src; video.load();
+                } catch (e) { console.log('[AnimeTracker v6] reprise rapide impossible : ' + e); }
+            };
             setInterval(() => {
                 if (!playbackStarted || video.ended) return;
+                if (turboBusy) { stallFor = 0; stallLastT = -1; return; }
                 const frozen = Math.abs(video.currentTime - stallLastT) < 0.2 && video.readyState < 3;
                 stallLastT = video.currentTime;
                 if (!frozen) {
                     if (stallSent) window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'stall-fini' }, '*');
                     stallSent = false; stallFor = 0; return;
                 }
+                if (stallFor === 3) { // v7.16.4 : etat reel de la balise video pendant un gel (diagnostic)
+                    try {
+                        const b = video.buffered, rg = [];
+                        for (let i = 0; i < b.length; i++) rg.push(b.start(i).toFixed(0) + '-' + b.end(i).toFixed(0));
+                        console.log('[AnimeTracker v6] (' + cfg.label + ') ETAT GEL : t=' + video.currentTime.toFixed(1) + ' readyState=' + video.readyState + ' networkState=' + video.networkState + ' paused=' + video.paused + ' seeking=' + video.seeking + ' preload=' + video.preload + ' buffered=[' + rg.join(' ') + '] erreur=' + (video.error ? video.error.code : 'aucune'));
+                    } catch (e) {}
+                }
+                if (stallFor === 4) stallRetry(1);
+                else if (stallFor === 9) stallRetry(2);
                 if (++stallFor >= 15 && !stallSent) {
                     stallSent = true;
                     console.log('[AnimeTracker v6] (' + cfg.label + ') lecture bloquee depuis 15 s a ' + Math.round(video.currentTime) + 's');
@@ -543,12 +640,27 @@
             const url = 'http://127.0.0.1:8787/sub?v=' + idm[1];
             const sec = (h, mi, s, ms) => +h * 3600 + +mi * 60 + +s + +ms / 1000;
             const parse = (txt) => txt.split(/\r?\n\r?\n/).map((b) => { const x = b.match(/(\d+):(\d+):(\d+)\.(\d+) --> (\d+):(\d+):(\d+)\.(\d+)\r?\n([\s\S]+)/); return x && { s: sec(x[1], x[2], x[3], x[4]), e: sec(x[5], x[6], x[7], x[8]), t: x[9].trim() }; }).filter(Boolean);
-            let cues = [], box = null, tries = 0;
+            let cues = [], box = null, tries = 0, complete = false, gapBox = null;
+            const GAP_MIN = 5; // s : au-delà, entre deux répliques, on signale « passage non sous-titré » (v7.15.1), seulement si la traduction est complète
             const tick = () => {
                 const v = doc.querySelector('video'); if (!v || !box) return;
                 applyBoxStyle();
                 const t = v.currentTime, c = cues.find((q) => t >= q.s && t <= q.e + 0.3);
                 box.textContent = c ? c.t : '';
+                let gap = false;
+                if (!c && complete) { let prev = null, next = null; for (const q of cues) { if (q.e < t) prev = q; else if (q.s > t) { next = q; break; } } gap = !!(prev && next && next.s - prev.e > GAP_MIN); }
+                if (gap && !gapBox) {
+                    gapBox = doc.createElement('div');
+                    gapBox.title = 'Pas de sous-titres dans la vidéo pour ce passage (même la piste d’origine est vide)';
+                    // pas d'innerHTML : YouTube impose Trusted Types (l'affectation échoue en silence)
+                    const NS = 'http://www.w3.org/2000/svg', ic = doc.createElementNS(NS, 'svg');
+                    ic.setAttribute('viewBox', '0 0 24 24'); ic.setAttribute('width', '16'); ic.setAttribute('height', '16'); ic.setAttribute('fill', 'none'); ic.setAttribute('stroke', 'currentColor'); ic.setAttribute('stroke-width', '2'); ic.setAttribute('stroke-linecap', 'round'); ic.setAttribute('stroke-linejoin', 'round'); ic.style.cssText = 'vertical-align:-3px;margin-right:6px';
+                    ['M4 5h16v11H9l-5 4z', 'M3 3l18 18'].forEach((d) => { const pa = doc.createElementNS(NS, 'path'); pa.setAttribute('d', d); ic.appendChild(pa); });
+                    gapBox.appendChild(ic); gapBox.appendChild(doc.createTextNode('passage non sous-titré'));
+                    gapBox.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:' + (box.style.bottom || '4%') + ';z-index:2147483647;pointer-events:none;font:600 15px Arial,sans-serif;color:#cfd8dc;background:rgba(0,0,0,.6);border:1px solid #1de9d6;border-radius:6px;padding:5px 12px;display:none';
+                    (doc.body || doc.documentElement).appendChild(gapBox);
+                }
+                if (gapBox) { gapBox.style.bottom = box.style.bottom || '4%'; gapBox.style.display = gap ? 'block' : 'none'; }
             };
             // Réglages du panneau (Sous-titres) : taille %, hauteur % du bas, contour px. Contour = cercle d'ombres noires (arrondi), liseré turquoise 1 px dehors.
             let styleKey = '';
@@ -576,7 +688,7 @@
                 const v = doc.querySelector('video');
                 try {
                     const r = await gmRequest({ method: 'GET', url: url + '&t=' + Math.floor(v ? v.currentTime : 0), timeout: 8000 });
-                    if (r.status === 200 || r.status === 206) { cues = parse(r.responseText); if (cues.length && !box) activate(); }
+                    if (r.status === 200 || r.status === 206) { cues = parse(r.responseText); complete = r.status === 200; if (cues.length && !box) activate(); }
                     if (r.status === 200 || (r.status >= 400 && r.status !== 429)) return; // complet, ou service sans clé / en échec : repli YouTube
                 } catch (e) { if (++tries < 400) setTimeout(poll, 15000); return; } // service éteint : on revient voir (démarrage manuel ou automatique après coup)
                 if (++tries < 400) setTimeout(poll, 6000); // 202/206/429 : traduction en cours, on revient voir
@@ -592,6 +704,95 @@
         });
     }
 
+    // ===== Turbo (v7.17.0) / prechargement (v7.18.0) : fonctions DECLAREES (hoistees, utilisables par le bloc en tete) =====
+    function turboKey(src) { return (/\/streams\/([0-9a-f]{40})\//.exec(src || '') || [])[1] || null; }
+
+    // Telecharge tout le fichier en morceaux Range paralleles ; renvoie un Blob ou leve une erreur.
+    async function turboFetch(src, L, onPct) {
+        const t0 = Date.now(), CHUNK = 8 << 20, PAR = 6, MAXMS = 240000;
+        const r0 = await fetch(src, { headers: { Range: 'bytes=0-0' } });
+        const m = /\/(\d+)$/.exec(r0.headers.get('content-range') || '');
+        let total = m ? +m[1] : 0;
+        if (!total) { // Content-Range non expose au CORS : taille depuis l'API publique Odysee (claim_id lu dans l'URL du flux)
+            const id = turboKey(src);
+            if (id) {
+                const j = await (await fetch('https://api.na-backend.odysee.com/api/v1/proxy?m=claim_search', { method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', method: 'claim_search', params: { claim_id: id }, id: 1 }) })).json();
+                total = +(((j.result || {}).items || [])[0] || { value: { source: {} } }).value.source.size || 0;
+            }
+        }
+        if (!total) throw new Error('taille inconnue (HTTP ' + r0.status + ')');
+        const n = Math.ceil(total / CHUNK), parts = new Array(n);
+        let next = 0, done = 0, loaded = 0, failed = null, lastLog = 0;
+        L('debut : ' + (total / 1048576).toFixed(0) + ' Mo en ' + n + ' morceaux, ' + PAR + ' connexions');
+        const worker = async () => {
+            while (!failed) {
+                const i = next++; if (i >= n) return;
+                const a = i * CHUNK, b = Math.min(total - 1, a + CHUNK - 1);
+                for (let k = 0; ; k++) {
+                    try {
+                        const r = await fetch(src, { headers: { Range: 'bytes=' + a + '-' + b } });
+                        if (r.status !== 206) throw new Error('HTTP ' + r.status);
+                        const buf = await r.arrayBuffer();
+                        if (buf.byteLength !== b - a + 1) throw new Error('taille ' + buf.byteLength);
+                        parts[i] = buf; done++; loaded += buf.byteLength; break;
+                    } catch (e) { L('morceau ' + i + ' essai ' + (k + 1) + ' : ' + e); if (k >= 5 || Date.now() - t0 > MAXMS) { failed = e; return; } await new Promise((ok) => setTimeout(ok, 1000 * (k + 1))); }
+                }
+                const now = Date.now();
+                if (onPct) onPct(Math.round(done * 100 / n));
+                if (now - lastLog > 10000) { lastLog = now; L(Math.round(done * 100 / n) + ' % - ' + (loaded * 8 / 1e6 / ((now - t0) / 1000)).toFixed(1) + ' Mb/s moyen'); }
+                if (now - t0 > MAXMS) { failed = new Error('delai depasse'); return; }
+            }
+        };
+        await Promise.all(Array.from({ length: PAR }, worker));
+        if (failed) throw failed;
+        const secs = (Date.now() - t0) / 1000;
+        L('termine en ' + secs.toFixed(0) + ' s (' + (total * 8 / 1e6 / secs).toFixed(1) + ' Mb/s)');
+        return new Blob(parts, { type: 'video/mp4' });
+    }
+
+    // Le lecteur demande si l'iframe de prechargement a deja (ou est en train de telecharger) cet episode.
+    // Renvoie l'URL blob: prete, ou null (pas de reponse en 0,6 s -> telechargement normal).
+    function turboAsk(key, L) {
+        return new Promise((resolve) => {
+            if (!key || typeof BroadcastChannel === 'undefined') { resolve(null); return; }
+            const bc = new BroadcastChannel('vc-turbo');
+            let pending = false, t1 = null, t2 = null;
+            const end = (u) => { clearTimeout(t1); clearTimeout(t2); bc.close(); resolve(u); };
+            bc.onmessage = (e) => {
+                const d = e.data || {};
+                if (d.a !== key) return;
+                if (d.url) end(d.url);
+                else if (d.pending && !pending) { pending = true; clearTimeout(t1); L('episode en cours de telechargement par le prechargement : attente'); t2 = setTimeout(() => end(null), 200000); }
+            };
+            bc.postMessage({ q: key });
+            t1 = setTimeout(() => end(null), 600);
+        });
+    }
+
+    // Iframe cachee de l'episode suivant : lance la lecture muette le temps de lire l'adresse du fichier, puis la coupe
+    // et telecharge le fichier (turbo) ; le Blob reste ici (URL blob: valable tant que cette iframe vit) et est propose au lecteur.
+    function runPreloadFrame() {
+        const L = (m) => console.log('[AnimeTracker v6] (turbo suivant) ' + m);
+        L('demarre');
+        let n = 0, key = null, url = null;
+        const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vc-turbo') : null;
+        if (bc) bc.onmessage = (e) => { const d = e.data || {}; if (d.q && d.q === key) bc.postMessage(url ? { a: key, url: url } : { a: key, pending: true }); };
+        const iv = setInterval(() => {
+            const v = document.querySelector('video');
+            if (v) {
+                try { v.muted = true; v.volume = 0; } catch (e) {}
+                const src = v.currentSrc || '';
+                if (/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src) && turboKey(src)) {
+                    clearInterval(iv); key = turboKey(src);
+                    v.pause(); try { v.removeAttribute('src'); v.load(); } catch (e) {}
+                    turboFetch(src, L, null).then((blob) => { url = URL.createObjectURL(blob); L('pret'); if (bc) bc.postMessage({ a: key, url: url }); }).catch((e) => L('abandon : ' + e));
+                    return;
+                }
+                if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+            } else { const b = document.querySelector('button.button--play, .button--play, button[aria-label="Play"]'); if (b) b.click(); }
+            if (++n > 240) clearInterval(iv);
+        }, 500);
+    }
     // ================= Reseau =================
 
     function gmRequest(details) {
@@ -2577,6 +2778,19 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
+            ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
+            ['7.17.2', ['Turbo : 6 essais par morceau (avec pause) au lieu de 3, et chaque échec est écrit dans la console.']],
+            ['7.17.1', ['Turbo : la taille du fichier est lue dans l’API Odysee (l’en-tête Content-Range n’est pas visible depuis la page).']],
+            ['7.17.0', ['Test « turbo » : le fichier Odysee est téléchargé en 6 morceaux parallèles puis lu depuis la mémoire (la lecture démarre quand il est entier). Repli automatique sur la lecture normale en cas d’échec ; la console (« (turbo) ») donne le débit.']],
+            ['7.16.4', ['Diagnostic : pendant un gel, la console écrit « ETAT GEL » (readyState, networkState, tampon, erreur) pour comprendre pourquoi Chrome ne redemande rien.']],
+            ['7.16.3', ['Préchargement de l’épisode suivant désactivé : le test a coïncidé avec des lags (14:49, 15:05).']],
+            ['7.16.2', ['Un saut dans la vidéo enregistre tout de suite sa position : si la lecture se fige juste après, F5 reprend là où tu as sauté (et non à l’ancienne position).']],
+            ['7.16.1', ['Lecture qui cale sur un fichier Odysee direct : jusqu’à 4 rechargements automatiques du lecteur (2 avant), comme un F5 manuel qui débloque le gel.']],
+            ['7.16.0', ['Saut d’intro : un seul saut, une fois la lecture stable (plus de saut dès le chargement qui bloquait le lecteur).', 'Test : à mi-épisode, l’épisode suivant est préchargé en cachette (iframe muette, 2 min) pour réchauffer le CDN Odysee.']],
+            ['7.15.3', ['Lecture qui cale sur un fichier Odysee direct sans repli YouTube : le lecteur est rechargé tout seul (2 essais, position conservée) au lieu d’afficher tout de suite l’erreur.']],
+            ['7.15.2', ['Lecture qui cale (flux Odysee suspendu) : reprise automatique après 5 s (nouveau seek) puis 10 s (rechargement de la vidéo à la même position), sans recharger la page ni perdre la place.']],
+            ['7.15.1', ['Sous-titres : un repère « passage non sous-titré » s’affiche quand la vidéo n’a aucun sous-titre pendant plus de 5 s (traduction terminée), pour savoir que ce n’est pas un bug.']],
             ['7.15.0', ['Sous-titres : curseurs Taille / Hauteur / Contour dans l’onglet Sous-titres, contour arrondi, drapeau chinois → FR (la traduction ne gère plus que le chinois).', '« Traduire cet épisode » affiche maintenant un retour (demande envoyée, déjà traduit, service injoignable, occupé…).']],
             ['7.14.0', ['Boutons du lecteur plus gros et centrés, avec un bouton pause entre précédent et suivant.', 'Réglages : 4 ronds lumineux (début intro, fin intro, début outro, fin outro) qui s’allument quand le repère est réglé ; boutons Fin intro / Début outro plus petits.', 'Sous-titres : cercle RVB qui tourne pendant la traduction et se fige ensuite.', 'Nouveau menu Sources (changement de source + bouton Source principale), icône de source à côté du titre, « chargement très lent » remplacé par une icône avec infobulle.']],
             ['7.13.2', ['Sous-titres FR plus gros, contour noir et liseré turquoise ; fin du doublon (sous-titres YouTube en plus des nôtres) ; le service local est durci (en-tête X-VC-Client).']],
@@ -3158,7 +3372,28 @@
         // passe au lecteur suivant de la page.
         let playerCandidates = [], playerCandidateIndex = 0, playerReadyTimer = null;
         let ytActive = false, ytSegment = null; // lecture YouTube en cours (v6.27)
-        let stallRetriedSrc = null; // un seul essai auto par lecteur (v6.33)
+        let preloadedEmbed = null; // v7.15.4 : dernier embed precharge (une fois par episode)
+        let preloadFrame = null; // v7.18.0 : { el, key } iframe cachee qui telecharge l'episode suivant (doit rester en vie : elle detient le Blob)
+        function startNextPreload() {
+            try {
+                const ce = currentEpisode, key = ce.site + '|' + ce.episodeNumber;
+                if (preloadedEmbed === key || ce.navigate) return;
+                preloadedEmbed = key;
+                const nextInfo = ce.navStyle === 'index' ? buildNextEpisodeInfo() : (ce.nextPageUrl ? buildNextEpisodeInfo() : null);
+                Promise.resolve(nextInfo).then((info) => {
+                    const url = info && info.embedSrc;
+                    if (!url || !/^https:\/\/odysee\.com\//.test(url)) return;
+                    if (preloadFrame) { preloadFrame.el.remove(); preloadFrame = null; }
+                    console.log('[AnimeTracker v6] prechargement turbo de l episode suivant : ' + url);
+                    const f = document.createElement('iframe');
+                    f.name = PRELOAD_FRAME_NAME; f.src = url;
+                    f.style.cssText = 'position:fixed;left:-9999px;top:0;width:320px;height:180px;opacity:0;pointer-events:none;border:0';
+                    document.body.appendChild(f);
+                    preloadFrame = { el: f, key: key };
+                }).catch((e) => console.log('[AnimeTracker v6] prechargement impossible : ' + e));
+            } catch (e) { console.log('[AnimeTracker v6] prechargement impossible : ' + e); }
+        }
+        let stallRetriedSrc = null, stallRetriedN = 0; // essais auto de rechargement par lecteur (v6.33 ; 2 pour un fichier direct sans repli YouTube, v7.15.3 ; remis a 0 quand la video repart)
         function armPlayerReadyTimer() {
             clearTimeout(playerReadyTimer);
             playerReadyTimer = setTimeout(tryNextPlayer, 25000);
@@ -3307,6 +3542,9 @@
             if (!overlayEls || event.source !== overlayEls.playerFrame.contentWindow) return;
             const type = event.data.type.slice(MSG_PREFIX.length);
 
+            if (type === 'ready' && preloadFrame && currentEpisode && preloadFrame.key !== currentEpisode.site + '|' + currentEpisode.episodeNumber) {
+                const pf = preloadFrame; preloadFrame = null; setTimeout(() => pf.el.remove(), 90000);
+            }
             if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
@@ -3323,6 +3561,8 @@
                 if (t >= 30 && (!isFinite(d) || d - t > 120)) setResumePosition(currentEpisode, t);
                 else if (isFinite(d) && d - t <= 120) setResumePosition(currentEpisode, null);
             }
+            // v7.18.0 : l'episode courant est en memoire (turbo) -> la bande passante est libre : on telecharge l'episode suivant en cachette.
+            if (type === 'turbo-done' && PRELOAD_ENABLED && currentEpisode) startNextPreload();
             if (type === 'outro-reached' || type === 'ended' || type === 'near-end') { if (currentEpisode) setResumePosition(currentEpisode, null); }
             if (type === 'outro-reached') {
                 if (outroSkipSuspended || outroSignalSent) return;
@@ -3351,13 +3591,18 @@
                     // seul avant d'afficher l'encadre.
                     // Fichier d'origine sans choix de qualite (pas de flux HLS en blob:) :
                     // recharger ne sert a rien, on passe direct a YouTube (v6.39).
-                    if (!event.data.direct && stallRetriedSrc !== overlayEls.playerFrame.src) {
-                        stallRetriedSrc = overlayEls.playerFrame.src;
-                        setStatus('La video cale, nouvel essai...');
+                    // v7.15.3 : sur un fichier direct, recharger le lecteur SERT (constat 2026-11-05 : F5 / clic manuel
+                    // relancent la lecture, la requete Range du CDN etant suspendue ou ralentie) : on le recharge donc aussi,
+                    // 4 fois au plus (v7.16.1, 2 avant : un F5 manuel debloque a coup sur le gel a zero requete, constat 2026-11-05), quand YouTube n'a pas de repli ; sinon bascule YouTube comme avant (v6.39).
+                    if (stallRetriedSrc !== overlayEls.playerFrame.src) { stallRetriedSrc = overlayEls.playerFrame.src; stallRetriedN = 0; }
+                    const ytReplacement = !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
+                    if ((!event.data.direct || !ytReplacement) && stallRetriedN < (event.data.direct ? 4 : 1)) {
+                        stallRetriedN++;
+                        setStatus('La video cale, nouvel essai ' + stallRetriedN + '...');
                         positionArmed = false; overlayEls.playerFrame.src = overlayEls.playerFrame.src;
                         return;
                     }
-                    if (!ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode)) {
+                    if (ytReplacement) {
                         setStatus('La video cale chez l\'hebergeur : bascule automatique sur YouTube...');
                         switchToYoutube(currentEpisode, 'auto, video bloquee');
                     } else showSiteError(0, 'stall');
@@ -3371,7 +3616,7 @@
                     }
                     renderLoadStatus();
                 }
-                else if (event.data.stage === 'pret') { stopBufferStallTracking(); setStatus('Lecture'); }
+                else if (event.data.stage === 'pret') { stallRetriedN = 0; stopBufferStallTracking(); setStatus('Lecture'); }
             }
         });
 
