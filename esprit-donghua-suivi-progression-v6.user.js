@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.18.0
+// @version      7.18.1
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -291,9 +291,12 @@
             console.log('[AnimeTracker v6] (' + cfg.label + ') saut d\'intro en attente d\'une lecture stable');
             introSkipTimer = setInterval(() => {
                 if (!config || !config.introEnd || video.currentTime >= config.introEnd) { clearInterval(introSkipTimer); return; }
+                if (turboBusy) return; // v7.18.1 : telechargement turbo en cours (video en pause voulue) : on attend la lecture depuis la memoire
+                // v7.18.1 : fichier en memoire (blob:) = sauts instantanes, aucune raison d'attendre : saut des que la video est prete
+                const mem = /^blob:/.test(video.currentSrc || '') && video.readyState >= 3;
                 const b = video.buffered, ahead = b.length ? b.end(b.length - 1) - video.currentTime : 0;
                 okSince = (!video.paused && video.readyState >= 3 && ahead >= 8) ? (okSince || Date.now()) : 0;
-                if (!(okSince && Date.now() - okSince >= 4000) && Date.now() - t0 < 90000) return;
+                if (!mem && !(okSince && Date.now() - okSince >= 4000) && Date.now() - t0 < 90000) return;
                 clearInterval(introSkipTimer);
                 video.currentTime = config.introEnd;
                 const p = video.play();
@@ -2778,6 +2781,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.18.1', ['Saut d’intro immédiat quand l’épisode est lu depuis la mémoire (turbo) ; l’attente d’une lecture stable ne sert plus que pour la lecture normale. Le saut attend aussi la fin du téléchargement turbo.']],
             ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
             ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
             ['7.17.2', ['Turbo : 6 essais par morceau (avec pause) au lieu de 3, et chaque échec est écrit dans la console.']],

@@ -1,6 +1,7 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.18.1', ['Saut d’intro immédiat quand l’épisode est lu depuis la mémoire (turbo) ; l’attente d’une lecture stable ne sert plus que pour la lecture normale. Le saut attend aussi la fin du téléchargement turbo.']],
             ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
             ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
             ['7.17.2', ['Turbo : 6 essais par morceau (avec pause) au lieu de 3, et chaque échec est écrit dans la console.']],

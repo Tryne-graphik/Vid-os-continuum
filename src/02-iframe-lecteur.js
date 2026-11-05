@@ -124,9 +124,12 @@
             console.log('[AnimeTracker v6] (' + cfg.label + ') saut d\'intro en attente d\'une lecture stable');
             introSkipTimer = setInterval(() => {
                 if (!config || !config.introEnd || video.currentTime >= config.introEnd) { clearInterval(introSkipTimer); return; }
+                if (turboBusy) return; // v7.18.1 : telechargement turbo en cours (video en pause voulue) : on attend la lecture depuis la memoire
+                // v7.18.1 : fichier en memoire (blob:) = sauts instantanes, aucune raison d'attendre : saut des que la video est prete
+                const mem = /^blob:/.test(video.currentSrc || '') && video.readyState >= 3;
                 const b = video.buffered, ahead = b.length ? b.end(b.length - 1) - video.currentTime : 0;
                 okSince = (!video.paused && video.readyState >= 3 && ahead >= 8) ? (okSince || Date.now()) : 0;
-                if (!(okSince && Date.now() - okSince >= 4000) && Date.now() - t0 < 90000) return;
+                if (!mem && !(okSince && Date.now() - okSince >= 4000) && Date.now() - t0 < 90000) return;
                 clearInterval(introSkipTimer);
                 video.currentTime = config.introEnd;
                 const p = video.play();
