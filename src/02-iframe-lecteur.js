@@ -5,7 +5,7 @@
         // automatique y lancait une 2e lecture en arriere-plan (v6.13).
         // v7.18.0 : iframe cachee qui TELECHARGE l'episode suivant (turbo) pendant qu'on regarde le courant (voir 30-lecteur.js)
         if (window.name === PRELOAD_FRAME_NAME && location.hostname.indexOf('odysee.com') !== -1) { runPreloadFrame(); return; }
-        if (window.name !== PLAYER_FRAME_NAME) return;
+        if (window.name !== PLAYER_FRAME_NAME) { if (location.hostname.indexOf('odysee.com') !== -1) window.parent.postMessage({ type: MSG_PREFIX + 'vstate', s: 'iframe odysee SANS le bon nom (nom=' + window.name + ')' }, '*'); return; }
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
         if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
@@ -28,9 +28,37 @@
     function runInsidePlayerFrameGeneric(cfg) {
         console.log('[AnimeTracker v6] (' + cfg.label + ') script demarre');
 
+        // v7.24 : erreurs de l'hebergeur lues dans la page du lecteur (Odysee : « resolve response » / « preparer votre compte » / fichier non charge ;
+        // YouTube : video indisponible) -> un seul message par type vers la page, qui affiche une aide.
+        (function hostErrorWatch() {
+            const sent = {}; let n = 0;
+            const post = (k) => { if (sent[k]) return; sent[k] = true; window.parent.postMessage({ type: MSG_PREFIX + 'host-error', kind: k, host: location.hostname }, '*'); };
+            const iv = setInterval(() => {
+                if (++n > 80) { clearInterval(iv); return; }
+                if (/odysee\.com$/.test(location.hostname)) {
+                    const t = document.body ? document.body.textContent : '';
+                    if (/resolve response|pr[eé]parer votre compte|preparing your account/i.test(t)) post('init');
+                    else if (/[eé]chec du chargement du fichier|failed to load (the )?file/i.test(t)) post('file');
+                } else if (/youtube/.test(location.hostname)) {
+                    const e = document.querySelector('.ytp-error');
+                    if (e && e.offsetParent !== null) post('yt');
+                }
+            }, 3000);
+        })();
+
         let config = null;
         let outroSignalSent = false;
         let playbackStarted = false; // evenement 'play' reel, PAS juste "la balise <video> existe" (faux sur sibnet, ou elle existe des le depart)
+
+        // v7.24.1 : etat reel envoye a la page toutes les 3 s (affiche dans « Copier le diagnostic »), meme sans <video>
+        (function vstateWatch() {
+            let vn = 0;
+            const vIv = setInterval(() => {
+                if (++vn > 100) { clearInterval(vIv); return; }
+                const v = document.querySelector('video'), src = (v && v.currentSrc) || '';
+                window.parent.postMessage({ type: MSG_PREFIX + 'vstate', s: 'iframe ' + location.hostname + ' nom=' + window.name + ' video=' + (v ? 'oui' : 'NON') + (v ? ' paused=' + v.paused + ' t=' + v.currentTime.toFixed(1) + ' rs=' + v.readyState + ' src=' + (src.slice(0, 5) === 'blob:' ? 'blob' : /\.mp4/.test(src) ? 'mp4' : /m3u8/.test(src) ? 'hls' : src ? 'autre' : 'vide') + ' err=' + (v.error ? v.error.code : 0) : '') + ' started=' + playbackStarted + ' turbo=' + turboBusy }, '*');
+            }, 3000);
+        })();
 
         function findVideo() { return document.querySelector('video'); }
 
@@ -139,9 +167,13 @@
         }
 
         let autoUnmuteAttempted = false;
-        function tryAutoUnmute(video, force) {
+        function tryAutoUnmute(video, force, userGesture) {
             if (autoUnmuteAttempted && !force) return;
             autoUnmuteAttempted = true;
+            // v7.22.1 : un vrai clic est un geste utilisateur, Chrome n'en refuse pas le son : rien a rattraper. Avant, la garde
+            // ci-dessous relancait la lecture (et remettait muet) si la video se mettait en pause dans les 350 ms, donc le clic
+            // fait pour METTRE EN PAUSE etait annule (« la pause se retire toute seule », 5-6 clics de suite : bascule muet/son).
+            if (userGesture) { try { video.muted = false; } catch (e) {} return; }
             let recovered = false;
             function recoverIfPaused() {
                 if (recovered || !video.paused) return;
@@ -175,7 +207,7 @@
             const now = Date.now();
             if (now - lastRealUnmuteAttempt < 1000) return;
             lastRealUnmuteAttempt = now;
-            tryAutoUnmute(video, true);
+            tryAutoUnmute(video, true, true);
         }, true);
 
         // Raccourcis (v7.11) : le focus est souvent DANS le lecteur, ou la page ne voit pas le clavier -> on relaie N / P / S / Echap au calque.
@@ -191,13 +223,13 @@
         // tire en morceaux Range paralleles, assemble en Blob puis donne a la balise video (la pile media de Chrome,
         // qui gelait, n'est plus en cause). v7.18.0 : si l'episode a deja ete telecharge par l'iframe de prechargement
         // (turboAsk), on reprend son Blob. Echec (CORS, taille, delai) -> lecture normale.
-        let turboBusy = false;
+        let turboBusy = false, turboDoneAt = 0;
         function turboLoad(video) {
             if (!TURBO_ENABLED || !/odysee\.com$/.test(location.hostname)) return;
             let tries = 0;
             const iv = setInterval(() => {
                 const src = video.currentSrc || '';
-                if (++tries > 120) { clearInterval(iv); return; }
+                if (++tries > 120) { clearInterval(iv); window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*'); return; } // v7.18.4 : pas un MP4 direct : on laisse quand meme demarrer le prechargement du suivant
                 if (!/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src)) return;
                 clearInterval(iv);
                 turboRun(video, src);
@@ -207,12 +239,18 @@
             const L = (m) => console.log('[AnimeTracker v6] (turbo) ' + m);
             turboBusy = true;
             const wasPlaying = !video.paused;
-            const giveUp = (why) => { turboBusy = false; L('abandon : ' + why + ' -> lecture normale'); if (wasPlaying) video.play().catch(() => {}); };
+            const giveUp = (why) => { turboBusy = false; L('abandon : ' + why + ' -> lecture normale'); video.play().catch(() => {}); window.parent.postMessage({ type: MSG_PREFIX + 'host-error', kind: 'turbo', why: String(why).slice(0, 120), host: location.hostname }, '*'); window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*'); }; // v7.24.1 : on relance TOUJOURS la lecture (avant : seulement si elle tournait deja -> video restee en pause, minuteur de demarrage, faux « indisponible ») ; v7.18.4 : le suivant se precharge meme apres un echec
             try {
                 video.pause();
                 let url = await turboAsk(turboKey(src), L);
-                if (url) L('episode deja telecharge par le prechargement -> lecture depuis la memoire');
-                else {
+                if (url) {
+                    L('episode deja telecharge par le prechargement -> lecture depuis la memoire');
+                    // v7.18.3 : l'URL blob: appartient a l'iframe de prechargement, retiree 90 s apres le debut de l'episode : elle serait alors
+                    // revoquee et les sauts vers une zone non lue ne pourraient plus relire le fichier. On en refait une URL a NOUS
+                    // (meme donnees, pas de copie en memoire : fetch(blob:).blob() partage le contenu).
+                    try { url = URL.createObjectURL(await (await fetch(url)).blob()); } catch (e) { L('copie de l\'URL du prechargement impossible (' + e + ') : URL d\'origine gardee'); }
+                } else {
+                    L('aucun episode pret chez le prechargement (pas de reponse, ou jamais demarre) -> telechargement normal');
                     const blob = await turboFetch(src, L, (pct) => window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'buffering', pct: pct }, '*'));
                     url = URL.createObjectURL(blob);
                 }
@@ -220,7 +258,7 @@
                 const nowT = video.currentTime, play = wasPlaying || !video.paused;
                 video.addEventListener('loadedmetadata', () => {
                     try { if (nowT > 1) video.currentTime = nowT; } catch (e) {}
-                    turboBusy = false;
+                    turboBusy = false; turboDoneAt = Date.now();
                     if (play) video.play().catch(() => {});
                     window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*');
                 }, { once: true });
@@ -228,7 +266,7 @@
                     L('lecture depuis la memoire impossible -> flux d\'origine');
                     const t = video.currentTime;
                     video.addEventListener('loadedmetadata', () => { try { video.currentTime = t; } catch (e) {} video.play().catch(() => {}); }, { once: true });
-                    video.src = src; video.load(); turboBusy = false;
+                    video.src = src; video.load(); turboBusy = false; window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*');
                 }, { once: true });
                 video.src = url;
             } catch (e) { giveUp(String(e)); }
@@ -274,6 +312,37 @@
             video.addEventListener('seeking', () => {
                 if (video.currentTime > 1) window.parent.postMessage({ type: MSG_PREFIX + 'position', t: video.currentTime, d: video.duration }, '*');
             });
+            // v7.18.2 : journal de fluidite (console, filtre « fluidite ») : duree de chaque saut, images perdues, attentes de donnees.
+            // Sert a savoir si une gene vient du saut lui-meme, du prechargement de l'episode suivant (< 150 s apres le turbo) ou de la source.
+            const FL = (m) => console.log('[AnimeTracker v6] (fluidite) ' + m);
+            const dropped = () => { try { return video.getVideoPlaybackQuality().droppedVideoFrames; } catch (e) { return 0; } };
+            let seekT0 = 0, waitT0 = 0;
+            const ctx = () => (/^blob:/.test(video.currentSrc || '') ? 'memoire' : 'direct') + ', ' + (turboDoneAt ? Math.round((Date.now() - turboDoneAt) / 1000) + ' s apres le turbo' : 'sans turbo');
+            video.addEventListener('seeking', () => { seekT0 = performance.now(); });
+            video.addEventListener('seeked', () => {
+                const ms = Math.round(performance.now() - seekT0), d0 = dropped(), t = video.currentTime.toFixed(0);
+                FL('saut a ' + t + ' s : ' + ms + ' ms (' + ctx() + ')');
+                setTimeout(() => FL('saut a ' + t + ' s, 5 s plus tard : images perdues +' + (dropped() - d0) + ', readyState ' + video.readyState), 5000);
+            });
+            video.addEventListener('waiting', () => { waitT0 = performance.now(); });
+            video.addEventListener('playing', () => { if (waitT0) { const ms = Math.round(performance.now() - waitT0); waitT0 = 0; if (ms > 150) FL('attente de donnees ' + ms + ' ms a ' + video.currentTime.toFixed(0) + ' s (' + ctx() + ')'); } });
+            // v7.22 : mesures de qualite (resolution reelle, images perdues, tampon, pauses) envoyees au recepteur local
+            // _outils/surveille-extensions/qualite.py (127.0.0.1:8788). Muet si ce serveur n'est pas lance (sonde toutes les 30 s).
+            (function qualiteLog() {
+                let on = false, lastProbe = 0;
+                const snap = () => {
+                    const q = (video.getVideoPlaybackQuality && video.getVideoPlaybackQuality()) || {}, b = video.buffered, u = video.currentSrc || '';
+                    return { ep: location.pathname, t: +video.currentTime.toFixed(1), w: video.videoWidth, h: video.videoHeight, drop: q.droppedVideoFrames, tot: q.totalVideoFrames,
+                        ahead: b.length ? +(b.end(b.length - 1) - video.currentTime).toFixed(1) : 0, paused: video.paused, rs: video.readyState,
+                        src: /^blob:/.test(u) ? 'memoire' : /\.m3u8/.test(u) ? 'hls' : /\.mp4/.test(u) ? 'mp4' : '?' };
+                };
+                const send = (ev) => { try { GM_xmlhttpRequest({ method: 'POST', url: 'http://127.0.0.1:8788/q', headers: { 'X-VC-Client': '1' }, data: JSON.stringify(Object.assign({ ev: ev }, snap())), timeout: 3000, onerror: () => { on = false; }, ontimeout: () => { on = false; } }); } catch (e) { on = false; } };
+                ['pause', 'play', 'waiting', 'seeking', 'ended'].forEach((ev) => video.addEventListener(ev, () => { if (on) send(ev); }));
+                setInterval(() => {
+                    if (on) send('tick');
+                    else if (Date.now() - lastProbe > 30000) { lastProbe = Date.now(); try { GM_xmlhttpRequest({ method: 'GET', url: 'http://127.0.0.1:8788/ping', headers: { 'X-VC-Client': '1' }, timeout: 2000, onload: (r) => { on = r.status === 200; }, onerror: () => {}, ontimeout: () => {} }); } catch (e) {} }
+                }, 5000);
+            })();
             video.addEventListener('timeupdate', () => {
                 const now = Date.now();
                 if (now - lastPositionPost > 5000) {
@@ -412,9 +481,57 @@
         });
     }
 
+    // v7.25.0 : plancher de qualite HLS. Odysee joue ses flux avec hls.js (instance non accessible) : on filtre donc la liste des
+    // qualites (playlist maitresse .m3u8) AVANT que le lecteur la lise. Les variantes < minH sont retirees ; s'il n'en reste aucune
+    // >= minH, la playlist est laissee intacte. Sans effet sur un MP4 direct (une seule qualite).
+    function hlsKeepHd(txt, minH) {
+        if (typeof txt !== 'string' || txt.indexOf('#EXT-X-STREAM-INF') < 0) return txt;
+        const heightOf = (l) => { const m = /RESOLUTION=\d+x(\d+)/i.exec(l); return m ? +m[1] : Infinity; }; // pas de resolution declaree -> gardee
+        const lines = txt.split(/\r?\n/);
+        if (!lines.some((l) => /^#EXT-X-STREAM-INF/.test(l) && heightOf(l) >= minH)) return txt;
+        const out = []; let skip = false;
+        for (const l of lines) {
+            if (/^#EXT-X-STREAM-INF/.test(l)) { skip = heightOf(l) < minH; if (skip) continue; }
+            else if (/^#EXT-X-I-FRAME-STREAM-INF/.test(l)) { if (heightOf(l) < minH) continue; }
+            else if (skip && l.trim() && l[0] !== '#') { skip = false; continue; } // URI de la variante retiree
+            out.push(l);
+        }
+        return out.join('\n');
+    }
+    function installHlsFloor(minH) {
+        const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window;
+        const L = (m) => console.log('[AnimeTracker v6] (qualite) ' + m);
+        try {
+            const f0 = W.fetch;
+            if (typeof f0 === 'function') W.fetch = function () {
+                return f0.apply(this, arguments).then((r) => {
+                    try {
+                        if (!/m3u8/i.test(r.url || '') && !/mpegurl/i.test(r.headers.get('content-type') || '')) return r;
+                        return r.clone().text().then((t) => { const n = hlsKeepHd(t, minH); if (n === t) return r; L('fetch : qualites < ' + minH + 'p retirees'); return new Response(n, { status: r.status, statusText: r.statusText, headers: r.headers }); }).catch(() => r);
+                    } catch (e) { return r; }
+                });
+            };
+            const X = W.XMLHttpRequest && W.XMLHttpRequest.prototype, o0 = X && X.open;
+            if (o0) X.open = function (m, url) {
+                try {
+                    if (/m3u8/i.test(String(url))) this.addEventListener('readystatechange', () => {
+                        if (this.readyState !== 4 || this.__vcFloor || (this.responseType && this.responseType !== 'text')) return;
+                        this.__vcFloor = true;
+                        const t = this.responseText, n = hlsKeepHd(t, minH);
+                        if (n !== t) { L('xhr : qualites < ' + minH + 'p retirees'); Object.defineProperty(this, 'responseText', { get: () => n }); Object.defineProperty(this, 'response', { get: () => n }); }
+                    });
+                } catch (e) { /* playlist laissee telle quelle */ }
+                return o0.apply(this, arguments);
+            };
+        } catch (e) { L('plancher non installe : ' + e); }
+    }
+
     function runInsidePlayerFrame_odysee() {
+        installHlsFloor(720); // v7.25.0
         runInsidePlayerFrameGeneric({
             label: 'Odysee',
+            // v7.24.2 : le bouton lecture d'Odysee n'apparait parfois qu'apres 10 s (profil neuf, bandeau de consentement, API lente) ; avant : abandon apres 20 x 0,5 s
+            autoClickIntervalMs: 1000, autoClickMaxAttempts: 120,
             playSelectors: ['button.button--play', '.button--play', 'button[aria-label="Jouer "]', 'button[aria-label="Jouer"]', 'button[aria-label="Play"]'],
         });
     }
@@ -557,6 +674,7 @@
             }
         }
         if (!total) throw new Error('taille inconnue (HTTP ' + r0.status + ')');
+        if (total > TURBO_MAX_BYTES) throw new Error('fichier trop lourd (' + Math.round(total / 1048576) + ' Mo) : garde memoire, lecture normale');
         const n = Math.ceil(total / CHUNK), parts = new Array(n);
         let next = 0, done = 0, loaded = 0, failed = null, lastLog = 0;
         L('debut : ' + (total / 1048576).toFixed(0) + ' Mo en ' + n + ' morceaux, ' + PAR + ' connexions');
@@ -598,6 +716,7 @@
                 const d = e.data || {};
                 if (d.a !== key) return;
                 if (d.url) end(d.url);
+                else if (d.fail) end(null); // v7.18.4 : prechargement abandonne : inutile d'attendre 200 s
                 else if (d.pending && !pending) { pending = true; clearTimeout(t1); L('episode en cours de telechargement par le prechargement : attente'); t2 = setTimeout(() => end(null), 200000); }
             };
             bc.postMessage({ q: key });
@@ -610,9 +729,9 @@
     function runPreloadFrame() {
         const L = (m) => console.log('[AnimeTracker v6] (turbo suivant) ' + m);
         L('demarre');
-        let n = 0, key = null, url = null;
+        let n = 0, key = null, url = null, fail = false;
         const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vc-turbo') : null;
-        if (bc) bc.onmessage = (e) => { const d = e.data || {}; if (d.q && d.q === key) bc.postMessage(url ? { a: key, url: url } : { a: key, pending: true }); };
+        if (bc) bc.onmessage = (e) => { const d = e.data || {}; if (d.q && d.q === key) bc.postMessage(url ? { a: key, url: url } : fail ? { a: key, fail: true } : { a: key, pending: true }); };
         const iv = setInterval(() => {
             const v = document.querySelector('video');
             if (v) {
@@ -621,7 +740,7 @@
                 if (/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src) && turboKey(src)) {
                     clearInterval(iv); key = turboKey(src);
                     v.pause(); try { v.removeAttribute('src'); v.load(); } catch (e) {}
-                    turboFetch(src, L, null).then((blob) => { url = URL.createObjectURL(blob); L('pret'); if (bc) bc.postMessage({ a: key, url: url }); }).catch((e) => L('abandon : ' + e));
+                    turboFetch(src, L, null).then((blob) => { url = URL.createObjectURL(blob); L('pret'); if (bc) bc.postMessage({ a: key, url: url }); }).catch((e) => { fail = true; L('abandon : ' + e); if (bc) bc.postMessage({ a: key, fail: true }); });
                     return;
                 }
                 if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }

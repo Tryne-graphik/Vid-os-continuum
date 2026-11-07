@@ -1,6 +1,24 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.25.0', ['Lecteur Odysee : qualité minimale 720p. Les qualités inférieures (144p, 360p…) sont retirées de la liste du flux avant que le lecteur la lise ; si le flux n’en propose aucune en 720p ou plus, il est laissé tel quel. Sans effet sur un fichier MP4 direct.']],
+            ['7.24.3', ['Recherche YouTube : chaque vidéo proposée est vérifiée pour le traducteur (piste de sous-titres chinoise présente). Badge « traduisible » ou « pas de piste chinoise » ; les vidéos sans piste sont écartées s’il en reste d’autres.']],
+            ['7.24.2', ['Correctif : le lecteur Odysee démarre même quand son bouton lecture n’apparaît qu’après plus de 10 s (avant : abandon du clic automatique, faux « Épisode indisponible » et lecture à lancer à la main) ; l’encadré disparaît dès que le lecteur répond.']],
+            ['7.24.1', ['Correctif : quand le mode turbo abandonne, la lecture est maintenant toujours relancée (avant, la vidéo pouvait rester en pause puis afficher un faux « Épisode indisponible ») ; la raison de l’abandon s’affiche dans le statut et dans « Copier le diagnostic ».']],
+            ['7.24.0', ['Fiabilité : bouton « Copier le diagnostic » et « Mode économe » (Plus > Diagnostic) ; message d’aide quand Odysee n’arrive pas à s’initialiser ; vidéo YouTube indisponible détectée ; résultats YouTube gardés 24 h ; sous-titres : voyant orange sans piste chinoise, plafond mensuel, journal du service.']],
+            ['7.23.1', ['Les chaînes YouTube masquées et le réglage « bascule automatique » sont maintenant inclus dans la sauvegarde / restauration.']],
+            ['7.23.0', ['Recherche YouTube : durée de l’épisode comparée (badge « durée identique », en tête de liste ; extraits trop courts écartés), durée affichée sur chaque résultat, recherche aussi avec les autres titres de la série (dont le chinois, « 第411集 » compris).', 'Recherche web : boutons Google, DuckDuckGo, Dailymotion et Bilibili (choix de la source et encadre d’erreur).']],
+            ['7.22.3', ['Plus de faux « Épisode indisponible » quand l’hébergeur est lent à démarrer mais que la vidéo joue déjà.']],
+            ['7.22.2', ['L’encadre « Épisode indisponible » (ou « La vidéo cale ») disparaît tout seul quand la vidéo repart, au lieu de rester affiché.']],
+            ['7.22.1', ['La pause ne se retire plus toute seule : un clic sur la vidéo pour la mettre en pause n’est plus annulé par la remise du son.']],
+            ['7.22.0', ['Mesure de qualité vidéo (résolution réelle, images perdues, pauses) envoyée à un outil local de diagnostic, seulement s’il est lancé ; sans effet sinon.']],
+            ['7.21.0', ['Case « Basculer automatiquement sur YouTube si la vidéo cale » dans le choix de source (Changer) : décochée, plus aucune bascule automatique vers YouTube.']],
+            ['7.20.0', ['Bouton « 🚫 Bloquer cette chaîne » dans la barre du lecteur pendant une vidéo YouTube : la chaîne est bannie pour toujours (plus proposée, plus de bascule automatique) et tu reviens au lecteur du site.']],
+            ['7.19.1', ['Masquer la chaîne YouTube en cours de lecture te ramène aussitôt au lecteur du site et supprime la bascule automatique vers elle.']],
+            ['7.19.0', ['Recherche YouTube : une croix ✕ sur chaque résultat masque définitivement cette chaîne (lien « tout réafficher » en bas de la liste).']],
+            ['7.18.4', ['Revue complète du code : la chaîne de préchargement ne s’arrête plus quand un épisode n’est pas en turbo ou que le turbo échoue (cause probable du « il faut réattendre après plusieurs épisodes »), et un préchargement abandonné n’impose plus 200 s d’attente au lecteur.']],
+            ['7.18.3', ['Épisode servi par le préchargement : le lecteur refait sa propre URL du fichier (celle de l’iframe cachée est supprimée 90 s après le début, ce qui pouvait bloquer les sauts), et la console dit si le préchargement était prêt.']],
+            ['7.18.2', ['Diagnostic : la console (filtre « fluidite ») donne la durée de chaque saut, les images perdues et les attentes de données, pour trouver d’où vient une gêne.']],
             ['7.18.1', ['Saut d’intro immédiat quand l’épisode est lu depuis la mémoire (turbo) ; l’attente d’une lecture stable ne sert plus que pour la lecture normale. Le saut attend aussi la fin du téléchargement turbo.']],
             ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
             ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
@@ -152,6 +170,49 @@
             if (x) x.addEventListener('click', hide);
         }
 
+        // v7.24 : diagnostic a copier (un seul message au lieu de plusieurs captures) + mode econome (memoire)
+        function diagSectionHtml(prefix) {
+            return menuItem('diag', 'Diagnostic',
+                '<button id="' + prefix + '-diag-copy" title="Copie l\'etat du lecteur (version, source, erreurs, service de sous-titres) a coller dans la conversation">Copier le diagnostic</button>' +
+                '<label class="vc-track vc-small" title="Pas de prechargement de l\'episode suivant : moins de memoire utilisee (automatique si le navigateur annonce 4 Go de RAM ou moins)"><input type="checkbox" id="' + prefix + '-eco"' + (GM_getValue('ecoMemoire', false) === true ? ' checked' : '') + '><span class="off">Mode econome</span><span class="on">&#10003; Mode econome</span></label>' +
+                '<span id="' + prefix + '-diag-note" class="vc-note"></span>');
+        }
+        async function collectDiagnostic() {
+            const L = [];
+            L.push('Video Continuum ' + ((typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?') + ' | ' + navigator.userAgent);
+            L.push('Page : ' + location.href);
+            if (currentEpisode) L.push('Episode : ' + currentEpisode.siteLabel + ' / ' + currentEpisode.seriesName + ' / ep ' + currentEpisode.episodeNumber);
+            let src = '?';
+            try { src = ytActive ? 'YouTube' : (overlayEls ? hostOf(overlayEls.playerFrame.src) + ' (lecteur ' + (playerCandidateIndex + 1) + '/' + playerCandidates.length + ')' : 'lecteur ferme'); } catch (e) {}
+            L.push('Source : ' + src + ' | lecture en cours : ' + (playerPlaying ? 'oui' : 'non'));
+            L.push('Statut : ' + (lastStatusText || '(vide)'));
+            L.push('Etat de la video (iframe) : ' + (lastVState || 'aucun message recu'));
+            L.push('Derniere erreur lue dans le lecteur : ' + (lastHostError || 'aucune'));
+            L.push('Reglages : bascule auto YouTube ' + (isYtAutoSwitch() ? 'oui' : 'non') + ' | chaines masquees ' + Object.keys(ytBlocked()).length + ' | mode econome ' + (isEcoMemory() ? 'oui' : 'non') + ' (RAM annoncee : ' + (navigator.deviceMemory || '?') + ' Go)');
+            try {
+                const r = await gmRequest({ method: 'GET', url: SUBS_URL + 'status', timeout: 2500 });
+                const st = JSON.parse(r.responseText);
+                L.push('Service de sous-titres : en marche | cle ' + (st.key ? 'oui' : 'NON') + ' | echecs : ' + (st.jobs.filter((j) => j.failed).map((j) => j.err.slice(-100)).join(' / ') || 'aucun') + ' | cout du mois ' + (st.usage ? st.usage.usd.toFixed(2) : '?') + ' $' + (st.cap ? ' / plafond ' + st.cap + ' $' : ''));
+            } catch (e) { L.push('Service de sous-titres : eteint ou injoignable'); }
+            return L.join(String.fromCharCode(10));
+        }
+        function bindDiagSection(container, prefix) {
+            const btn = container.querySelector('#' + prefix + '-diag-copy'), note = container.querySelector('#' + prefix + '-diag-note'), eco = container.querySelector('#' + prefix + '-eco');
+            if (eco) eco.addEventListener('change', () => { GM_setValue('ecoMemoire', eco.checked); if (note) note.textContent = eco.checked ? 'Mode econome actif (prochain episode).' : 'Mode econome coupe.'; });
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+                const text = await collectDiagnostic();
+                let ok = false;
+                try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+                    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+                    document.body.appendChild(ta); ta.select();
+                    try { ok = document.execCommand('copy'); } catch (e2) {}
+                    ta.remove();
+                }
+                if (note) note.textContent = ok ? 'Diagnostic copie : colle-le dans la conversation.' : 'Copie impossible : ouvre la console (F12).';
+                if (!ok) console.log('[AnimeTracker v6] diagnostic :' + String.fromCharCode(10) + text);
+            });
+        }
         function bindIncidentSection(container, prefix) {
             const body = container.querySelector('#' + prefix + '-fb-body');
             const sendBtn = container.querySelector('#' + prefix + '-fb-send');

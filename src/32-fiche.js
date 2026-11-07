@@ -260,7 +260,7 @@
         function applyLoadedEpisode(info, pushHistory, skipYoutubeLookup) {
             if (!info) throw new Error('episode introuvable ou aucun lecteur compatible pour cet episode');
             // Serie passee sur YouTube : chercher d'abord cet episode la-bas.
-            if (!skipYoutubeLookup && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
+            if (!skipYoutubeLookup && isYtAutoSwitch() && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
                 setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube...');
                 findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber), seriesSeason(info))
                     .then((hit) => { if (hit) storeYoutubeHit(info, hit); else console.log('[AnimeTracker v6] YouTube : episode ' + info.episodeNumber + ' introuvable sur la chaine, source du site'); })

@@ -130,5 +130,8 @@
     const PLAYER_FRAME_NAME = 'continuum-player';
     const PRELOAD_FRAME_NAME = 'continuum-preload';
     const TURBO_ENABLED = true; // v7.17.0 : telechargement parallele du MP4 Odysee (test) ; false pour le couper
+    // v7.24 : mode econome = pas de prechargement de l'episode suivant (deux fichiers de ~720 Mo en memoire sinon) ; automatique si le navigateur annonce <= 4 Go de RAM
+    function isEcoMemory() { try { return GM_getValue('ecoMemoire', false) === true || (navigator.deviceMemory > 0 && navigator.deviceMemory <= 4); } catch (e) { return false; } }
+    const TURBO_MAX_BYTES = 1300 * 1048576; // fichier plus lourd : pas de turbo (lecture normale)
     const PRELOAD_ENABLED = true; // v7.18.0 : telechargement turbo de l episode suivant en arriere-plan (ancien test de prechargement par lecture : abandonne) ; false pour couper
 

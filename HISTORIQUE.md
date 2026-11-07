@@ -1500,3 +1500,61 @@ Essais 7.17.2/7.17.3 : 3 episodes froids en 96-136 s a 29-36 Mb/s, sauts instant
 
 ## 2026-11-05 - v7.18.1 : saut d'intro immediat depuis la memoire
 Avec le turbo (blob: en memoire) les sauts sont instantanes : applyIntroSkipIfNeeded saute des que readyState>=3 si currentSrc est un blob:. Attente de lecture stable (8 s d'avance, 4 s) gardee pour la lecture normale (fichier froid : un saut precoce bloquait le lecteur). Correctif au passage : le minuteur d'attente ne declenche plus son saut 'abandon apres 90 s' pendant le telechargement turbo (video en pause voulue, turboBusy).
+
+
+## 2026-11-05 - v7.18.2 : journal de fluidite (diagnostic)
+L'utilisateur a l'impression de moins de fluidite lors de sauts avant/arriere depuis 7.18.0 (prechargement de l'episode suivant) / 7.18.1 (saut d'intro immediat). Mesure systeme : Chrome 2,5 Go, 44 Go de RAM libres, GPU 2 % : pas de manque de memoire. Console non lisible depuis ici. Ajout : '(fluidite)' = duree seeking->seeked de chaque saut, images perdues (getVideoPlaybackQuality) a +5 s, attentes 'waiting' > 150 ms, avec source (memoire/direct) et secondes depuis le turbo (< ~150 s = prechargement probablement en cours). Aucun changement de comportement.
+
+
+## 2026-11-05 - v7.18.3 : URL du prechargement refaite dans le lecteur
+Retour utilisateur : au bout de plusieurs episodes enchaines, il faut de nouveau attendre le chargement complet ; gene de fluidite apres un certain temps (F5 la supprime). Mesure pendant la gene : Chrome 2,9 Go, processus principal 791 Mo (1 episode en memoire, pas de fuite), reseau 0, CPU 6 %. Defaut probable relu dans le code : l'URL blob: d'un episode servi par le prechargement appartient a l'iframe cachee, retiree 90 s apres le 'ready' ; une URL blob: est revoquee avec son document, donc les nouvelles lectures par plages (sauts vers une zone non lue) peuvent echouer. Correctif : fetch(blob:).blob() puis createObjectURL dans le lecteur (donnees partagees, pas de copie). Journal : la console dit si le prechargement etait pret. NON verifie sur l'ecran de l'utilisateur ; cause du « re-attendre » a un certain episode non tranchee (prechargement non pret ? episode non MP4 direct ? : lire les lignes '(turbo suivant)').
+
+## 7.18.4 (2026-11-05) - revue complete
+- turbo-done est maintenant envoye aussi apres un abandon du turbo, une erreur de lecture memoire, ou un episode qui n est pas un MP4 direct : la chaine de prechargement ne se coupe plus (hypothese pour "reattendre apres N episodes").
+- Prechargement en echec : le lecteur recoit {fail} et telecharge tout de suite, au lieu d attendre 200 s en pause.
+- Non corriges (mineurs) : course si le lecteur demande avant que le prechargement connaisse sa cle (double telechargement), pic memoire parts+Blob, preloadedEmbed non retente.
+
+## 7.19.0 (2026-11-06) - chaines YouTube masquables
+Demande : la recherche YouTube d'un episode (Ni Tian Zhizun E388/E389) propose de mauvaises sources. Une croix sur chaque resultat du choix de source masque la CHAINE (GM `youtubeBlockedChannels`, globale, id->nom) ; elle est filtree dans searchYoutubeForEpisode et son association a la serie est effacee si c'etait elle. Lien « N chaine(s) masquee(s) - tout reafficher » sous la liste. NON verifie a l'ecran (juste build + syntaxe).
+
+## 7.19.1 (2026-11-06) - masquer = quitter YouTube
+Retour utilisateur (E388) : rien ne charge (Odysee) puis bascule automatique sur une video YouTube mauvaise (chaine retenue pour la serie : stall -> switchToYoutube, ou youtubeMode de la serie). Masquer la chaine retenue efface maintenant l'association ET, si une video YouTube est active, appelle leaveYoutubeMode (mode + liens memorises de la serie oublies). Non reproduit chez moi : E388 se lit dans mon Chrome. NON verifie a l'ecran.
+
+## 7.20.0 (2026-11-06) - bouton « Bloquer cette chaine »
+Demande utilisateur : la meme video YouTube mauvaise revient. Bouton #ed-yt-block (src/30-lecteur.js, a cote de « Source principale », visible seulement quand ytActive) : blockYoutubeChannel sur l'association de la serie, puis leaveYoutubeMode. Liste globale GM `youtubeBlockedChannels` ; deblocage = lien « tout reafficher » du choix de source. NON verifie a l'ecran.
+
+## 7.21.0 (2026-11-06) - case « bascule automatique YouTube »
+GM `ytAutoSwitch` (defaut vrai), case dans showSourceChooser. Decochee : plus de bascule sur video qui cale (30-lecteur, ytReplacement) ni de recherche automatique pour une serie passee sur YouTube (32-fiche, applyLoadedEpisode). Les liens YouTube deja memorises pour un episode precis restent utilises (choix explicites passes). Pas dans BACKUP_PREFS (sauvegarde) : a ajouter si voulu. NON verifie a l'ecran.
+
+## 7.22.0 (2026-11-06) - mesures de qualite pour diagnostic
+Contexte : 144p, pause qui saute, baisse de qualite sur E410/E411 (Chrome profil tryne31, Firefox OK). Dans le lecteur Odysee : releve toutes les 5 s + evenements (pause, play, waiting, seeking, ended) de videoWidth x videoHeight, images perdues, tampon, readyState, type de source, POST sur http://127.0.0.1:8788/q avec en-tete X-VC-Client. Recepteur : G:/DevProject/_outils/surveille-extensions/qualite.py (signale resolution < 720p, changement de resolution, « REPRISE AUTO » = play < 3 s apres une pause). Muet si le serveur n'est pas lance (sonde GET /ping toutes les 30 s). Recepteur teste (faux POST) ; script NON verifie dans un vrai lecteur.
+
+## 7.22.1 (2026-11-07) - la pause ne se retire plus
+Retour utilisateur : « 5 ou 6 clics plus la barre espace, la pause fait sa vie ». Cause lue dans le code (02-iframe-lecteur.js) : le gestionnaire de clic (capture) appelle tryAutoUnmute(force) tant que la video est muette ; sa garde recoverIfPaused relance play() en remettant muet si une pause survient dans les 350 ms, donc le clic fait pour mettre en pause etait annule, et chaque clic basculait muet/son. Correctif : un vrai clic (geste utilisateur) ne declenche plus cette garde (parametre userGesture). Les appels sans geste (demarrage auto, messages) gardent la garde. NON verifie dans un vrai lecteur ; la barre espace n'est pas geree par le script (Odysee), a recontroler.
+
+## 7.22.2 (2026-11-07) - l'encadre d'erreur se masque quand la video repart
+Retour utilisateur : un changement de qualite (menu Odysee) a affiche « Episode indisponible sur Esprit Donghua » puis l'episode a redemarre, mais l'encadre restait a l'ecran alors que la video jouait. Message 'playstate' playing=true : masque l'encadre si data-kind = dead|stall (pas 'sources'). Cause du declenchement de l'encadre (minuteur 25 s sans 'ready', via tryNextPlayer) et du « reset » apres changement de qualite : NON elucidee ; non verifie a l'ecran.
+
+## 7.22.3 (2026-11-07) - plus de faux « episode indisponible »
+Le minuteur de 25 s sans signal « ready » (armPlayerReadyTimer) est annule des que la video joue (message playstate) et tryNextPlayer ne fait rien si playerPlaying : un hebergeur lent (Odysee « prepare votre compte ») n'affiche plus l'encadre alors que la lecture a commence. NON verifie a l'ecran.
+
+## 7.23.0 (2026-11-07) - recherche d'episode amelioree
+Observe le 2026-11-07 (E411) : le filtre YouTube est correct, mais rien ne guide le choix. Ajouts : duree de reference (lecteur du site, sinon API Odysee resolve par le lien du lecteur) -> badge « duree identique » (±3 %, classe en tete), duree affichee, seuil d'ecart 0,75-1,3 (avant 0,5-1,6) ; titres alternatifs de la serie (span.alter de la page, memes serie) dont le chinois (ytTitleOk par inclusion, requete « <nom> EP n », titres « 第411集 ») ; boutons web Google, DuckDuckGo, Dailymotion, Bilibili (choix de source + encadre d'erreur). Teste : fonctions pures (node, 7 assertions). NON verifie a l'ecran.
+
+## 7.23.1 (2026-11-07) - sauvegarde : donnees ajoutees en 7.19-7.21
+Oubli releve pendant l'analyse de fiabilite (regle CLAUDE.md : toute donnee GM utilisateur va dans BACKUP_SETTINGS) : `youtubeBlockedChannels` (objet id de chaine UC... -> nom, filtre a l'import) et `ytAutoSwitch` (booleen) ajoutes a la sauvegarde / restauration. NON verifie par un export/import reel.
+
+## 7.24.0 (2026-11-07) - fiabilite (ANALYSE-FIABILITE.md)
+Points traites : #9 garde-fous memoire (mode econome `ecoMemoire`, automatique si deviceMemory <= 4 ; pas de turbo au-dela de 1300 Mo) ; #30 bouton « Copier le diagnostic » (Plus > Diagnostic, version, source, statut, derniere erreur du lecteur, reglages, service de sous-titres) ; #2 erreurs Odysee lues dans le lecteur (« resolve response », « preparer votre compte », fichier non charge) -> message d'aide ; #23 video YouTube indisponible (.ytp-error) -> choix de source ; #17 403/429 retenus 5 min (fetchPageHtml) ; #21 resultats YouTube gardes 24 h (30 recherches max) ; #20 « page YouTube illisible » / « ne repond pas » distingues de « zero resultat » ; #6 echec de l'API Odysee retenu 5 min ; #26 voyant orange « Pas de piste chinoise » ; #27 plafond mensuel du service (VC_PLAFOND_USD, 5 $ par defaut ; 402 au-dela) ; #25 lanceur : serve.log / serve.err.log + uncaughtException ; #12/13/15 `node tests/controle.js` (build, syntaxe, versions, cles GM vs sauvegarde, tests/unit.js, 15 verifications). Teste : tests/unit.js (15 ok). NON verifie a l'ecran : diagnostic, mode econome, detection des erreurs Odysee/YouTube, voyants. Le service en cours d'execution garde l'ancien code jusqu'a un redemarrage.
+
+## 7.24.1 (2026-11-07) - turbo abandonne : lecture relancee
+turboRun/giveUp ne relancait la lecture que si elle tournait deja (`wasPlaying`). Turbo met la video en pause ; s'il echoue vite (taille inconnue, fichier trop lourd, reseau) avant que la lecture ait demarre, la video restait en pause, `playbackStarted` jamais vrai : rechargement du watchdog puis `echec` -> faux « Episode indisponible ». Maintenant `video.play()` toujours. NON verifie en vrai. Intro/outro : meme cause suspectee (video jamais lancee) ; a confirmer. Cause de l'echec turbo inconnue : chercher `(turbo) abandon :` dans la console de l'iframe Odysee.
+
+## 7.24.2 (2026-11-07) - clic auto Odysee plus patient
+Cause trouvee (reproduite 1 fois sur Chrome neuf, E414) : le clic automatique sur le bouton lecture s'arretait apres 20 x 500 ms = 10 s ; Odysee (profil neuf / bandeau de consentement OneTrust / API lente) affiche son bouton plus tard -> aucune <video>, aucun « ready », minuteur de 25 s -> faux « indisponible » ; un clic manuel relancait tout. Odysee : 120 x 1 s. `ready` masque aussi l'encadre dead/stall. Le turbo ne demarre pas quand Odysee sert du HLS (blob), seulement pour un MP4 odycdn : normal. NON verifie sur ton profil.
+
+## 7.24.3 (2026-11-07) - recherche de remplacement : piste chinoise verifiee
+Le traducteur (traduire.js --src zh) echoue (« Aucune piste source ») sur une video sans sous-titres chinois (constat E411, video anglaise). `ytHasZhTrack(id)` lit `captionTracks` dans la page de chaque resultat (hors `translationLanguages`, qui liste des traductions automatiques et pas la langue d'origine) ; badge traduisible / pas de piste chinoise ; ecartees si une autre a la piste ; resultat memorise 24 h avec le cache. +2 tests. Page YouTube illisible -> inconnu (null), video gardee. NON verifie en vrai.
+
+## 7.25.0 (2026-11-08) - plancher de qualite 720p (Odysee)
+Demande utilisateur : jamais moins de 720p. Recherche : Odysee utilise hls.js (package.json odysee-frontend : hls.js ^1.6.7, @videojs/react 10 beta, p2p-media-loader-hlsjs), instance inaccessible -> l'ancienne API videojs qualityLevels ne s'applique pas. Solution defensive : hlsKeepHd() filtre la playlist maitresse .m3u8 (variantes RESOLUTION < 720 retirees) via crochets fetch + XMLHttpRequest installes au debut de runInsidePlayerFrame_odysee (installHlsFloor). Intacte si aucune variante >= 720p ; MP4 direct non concerne. Teste : hlsKeepHd (3 assertions, tests/unit.js). NON verifie dans un vrai lecteur : chercher `(qualite) fetch/xhr : qualites < 720p retirees` dans la console de l'iframe Odysee. Limite : le crochet s'installe a document-end (pas document-start) ; si la playlist est deja chargee avant, sans effet.

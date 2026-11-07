@@ -7,8 +7,10 @@
         });
     }
 
+    const failedPages = {}; // v7.24 : 403 / 429 (anti-bot, limite de debit) retenus 5 min : on ne redemande pas en rafale
     function fetchPageHtml(url, retriesLeft) {
         if (retriesLeft === undefined) retriesLeft = 1;
+        if (failedPages[url] && failedPages[url].until > Date.now()) return Promise.reject(new Error(failedPages[url].msg));
         // Meme site que la page : fetch() du navigateur, pas besoin d'@connect
         // (sites ajoutes par l'utilisateur, inconnus a l'avance - v6.23).
         let sameOrigin = false;
@@ -21,7 +23,9 @@
             if (res.status >= 500 && res.status < 600 && retriesLeft > 0) {
                 return new Promise((resolve) => setTimeout(resolve, 1000)).then(() => fetchPageHtml(url, retriesLeft - 1));
             }
-            throw new Error('Chargement de la page echoue, statut ' + res.status);
+            const err = new Error('Chargement de la page echoue, statut ' + res.status);
+            if (res.status === 403 || res.status === 429) failedPages[url] = { until: Date.now() + 300000, msg: err.message };
+            throw err;
         });
     }
 

@@ -5,6 +5,14 @@
 const http = require('http'), fs = require('fs'), path = require('path'), { spawn } = require('child_process');
 const MAX_JOBS = 2, jobs = new Map(); // id -> { p, err }
 const f = id => path.join(__dirname, id + '.fr.vtt');
+// v7.24 : plafond mensuel (variable VC_PLAFOND_USD, 5 $ par defaut ; 0 = pas de plafond) : plus de NOUVELLE traduction au-dela ; les deja traduites restent servies
+const CAP = process.env.VC_PLAFOND_USD === undefined ? 5 : Number(process.env.VC_PLAFOND_USD) || 0;
+function usageMois() { // tarif deepseek-flash heures pleines, cache rate (borne haute) : 0,30 $ / M en entree, 1,20 $ / M en sortie
+  let tokIn = 0, tokOut = 0; const mois = new Date().toISOString().slice(0, 7);
+  try { for (const l of fs.readFileSync(path.join(__dirname, 'usage.log'), 'utf8').split(String.fromCharCode(10))) { if (!l) continue; const x = JSON.parse(l); if (x.m === mois) { tokIn += x.i; tokOut += x.o; } } } catch (e) {}
+  return { tokIn, tokOut, usd: tokIn * 0.30 / 1e6 + tokOut * 1.20 / 1e6 };
+}
+process.on('uncaughtException', (e) => { console.error(new Date().toISOString(), e && e.stack || e); process.exit(1); }); // sortie redirigee vers serve.err.log par lanceur.ps1
 function start(id, t) {
   if (jobs.has(id)) return;
   const p = spawn(process.execPath, [path.join(__dirname, 'traduire.js'), 'https://www.youtube.com/watch?v=' + id, '--moteur', 'deepseek', '--src', 'zh', '--start', String(t)], { env: process.env });
@@ -21,16 +29,15 @@ http.createServer((q, r) => {
   if (u.pathname === '/stop' && q.method !== 'POST') { r.writeHead(405, h); return r.end('POST requis'); }
   if (u.pathname === '/status') { // état pour le panneau du userscript : traductions en cours (bloc N/total, secondes écoulées)
     const list = [...jobs].map(([k, x]) => { const m = [...x.err.matchAll(/bloc (\d+)\/(\d+)/g)].pop(); return { id: k, done: m ? +m[1] : 0, total: m ? +m[2] : 0, sec: Math.round((Date.now() - x.t0) / 1000), failed: !!x.failed, err: x.failed ? x.err : '' }; });
-    let tokIn = 0, tokOut = 0; const mois = new Date().toISOString().slice(0, 7); // tarif deepseek-flash heures pleines, cache raté (borne haute) : 0,30 $ / M en entrée, 1,20 $ / M en sortie
-    try { for (const l of fs.readFileSync(path.join(__dirname, 'usage.log'), 'utf8').split(String.fromCharCode(10))) { if (!l) continue; const x = JSON.parse(l); if (x.m === mois) { tokIn += x.i; tokOut += x.o; } } } catch (e) {}
-    h['Content-Type'] = 'application/json'; r.writeHead(200, h); return r.end(JSON.stringify({ apiVersion: 1, on: true, key: !!process.env.DEEPSEEK_API_KEY, jobs: list, usage: { tokIn, tokOut, usd: tokIn * 0.30 / 1e6 + tokOut * 1.20 / 1e6 } }));
+    const usage = usageMois();
+    h['Content-Type'] = 'application/json'; r.writeHead(200, h); return r.end(JSON.stringify({ apiVersion: 1, on: true, key: !!process.env.DEEPSEEK_API_KEY, jobs: list, usage: usage, cap: CAP }));
   }
   if (u.pathname === '/stop') { r.writeHead(200, h); r.end('stop'); for (const x of jobs.values()) x.p.kill(); return setTimeout(() => process.exit(0), 200); }
   if (u.pathname !== '/sub' || !/^[\w-]{11}$/.test(id)) { r.writeHead(400, h); return r.end('v invalide'); }
   if (fs.existsSync(f(id))) { r.writeHead(200, h); return r.end(fs.readFileSync(f(id))); }
   const j = jobs.get(id);
   if (j?.failed) { r.writeHead(500, h); return r.end(j.err); }
-  if (!j) { if (!process.env.DEEPSEEK_API_KEY) { r.writeHead(500, h); return r.end('DEEPSEEK_API_KEY absente'); } if (jobs.size >= MAX_JOBS) { r.writeHead(429, h); return r.end('trop de traductions en cours'); } start(id, Math.max(0, +u.searchParams.get('t') || 0)); }
+  if (!j) { if (!process.env.DEEPSEEK_API_KEY) { r.writeHead(500, h); return r.end('DEEPSEEK_API_KEY absente'); } if (CAP > 0 && usageMois().usd >= CAP) { r.writeHead(402, h); return r.end('plafond mensuel atteint'); } if (jobs.size >= MAX_JOBS) { r.writeHead(429, h); return r.end('trop de traductions en cours'); } start(id, Math.max(0, +u.searchParams.get('t') || 0)); }
   if (fs.existsSync(f(id) + '.part')) { r.writeHead(206, h); return r.end(fs.readFileSync(f(id) + '.part')); }
   r.writeHead(202, h); r.end('');
-}).listen(8787, '127.0.0.1', () => console.log('Sous-titres FR : http://127.0.0.1:8787/sub?v=<id>'));
+}).listen(8787, '127.0.0.1', () => console.log(new Date().toISOString(), 'Sous-titres FR : http://127.0.0.1:8787/sub?v=<id>' + (CAP > 0 ? ' (plafond ' + CAP + ' $/mois)' : '')));

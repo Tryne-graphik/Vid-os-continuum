@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Anime Tracker Continuum (v6)
 // @namespace    esprit-donghua-tracker-v6
-// @version      7.18.1
+// @version      7.25.0
 // @description  Suite de esprit-donghua-suivi-progression-v4 (v4 restait limite a esprit-donghua.xyz/Odysee) : meme principe (calque plein ecran, jamais recharge, iframe du lecteur natif pilotee par un second script injecte) mais etendu a 4 familles de sites - esprit-donghua.xyz (Odysee), animoflix.to (video.sibnet.ru), anime-sama.to (video.sibnet.ru) et odysee.com en navigation directe (playlist reconstruite via l'API publique Odysee) - avec UNE seule liste de suivi, groupee par site. Script independant de v4 (storage isole) : le fichier v4.36 reste intact sur le disque mais doit etre DESACTIVE dans Tampermonkey pour eviter un doublon de calque sur esprit-donghua.xyz.
 // @match        https://esprit-donghua.xyz/*
 // @match        https://odysee.com/*
@@ -163,6 +163,9 @@
     const PLAYER_FRAME_NAME = 'continuum-player';
     const PRELOAD_FRAME_NAME = 'continuum-preload';
     const TURBO_ENABLED = true; // v7.17.0 : telechargement parallele du MP4 Odysee (test) ; false pour le couper
+    // v7.24 : mode econome = pas de prechargement de l'episode suivant (deux fichiers de ~720 Mo en memoire sinon) ; automatique si le navigateur annonce <= 4 Go de RAM
+    function isEcoMemory() { try { return GM_getValue('ecoMemoire', false) === true || (navigator.deviceMemory > 0 && navigator.deviceMemory <= 4); } catch (e) { return false; } }
+    const TURBO_MAX_BYTES = 1300 * 1048576; // fichier plus lourd : pas de turbo (lecture normale)
     const PRELOAD_ENABLED = true; // v7.18.0 : telechargement turbo de l episode suivant en arriere-plan (ancien test de prechargement par lecture : abandonne) ; false pour couper
 
     // ================= Contexte : DANS l'iframe du lecteur =================
@@ -172,7 +175,7 @@
         // automatique y lancait une 2e lecture en arriere-plan (v6.13).
         // v7.18.0 : iframe cachee qui TELECHARGE l'episode suivant (turbo) pendant qu'on regarde le courant (voir 30-lecteur.js)
         if (window.name === PRELOAD_FRAME_NAME && location.hostname.indexOf('odysee.com') !== -1) { runPreloadFrame(); return; }
-        if (window.name !== PLAYER_FRAME_NAME) return;
+        if (window.name !== PLAYER_FRAME_NAME) { if (location.hostname.indexOf('odysee.com') !== -1) window.parent.postMessage({ type: MSG_PREFIX + 'vstate', s: 'iframe odysee SANS le bon nom (nom=' + window.name + ')' }, '*'); return; }
         if (location.hostname.indexOf('odysee.com') !== -1) { runInsidePlayerFrame_odysee(); return; }
         if (location.hostname.indexOf('sibnet.ru') !== -1) { runInsidePlayerFrame_sibnet(); return; }
         if (location.hostname.indexOf('ansembed.net') !== -1) { runInsidePlayerFrame_ansembed(); return; }
@@ -195,9 +198,37 @@
     function runInsidePlayerFrameGeneric(cfg) {
         console.log('[AnimeTracker v6] (' + cfg.label + ') script demarre');
 
+        // v7.24 : erreurs de l'hebergeur lues dans la page du lecteur (Odysee : « resolve response » / « preparer votre compte » / fichier non charge ;
+        // YouTube : video indisponible) -> un seul message par type vers la page, qui affiche une aide.
+        (function hostErrorWatch() {
+            const sent = {}; let n = 0;
+            const post = (k) => { if (sent[k]) return; sent[k] = true; window.parent.postMessage({ type: MSG_PREFIX + 'host-error', kind: k, host: location.hostname }, '*'); };
+            const iv = setInterval(() => {
+                if (++n > 80) { clearInterval(iv); return; }
+                if (/odysee\.com$/.test(location.hostname)) {
+                    const t = document.body ? document.body.textContent : '';
+                    if (/resolve response|pr[eé]parer votre compte|preparing your account/i.test(t)) post('init');
+                    else if (/[eé]chec du chargement du fichier|failed to load (the )?file/i.test(t)) post('file');
+                } else if (/youtube/.test(location.hostname)) {
+                    const e = document.querySelector('.ytp-error');
+                    if (e && e.offsetParent !== null) post('yt');
+                }
+            }, 3000);
+        })();
+
         let config = null;
         let outroSignalSent = false;
         let playbackStarted = false; // evenement 'play' reel, PAS juste "la balise <video> existe" (faux sur sibnet, ou elle existe des le depart)
+
+        // v7.24.1 : etat reel envoye a la page toutes les 3 s (affiche dans « Copier le diagnostic »), meme sans <video>
+        (function vstateWatch() {
+            let vn = 0;
+            const vIv = setInterval(() => {
+                if (++vn > 100) { clearInterval(vIv); return; }
+                const v = document.querySelector('video'), src = (v && v.currentSrc) || '';
+                window.parent.postMessage({ type: MSG_PREFIX + 'vstate', s: 'iframe ' + location.hostname + ' nom=' + window.name + ' video=' + (v ? 'oui' : 'NON') + (v ? ' paused=' + v.paused + ' t=' + v.currentTime.toFixed(1) + ' rs=' + v.readyState + ' src=' + (src.slice(0, 5) === 'blob:' ? 'blob' : /\.mp4/.test(src) ? 'mp4' : /m3u8/.test(src) ? 'hls' : src ? 'autre' : 'vide') + ' err=' + (v.error ? v.error.code : 0) : '') + ' started=' + playbackStarted + ' turbo=' + turboBusy }, '*');
+            }, 3000);
+        })();
 
         function findVideo() { return document.querySelector('video'); }
 
@@ -306,9 +337,13 @@
         }
 
         let autoUnmuteAttempted = false;
-        function tryAutoUnmute(video, force) {
+        function tryAutoUnmute(video, force, userGesture) {
             if (autoUnmuteAttempted && !force) return;
             autoUnmuteAttempted = true;
+            // v7.22.1 : un vrai clic est un geste utilisateur, Chrome n'en refuse pas le son : rien a rattraper. Avant, la garde
+            // ci-dessous relancait la lecture (et remettait muet) si la video se mettait en pause dans les 350 ms, donc le clic
+            // fait pour METTRE EN PAUSE etait annule (« la pause se retire toute seule », 5-6 clics de suite : bascule muet/son).
+            if (userGesture) { try { video.muted = false; } catch (e) {} return; }
             let recovered = false;
             function recoverIfPaused() {
                 if (recovered || !video.paused) return;
@@ -342,7 +377,7 @@
             const now = Date.now();
             if (now - lastRealUnmuteAttempt < 1000) return;
             lastRealUnmuteAttempt = now;
-            tryAutoUnmute(video, true);
+            tryAutoUnmute(video, true, true);
         }, true);
 
         // Raccourcis (v7.11) : le focus est souvent DANS le lecteur, ou la page ne voit pas le clavier -> on relaie N / P / S / Echap au calque.
@@ -358,13 +393,13 @@
         // tire en morceaux Range paralleles, assemble en Blob puis donne a la balise video (la pile media de Chrome,
         // qui gelait, n'est plus en cause). v7.18.0 : si l'episode a deja ete telecharge par l'iframe de prechargement
         // (turboAsk), on reprend son Blob. Echec (CORS, taille, delai) -> lecture normale.
-        let turboBusy = false;
+        let turboBusy = false, turboDoneAt = 0;
         function turboLoad(video) {
             if (!TURBO_ENABLED || !/odysee\.com$/.test(location.hostname)) return;
             let tries = 0;
             const iv = setInterval(() => {
                 const src = video.currentSrc || '';
-                if (++tries > 120) { clearInterval(iv); return; }
+                if (++tries > 120) { clearInterval(iv); window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*'); return; } // v7.18.4 : pas un MP4 direct : on laisse quand meme demarrer le prechargement du suivant
                 if (!/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src)) return;
                 clearInterval(iv);
                 turboRun(video, src);
@@ -374,12 +409,18 @@
             const L = (m) => console.log('[AnimeTracker v6] (turbo) ' + m);
             turboBusy = true;
             const wasPlaying = !video.paused;
-            const giveUp = (why) => { turboBusy = false; L('abandon : ' + why + ' -> lecture normale'); if (wasPlaying) video.play().catch(() => {}); };
+            const giveUp = (why) => { turboBusy = false; L('abandon : ' + why + ' -> lecture normale'); video.play().catch(() => {}); window.parent.postMessage({ type: MSG_PREFIX + 'host-error', kind: 'turbo', why: String(why).slice(0, 120), host: location.hostname }, '*'); window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*'); }; // v7.24.1 : on relance TOUJOURS la lecture (avant : seulement si elle tournait deja -> video restee en pause, minuteur de demarrage, faux « indisponible ») ; v7.18.4 : le suivant se precharge meme apres un echec
             try {
                 video.pause();
                 let url = await turboAsk(turboKey(src), L);
-                if (url) L('episode deja telecharge par le prechargement -> lecture depuis la memoire');
-                else {
+                if (url) {
+                    L('episode deja telecharge par le prechargement -> lecture depuis la memoire');
+                    // v7.18.3 : l'URL blob: appartient a l'iframe de prechargement, retiree 90 s apres le debut de l'episode : elle serait alors
+                    // revoquee et les sauts vers une zone non lue ne pourraient plus relire le fichier. On en refait une URL a NOUS
+                    // (meme donnees, pas de copie en memoire : fetch(blob:).blob() partage le contenu).
+                    try { url = URL.createObjectURL(await (await fetch(url)).blob()); } catch (e) { L('copie de l\'URL du prechargement impossible (' + e + ') : URL d\'origine gardee'); }
+                } else {
+                    L('aucun episode pret chez le prechargement (pas de reponse, ou jamais demarre) -> telechargement normal');
                     const blob = await turboFetch(src, L, (pct) => window.parent.postMessage({ type: MSG_PREFIX + 'load-status', stage: 'buffering', pct: pct }, '*'));
                     url = URL.createObjectURL(blob);
                 }
@@ -387,7 +428,7 @@
                 const nowT = video.currentTime, play = wasPlaying || !video.paused;
                 video.addEventListener('loadedmetadata', () => {
                     try { if (nowT > 1) video.currentTime = nowT; } catch (e) {}
-                    turboBusy = false;
+                    turboBusy = false; turboDoneAt = Date.now();
                     if (play) video.play().catch(() => {});
                     window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*');
                 }, { once: true });
@@ -395,7 +436,7 @@
                     L('lecture depuis la memoire impossible -> flux d\'origine');
                     const t = video.currentTime;
                     video.addEventListener('loadedmetadata', () => { try { video.currentTime = t; } catch (e) {} video.play().catch(() => {}); }, { once: true });
-                    video.src = src; video.load(); turboBusy = false;
+                    video.src = src; video.load(); turboBusy = false; window.parent.postMessage({ type: MSG_PREFIX + 'turbo-done' }, '*');
                 }, { once: true });
                 video.src = url;
             } catch (e) { giveUp(String(e)); }
@@ -441,6 +482,37 @@
             video.addEventListener('seeking', () => {
                 if (video.currentTime > 1) window.parent.postMessage({ type: MSG_PREFIX + 'position', t: video.currentTime, d: video.duration }, '*');
             });
+            // v7.18.2 : journal de fluidite (console, filtre « fluidite ») : duree de chaque saut, images perdues, attentes de donnees.
+            // Sert a savoir si une gene vient du saut lui-meme, du prechargement de l'episode suivant (< 150 s apres le turbo) ou de la source.
+            const FL = (m) => console.log('[AnimeTracker v6] (fluidite) ' + m);
+            const dropped = () => { try { return video.getVideoPlaybackQuality().droppedVideoFrames; } catch (e) { return 0; } };
+            let seekT0 = 0, waitT0 = 0;
+            const ctx = () => (/^blob:/.test(video.currentSrc || '') ? 'memoire' : 'direct') + ', ' + (turboDoneAt ? Math.round((Date.now() - turboDoneAt) / 1000) + ' s apres le turbo' : 'sans turbo');
+            video.addEventListener('seeking', () => { seekT0 = performance.now(); });
+            video.addEventListener('seeked', () => {
+                const ms = Math.round(performance.now() - seekT0), d0 = dropped(), t = video.currentTime.toFixed(0);
+                FL('saut a ' + t + ' s : ' + ms + ' ms (' + ctx() + ')');
+                setTimeout(() => FL('saut a ' + t + ' s, 5 s plus tard : images perdues +' + (dropped() - d0) + ', readyState ' + video.readyState), 5000);
+            });
+            video.addEventListener('waiting', () => { waitT0 = performance.now(); });
+            video.addEventListener('playing', () => { if (waitT0) { const ms = Math.round(performance.now() - waitT0); waitT0 = 0; if (ms > 150) FL('attente de donnees ' + ms + ' ms a ' + video.currentTime.toFixed(0) + ' s (' + ctx() + ')'); } });
+            // v7.22 : mesures de qualite (resolution reelle, images perdues, tampon, pauses) envoyees au recepteur local
+            // _outils/surveille-extensions/qualite.py (127.0.0.1:8788). Muet si ce serveur n'est pas lance (sonde toutes les 30 s).
+            (function qualiteLog() {
+                let on = false, lastProbe = 0;
+                const snap = () => {
+                    const q = (video.getVideoPlaybackQuality && video.getVideoPlaybackQuality()) || {}, b = video.buffered, u = video.currentSrc || '';
+                    return { ep: location.pathname, t: +video.currentTime.toFixed(1), w: video.videoWidth, h: video.videoHeight, drop: q.droppedVideoFrames, tot: q.totalVideoFrames,
+                        ahead: b.length ? +(b.end(b.length - 1) - video.currentTime).toFixed(1) : 0, paused: video.paused, rs: video.readyState,
+                        src: /^blob:/.test(u) ? 'memoire' : /\.m3u8/.test(u) ? 'hls' : /\.mp4/.test(u) ? 'mp4' : '?' };
+                };
+                const send = (ev) => { try { GM_xmlhttpRequest({ method: 'POST', url: 'http://127.0.0.1:8788/q', headers: { 'X-VC-Client': '1' }, data: JSON.stringify(Object.assign({ ev: ev }, snap())), timeout: 3000, onerror: () => { on = false; }, ontimeout: () => { on = false; } }); } catch (e) { on = false; } };
+                ['pause', 'play', 'waiting', 'seeking', 'ended'].forEach((ev) => video.addEventListener(ev, () => { if (on) send(ev); }));
+                setInterval(() => {
+                    if (on) send('tick');
+                    else if (Date.now() - lastProbe > 30000) { lastProbe = Date.now(); try { GM_xmlhttpRequest({ method: 'GET', url: 'http://127.0.0.1:8788/ping', headers: { 'X-VC-Client': '1' }, timeout: 2000, onload: (r) => { on = r.status === 200; }, onerror: () => {}, ontimeout: () => {} }); } catch (e) {} }
+                }, 5000);
+            })();
             video.addEventListener('timeupdate', () => {
                 const now = Date.now();
                 if (now - lastPositionPost > 5000) {
@@ -579,9 +651,57 @@
         });
     }
 
+    // v7.25.0 : plancher de qualite HLS. Odysee joue ses flux avec hls.js (instance non accessible) : on filtre donc la liste des
+    // qualites (playlist maitresse .m3u8) AVANT que le lecteur la lise. Les variantes < minH sont retirees ; s'il n'en reste aucune
+    // >= minH, la playlist est laissee intacte. Sans effet sur un MP4 direct (une seule qualite).
+    function hlsKeepHd(txt, minH) {
+        if (typeof txt !== 'string' || txt.indexOf('#EXT-X-STREAM-INF') < 0) return txt;
+        const heightOf = (l) => { const m = /RESOLUTION=\d+x(\d+)/i.exec(l); return m ? +m[1] : Infinity; }; // pas de resolution declaree -> gardee
+        const lines = txt.split(/\r?\n/);
+        if (!lines.some((l) => /^#EXT-X-STREAM-INF/.test(l) && heightOf(l) >= minH)) return txt;
+        const out = []; let skip = false;
+        for (const l of lines) {
+            if (/^#EXT-X-STREAM-INF/.test(l)) { skip = heightOf(l) < minH; if (skip) continue; }
+            else if (/^#EXT-X-I-FRAME-STREAM-INF/.test(l)) { if (heightOf(l) < minH) continue; }
+            else if (skip && l.trim() && l[0] !== '#') { skip = false; continue; } // URI de la variante retiree
+            out.push(l);
+        }
+        return out.join('\n');
+    }
+    function installHlsFloor(minH) {
+        const W = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window;
+        const L = (m) => console.log('[AnimeTracker v6] (qualite) ' + m);
+        try {
+            const f0 = W.fetch;
+            if (typeof f0 === 'function') W.fetch = function () {
+                return f0.apply(this, arguments).then((r) => {
+                    try {
+                        if (!/m3u8/i.test(r.url || '') && !/mpegurl/i.test(r.headers.get('content-type') || '')) return r;
+                        return r.clone().text().then((t) => { const n = hlsKeepHd(t, minH); if (n === t) return r; L('fetch : qualites < ' + minH + 'p retirees'); return new Response(n, { status: r.status, statusText: r.statusText, headers: r.headers }); }).catch(() => r);
+                    } catch (e) { return r; }
+                });
+            };
+            const X = W.XMLHttpRequest && W.XMLHttpRequest.prototype, o0 = X && X.open;
+            if (o0) X.open = function (m, url) {
+                try {
+                    if (/m3u8/i.test(String(url))) this.addEventListener('readystatechange', () => {
+                        if (this.readyState !== 4 || this.__vcFloor || (this.responseType && this.responseType !== 'text')) return;
+                        this.__vcFloor = true;
+                        const t = this.responseText, n = hlsKeepHd(t, minH);
+                        if (n !== t) { L('xhr : qualites < ' + minH + 'p retirees'); Object.defineProperty(this, 'responseText', { get: () => n }); Object.defineProperty(this, 'response', { get: () => n }); }
+                    });
+                } catch (e) { /* playlist laissee telle quelle */ }
+                return o0.apply(this, arguments);
+            };
+        } catch (e) { L('plancher non installe : ' + e); }
+    }
+
     function runInsidePlayerFrame_odysee() {
+        installHlsFloor(720); // v7.25.0
         runInsidePlayerFrameGeneric({
             label: 'Odysee',
+            // v7.24.2 : le bouton lecture d'Odysee n'apparait parfois qu'apres 10 s (profil neuf, bandeau de consentement, API lente) ; avant : abandon apres 20 x 0,5 s
+            autoClickIntervalMs: 1000, autoClickMaxAttempts: 120,
             playSelectors: ['button.button--play', '.button--play', 'button[aria-label="Jouer "]', 'button[aria-label="Jouer"]', 'button[aria-label="Play"]'],
         });
     }
@@ -724,6 +844,7 @@
             }
         }
         if (!total) throw new Error('taille inconnue (HTTP ' + r0.status + ')');
+        if (total > TURBO_MAX_BYTES) throw new Error('fichier trop lourd (' + Math.round(total / 1048576) + ' Mo) : garde memoire, lecture normale');
         const n = Math.ceil(total / CHUNK), parts = new Array(n);
         let next = 0, done = 0, loaded = 0, failed = null, lastLog = 0;
         L('debut : ' + (total / 1048576).toFixed(0) + ' Mo en ' + n + ' morceaux, ' + PAR + ' connexions');
@@ -765,6 +886,7 @@
                 const d = e.data || {};
                 if (d.a !== key) return;
                 if (d.url) end(d.url);
+                else if (d.fail) end(null); // v7.18.4 : prechargement abandonne : inutile d'attendre 200 s
                 else if (d.pending && !pending) { pending = true; clearTimeout(t1); L('episode en cours de telechargement par le prechargement : attente'); t2 = setTimeout(() => end(null), 200000); }
             };
             bc.postMessage({ q: key });
@@ -777,9 +899,9 @@
     function runPreloadFrame() {
         const L = (m) => console.log('[AnimeTracker v6] (turbo suivant) ' + m);
         L('demarre');
-        let n = 0, key = null, url = null;
+        let n = 0, key = null, url = null, fail = false;
         const bc = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('vc-turbo') : null;
-        if (bc) bc.onmessage = (e) => { const d = e.data || {}; if (d.q && d.q === key) bc.postMessage(url ? { a: key, url: url } : { a: key, pending: true }); };
+        if (bc) bc.onmessage = (e) => { const d = e.data || {}; if (d.q && d.q === key) bc.postMessage(url ? { a: key, url: url } : fail ? { a: key, fail: true } : { a: key, pending: true }); };
         const iv = setInterval(() => {
             const v = document.querySelector('video');
             if (v) {
@@ -788,7 +910,7 @@
                 if (/^https:\/\/[^/]*odycdn\.com\/.+\.mp4/.test(src) && turboKey(src)) {
                     clearInterval(iv); key = turboKey(src);
                     v.pause(); try { v.removeAttribute('src'); v.load(); } catch (e) {}
-                    turboFetch(src, L, null).then((blob) => { url = URL.createObjectURL(blob); L('pret'); if (bc) bc.postMessage({ a: key, url: url }); }).catch((e) => L('abandon : ' + e));
+                    turboFetch(src, L, null).then((blob) => { url = URL.createObjectURL(blob); L('pret'); if (bc) bc.postMessage({ a: key, url: url }); }).catch((e) => { fail = true; L('abandon : ' + e); if (bc) bc.postMessage({ a: key, fail: true }); });
                     return;
                 }
                 if (v.paused) { const p = v.play(); if (p && p.catch) p.catch(() => {}); }
@@ -805,8 +927,10 @@
         });
     }
 
+    const failedPages = {}; // v7.24 : 403 / 429 (anti-bot, limite de debit) retenus 5 min : on ne redemande pas en rafale
     function fetchPageHtml(url, retriesLeft) {
         if (retriesLeft === undefined) retriesLeft = 1;
+        if (failedPages[url] && failedPages[url].until > Date.now()) return Promise.reject(new Error(failedPages[url].msg));
         // Meme site que la page : fetch() du navigateur, pas besoin d'@connect
         // (sites ajoutes par l'utilisateur, inconnus a l'avance - v6.23).
         let sameOrigin = false;
@@ -819,7 +943,9 @@
             if (res.status >= 500 && res.status < 600 && retriesLeft > 0) {
                 return new Promise((resolve) => setTimeout(resolve, 1000)).then(() => fetchPageHtml(url, retriesLeft - 1));
             }
-            throw new Error('Chargement de la page echoue, statut ' + res.status);
+            const err = new Error('Chargement de la page echoue, statut ' + res.status);
+            if (res.status === 403 || res.status === 429) failedPages[url] = { until: Date.now() + 300000, msg: err.message };
+            throw err;
         });
     }
 
@@ -1833,6 +1959,18 @@
             all[storageKey(info)] = assoc;
             GM_setValue('youtubeChannelAssociations', all);
         }
+        // v7.21 : bascule automatique vers YouTube (video qui cale, serie passee sur YouTube) ; activee par defaut.
+        function isYtAutoSwitch() { return GM_getValue('ytAutoSwitch', true); }
+        // v7.19 : chaines YouTube masquees (globales) : plus jamais proposees dans les resultats.
+        function ytBlocked() { return GM_getValue('youtubeBlockedChannels', {}); }
+        function blockYoutubeChannel(info, id, name) {
+            const all = ytBlocked(); all[id] = name || id; GM_setValue('youtubeBlockedChannels', all);
+            const assoc = getYoutubeChannelAssociation(info);
+            if (assoc && assoc.channelId === id) {
+                setYoutubeChannelAssociation(info, null); // plus de bascule automatique vers cette chaine
+                if (ytActive) leaveYoutubeMode(); // et on quitte la video YouTube en cours (oublie aussi les liens memorises de la serie)
+            }
+        }
         function isYoutubeMode(info) { return !!GM_getValue('youtubeMode', {})[storageKey(info)]; }
         function setYoutubeMode(info, on) {
             const all = GM_getValue('youtubeMode', {});
@@ -1857,6 +1995,9 @@
                 const a = Number(m[1]), b = Number(m[2] || m[1]);
                 if (n >= a && n <= b && b - a < 200) return { first: a, last: b };
             }
+            // v7.23 : titres chinois « 第411集 » / « 第411-420集 »
+            const zh = /第\s*(\d+)(?:\s*[-~至]\s*(\d+))?\s*[集话話]/.exec(title);
+            if (zh) { const a = Number(zh[1]), b = Number(zh[2] || zh[1]); if (n >= a && n <= b && b - a < 200) return { first: a, last: b }; }
             return null;
         }
         // v7.1 : nom de la serie en mots entiers ("The Demon Hunter's Romance",
@@ -1864,7 +2005,9 @@
         // annoncee ("S2", "Season 3", "Saison 2", "S02E480", "Nom 2 EP17").
         // ponytail: saison du titre comparee a celle de l'adresse du site ; une chaine qui numerote autrement est ecartee
         function ytWords(t) { return ' ' + String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’]s\b/g, 's').replace(/[^a-z0-9]+/g, ' ').trim() + ' '; }
+        const CJK = /[㐀-鿿]/;
         function ytTitleOk(title, name, season) {
+            if (CJK.test(name)) return String(title || '').indexOf(name) !== -1; // v7.23 : nom chinois (ex. 逆天至尊) : simple inclusion, pas de saison
             const t = ytWords(title), k = ytWords(name);
             const at = t.indexOf(k);
             if (k.length < 4 || at === -1) return false;
@@ -1881,6 +2024,39 @@
         // la serie (avant / entre parentheses) ET le numero d'episode.
         // v6.37 : chaque nom x ("episode N vostfr", "EP N") - les compilations
         // sont souvent titrees avec le nom anglais ("Ten Thousand Worlds EP 181 - EP 200").
+        // v7.23 : duree reelle de l'episode. Lecteur du site si connue, sinon l'API Odysee (resolve, sans cle) a partir du lien du lecteur.
+        const odyDurCache = {}, odyDurFail = {}; // v7.24 : echec de l'API retenu 5 min
+        function referenceDuration(info) {
+            const d0 = aniSkip && aniSkip.key === storageKey(info) && aniSkip.ep === info.episodeNumber && aniSkip.duration;
+            if (d0) return Promise.resolve(d0);
+            let m;
+            try { m = decodeURIComponent(info.embedSrc || '').match(/odysee\.com\/\$\/embed\/(@[^/?#]+)\/([^/?#]+)/); } catch (e) { m = null; }
+            if (!m) return Promise.resolve(0);
+            const lbry = 'lbry://' + m[1] + '/' + m[2];
+            if (odyDurCache[lbry] !== undefined) return Promise.resolve(odyDurCache[lbry]);
+            if (odyDurFail[lbry] > Date.now()) return Promise.resolve(0);
+            return gmRequest({ method: 'POST', url: 'https://api.na-backend.odysee.com/api/v1/proxy', headers: { 'Content-Type': 'application/json' }, timeout: 8000,
+                data: JSON.stringify({ method: 'resolve', params: { urls: [lbry] } }) })
+                .then((r) => { const v = ((JSON.parse(r.responseText).result || {})[lbry] || {}).value; return (odyDurCache[lbry] = Number(v && v.video && v.video.duration) || 0); })
+                .catch(() => { odyDurFail[lbry] = Date.now() + 300000; return 0; });
+        }
+        // v7.23 : autres titres de la serie (« Against The Sky Supreme, N.T.Z.Z, 逆天至尊 ») lus dans la page ouverte, seulement si c'est bien la meme serie.
+        function altSeriesNames(info) {
+            try {
+                const h = document.querySelector('.infox h2'), a = document.querySelector('.infox .alter');
+                if (!h || !a || ytNorm(h.textContent) !== ytNorm(info.seriesName)) return [];
+                return a.textContent.split(',').map((s) => s.trim()).filter((s) => s.length >= 2 && (CJK.test(s) || (/\s/.test(s) && ytNorm(s).length >= 8)));
+            } catch (e) { return []; }
+        }
+        // true = piste chinoise (zh*) presente dans la page de la video, false = absente, null = page illisible (inconnu : on garde la video)
+        function ytHasZhTrack(id) {
+            return fetchPageHtml('https://www.youtube.com/watch?v=' + encodeURIComponent(id) + '&ucbcb=1').then((html) => {
+                const i = html.indexOf('"captionTracks"');
+                if (i < 0) return html.indexOf('"playerCaptionsTracklistRenderer"') >= 0 || html.indexOf('ytInitialPlayerResponse') >= 0 ? false : null;
+                const rest = html.slice(i, i + 30000), e = Math.min(...['"audioTracks"', '"translationLanguages"'].map((s) => { const n = rest.indexOf(s); return n < 0 ? rest.length : n; }));
+                return /"languageCode":"zh(-[A-Za-z]+)?"/.test(rest.slice(0, e));
+            }).catch(() => null);
+        }
         function searchYoutubeForEpisode(info) {
             const n = Number(info.episodeNumber);
             const full = info.seriesName || '';
@@ -1889,12 +2065,22 @@
             if (!n || !names.length) return Promise.resolve([]);
             const queries = [];
             names.slice(0, 2).forEach((v) => queries.push(v + ' episode ' + n + ' vostfr', v + ' EP ' + n));
+            // v7.23 : titres alternatifs : le chinois (chaines officielles) et un nom anglais different, une requete chacun
+            const alts = altSeriesNames(info).filter((v) => !names.some((x) => ytNorm(x) === ytNorm(v)));
+            alts.slice(0, 2).forEach((v) => { queries.push(v + ' EP ' + n); names.push(v); });
             const seen = {}, out = [];
             const season = seriesSeason(info);
-            // Duree de l'episode si le lecteur du site l'a donnee : ecarte un episode unique 2x trop long/court.
-            const dur = aniSkip && aniSkip.key === storageKey(info) && aniSkip.ep === info.episodeNumber && aniSkip.duration;
-            return Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => ''))).then((pages) => {
-                pages.forEach((html) => (function walk(o) {
+            // v7.24 : resultats gardes 24 h par episode (pas de nouvelle rafale de requetes a chaque ouverture) ; chaines masquees filtrees a la lecture
+            const ckey = storageKey(info) + '::' + n, cache = GM_getValue('ytSearchCache', {});
+            if (cache[ckey] && Date.now() - cache[ckey].t < 86400000 && cache[ckey].out && cache[ckey].out.length) {
+                const bl = ytBlocked();
+                return Promise.resolve(cache[ckey].out.filter((r) => !bl[r.channelId]));
+            }
+            // Duree de l'episode (v7.23 : aussi via Odysee) : ecarte un episode unique trop long/court (v7.23 : 0,75 a 1,3 au lieu de 0,5 a 1,6) et classe en tete celui de meme duree.
+            return Promise.all([referenceDuration(info), Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => '')))]).then((res) => {
+                const dur = res[0], pages = res[1];
+                let parsed = 0;
+                pages.forEach((html) => { let data = null; try { data = html && ytInitialJson(html, 'var ytInitialData'); } catch (e) {} if (data) parsed++; (function walk(o) {
                     if (Array.isArray(o)) { o.forEach(walk); return; }
                     if (!o || typeof o !== 'object') return;
                     if (o.videoId && o.title && o.lengthText && o.ownerText && !seen[o.videoId]) {
@@ -1911,15 +2097,29 @@
                         // badge ni FR : sous-titres anglais incrustes, ecartee (v6.35).
                         const cc = /"label":"(?:Sous-titres|CC|Subtitles)"/.test(JSON.stringify(o.badges || []));
                         const len = ytTimeToSec(o.lengthText.simpleText);
-                        const badLen = dur && range && range.first === range.last && (len > dur * 1.6 || len < dur * 0.5);
-                        if (name && range && be && be.browseId && !teaser && !badLen && (vf || cc)) {
+                        const badLen = dur && range && range.first === range.last && (len > dur * 1.3 || len < dur * 0.75);
+                        const durMatch = !!(dur && range && range.first === range.last && Math.abs(len - dur) <= Math.max(10, dur * 0.03));
+                        if (name && range && be && be.browseId && !ytBlocked()[be.browseId] && !teaser && !badLen && (vf || cc)) {
                             out.push({ id: o.videoId, title: title, len: len, channelId: be.browseId, channelName: owner.text || '',
-                                keyword: name, first: range.first, last: range.last, vf: vf, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
+                                keyword: name, first: range.first, last: range.last, vf: vf, durMatch: durMatch, refDur: dur || 0, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) + (durMatch ? 4 : 0) });
                         }
                     }
                     Object.keys(o).forEach((k) => walk(o[k]));
-                })(html && ytInitialJson(html, 'var ytInitialData')));
-                return out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
+                })(data); });
+                if (!parsed) throw new Error(pages.some(Boolean) ? 'la page YouTube est illisible (format change ?)' : 'YouTube ne repond pas');
+                const top = out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
+                // v7.24.3 : le traducteur (traduction/serve.js, --src zh) a besoin d'une piste de sous-titres CHINOISE (manuelle ou automatique) :
+                // on la cherche dans la page de chaque video ; les videos sans piste chinoise sont ecartees s'il en reste d'autres.
+                return Promise.all(top.map((r) => ytHasZhTrack(r.id).then((z) => { r.zh = z; }))).then(() => {
+                    const ok = top.filter((r) => r.zh === true), res = ok.length ? top.filter((r) => r.zh !== false) : top;
+                    res.sort((a, b) => (b.zh === true) - (a.zh === true));
+                    if (res.length) { // cache : 30 recherches au plus
+                        cache[ckey] = { t: Date.now(), out: res };
+                        Object.keys(cache).sort((x, y) => cache[y].t - cache[x].t).slice(30).forEach((k) => delete cache[k]);
+                        GM_setValue('ytSearchCache', cache);
+                    }
+                    return res;
+                });
             });
         }
         // Compilation : debut de chaque episode lu dans les chapitres de la
@@ -1969,6 +2169,17 @@
         }
         // Vignettes des resultats de la recherche YouTube dans `zone` ; clic =
         // useYoutubeSearchResult (+ onPick, ex. fermer l'encadre).
+        // v7.23 : recherche web hors YouTube (pages de resultats ouvertes dans un onglet ; pas de scraping automatique, trop fragile)
+        const WEB_SEARCHES = [['google', 'Google', (q) => 'https://www.google.com/search?q=' + q], ['ddg', 'DuckDuckGo', (q) => 'https://duckduckgo.com/?q=' + q],
+            ['dm', 'Dailymotion', (q) => 'https://www.dailymotion.com/search/' + q + '/videos'], ['bili', 'Bilibili', (q) => 'https://www.bilibili.tv/en/search-result?q=' + q]];
+        function webSearchButtons(style) { return WEB_SEARCHES.map((w) => '<button type="button" data-act="web-' + w[0] + '" style="' + style + '">' + w[1] + '</button>').join(''); }
+        function openWebSearch(act, info) {
+            const w = WEB_SEARCHES.find((x) => 'web-' + x[0] === act);
+            if (!w) return false;
+            window.open(w[2](encodeURIComponent(displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr')), '_blank', 'noopener');
+            return true;
+        }
+        function fmtLen(s) { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
         function renderYoutubeChoices(zone, info, onPick) {
             return searchYoutubeForEpisode(info).then((results) => {
                 if (!zone.isConnected || currentEpisode !== info) return;
@@ -1976,17 +2187,33 @@
                 zone.innerHTML = '<div style="margin-bottom:4px;">Sur YouTube (clique pour regarder) :</div>' + results.map((r, i) =>
                     '<div data-yt="' + i + '" role="button" tabindex="0" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
                     '<img src="https://i.ytimg.com/vi/' + escapeHtml(r.id) + '/mqdefault.jpg" style="width:96px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;">' +
-                    '<div style="min-width:0;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
-                    '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</span> ' +
+                    '<div style="min-width:0;flex:1;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
+                    '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + ' - ' + fmtLen(r.len) + '</span> ' +
+                    (r.durMatch ? '<span style="background:#1565c0;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Meme duree que l\'episode du site (' + fmtLen(r.refDur) + ')">duree identique</span> ' : '') +
                     // VOSTFR = annonce dans le titre ; sinon piste de sous-titres
                     // traduite automatiquement en francais par YouTube.
+                    (r.zh === true ? '<span style="background:#00695c;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Piste de sous-titres chinoise presente : le traducteur peut l\'utiliser">traduisible</span> ' : r.zh === false ? '<span style="background:#8a1c1c;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Aucune piste chinoise : le traducteur ne pourra pas traduire cette video">pas de piste chinoise</span> ' : '') +
                     (r.vf ? '<span style="background:#2e7d32;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;">VOSTFR</span>'
                         : '<span style="background:#b26a00;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Sous-titres traduits automatiquement en francais par YouTube">ST auto FR</span>') +
-                    '</div></div></div>').join('');
+                    '</div></div><button type="button" data-block="' + i + '" title="Ne plus proposer la chaine ' + escapeHtml(r.channelName) + '" style="flex-shrink:0;background:#3a1010;color:#fff;border:1px solid #a33;border-radius:4px;cursor:pointer;padding:2px 6px;">&#10005;</button></div>').join('');
+                zone.querySelectorAll('[data-block]').forEach((el) => el.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const r = results[Number(el.getAttribute('data-block'))];
+                    blockYoutubeChannel(info, r.channelId, r.channelName);
+                    renderYoutubeChoices(zone, info, onPick);
+                }));
                 zone.querySelectorAll('[data-yt]').forEach((el) => el.addEventListener('click', () => {
                     if (onPick) onPick();
                     useYoutubeSearchResult(info, results[Number(el.getAttribute('data-yt'))]);
                 }));
+            }).then(() => {
+                const n = Object.keys(ytBlocked()).length;
+                if (!n || !zone.isConnected) return;
+                const l = document.createElement('div');
+                l.style.cssText = 'font-size:11px;opacity:.7;cursor:pointer;text-decoration:underline;margin-top:4px;';
+                l.textContent = n + ' chaine(s) masquee(s) - tout reafficher';
+                l.onclick = () => { GM_setValue('youtubeBlockedChannels', {}); renderYoutubeChoices(zone, info, onPick); };
+                zone.append(l);
             }).catch((e) => { zone.textContent = 'Recherche YouTube impossible : ' + e.message; });
         }
         // Choix de la source (v7.1, remplace le volet "Sources") : lecteurs du
@@ -2005,16 +2232,19 @@
             box.innerHTML = '<div style="font-size:16px;font-weight:bold;">Sources de l\'épisode ' + escapeHtml(String(info.episodeNumber)) + '</div>' +
                 '<div style="font-size:12px;text-align:left;">' + site +
                 head('Autres sites', '#ffb300') + '<div id="ed-site-alt" style="color:#d9b77a;">Recherche sur les autres sites...</div>' +
-                head('YouTube', '#ff4e45') + '<div id="ed-yt-results" style="color:#d9b77a;">Recherche sur YouTube...</div></div>' +
+                head('Sur le web', '#9ccc65') + '<div>' + webSearchButtons(BTN.replace('display:block;width:100%;', 'display:inline-block;width:auto;margin-right:4px;')) + '</div>' +
+                head('YouTube', '#ff4e45') + '<label style="display:block;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="ed-yt-auto"' + (isYtAutoSwitch() ? ' checked' : '') + '> Basculer automatiquement sur YouTube si la vidéo cale</label><div id="ed-yt-results" style="color:#d9b77a;">Recherche sur YouTube...</div></div>' +
                 '<div style="margin-top:12px;"><button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
+                if (openWebSearch(act, info)) return; // recherche web : on garde le choix ouvert
                 box.style.display = 'none';
                 if (act === 'site') leaveYoutubeMode();
                 if (act === 'odysee') openCurrentEpisodeOnOdysee();
                 if (act === 'player') selectPlayer(Number(b.getAttribute('data-i')));
             }));
+            box.querySelector('#ed-yt-auto').addEventListener('change', (ev) => GM_setValue('ytAutoSwitch', ev.target.checked));
             renderElsewhere(box.querySelector('#ed-site-alt'), info, ytActive ? [] : playerCandidates.slice());
             renderYoutubeChoices(box.querySelector('#ed-yt-results'), info, () => { box.style.display = 'none'; });
         }
@@ -2401,9 +2631,9 @@
         // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'togetherSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
-            'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
+            'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks', 'youtubeBlockedChannels'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelLayout', 'panelAutoHide', 'panelHidden',
-            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto', 'subsSize', 'subsBottom', 'subsStroke'];
+            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto', 'subsSize', 'subsBottom', 'subsStroke', 'ytAutoSwitch', 'ecoMemoire'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -2435,6 +2665,7 @@
                 let v = cleanBackupValue(data[k], 0);
                 if (!v || typeof v !== 'object' || Array.isArray(v)) return;
                 if (k === 'customSites') v = Object.fromEntries(Object.entries(v).filter(([h]) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h)));
+                if (k === 'youtubeBlockedChannels') v = Object.fromEntries(Object.entries(v).filter(([id, n]) => /^UC[\w-]{10,40}$/.test(id) && typeof n === 'string'));
                 if (k === 'youtubeOverrides') v = Object.fromEntries(Object.entries(v).filter(([, u]) => /^https:\/\/(www\.)?youtube(-nocookie)?\.com\//i.test(u)));
                 // Fusion : les reglages deja presents ici gagnent.
                 GM_setValue(k, Object.assign({}, v, GM_getValue(k, {})));
@@ -2450,7 +2681,7 @@
         }
         // Type attendu par preference (recette 6.58 : "oui" texte activait le panneau discret).
         function validImportedPref(k, v) {
-            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'panelHidden', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
+            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'panelHidden', 'titleCinzel', 'dimTracked', 'ytAutoSwitch', 'ecoMemoire'].includes(k)) return typeof v === 'boolean';
             if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
             if (k === 'panelLayout') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(layouts(), v);
             if (k === 'accentColor') return typeof v === 'string' && /^(#[0-9a-f]{6})?$/i.test(v);
@@ -2781,6 +3012,24 @@
         // ---- Nouveautes (v6.18) : encart repliable, ouvert d'office tant
         // que la version installee n'a pas ete "vue" (ouverture de l'encart).
         const CHANGELOG = [
+            ['7.25.0', ['Lecteur Odysee : qualité minimale 720p. Les qualités inférieures (144p, 360p…) sont retirées de la liste du flux avant que le lecteur la lise ; si le flux n’en propose aucune en 720p ou plus, il est laissé tel quel. Sans effet sur un fichier MP4 direct.']],
+            ['7.24.3', ['Recherche YouTube : chaque vidéo proposée est vérifiée pour le traducteur (piste de sous-titres chinoise présente). Badge « traduisible » ou « pas de piste chinoise » ; les vidéos sans piste sont écartées s’il en reste d’autres.']],
+            ['7.24.2', ['Correctif : le lecteur Odysee démarre même quand son bouton lecture n’apparaît qu’après plus de 10 s (avant : abandon du clic automatique, faux « Épisode indisponible » et lecture à lancer à la main) ; l’encadré disparaît dès que le lecteur répond.']],
+            ['7.24.1', ['Correctif : quand le mode turbo abandonne, la lecture est maintenant toujours relancée (avant, la vidéo pouvait rester en pause puis afficher un faux « Épisode indisponible ») ; la raison de l’abandon s’affiche dans le statut et dans « Copier le diagnostic ».']],
+            ['7.24.0', ['Fiabilité : bouton « Copier le diagnostic » et « Mode économe » (Plus > Diagnostic) ; message d’aide quand Odysee n’arrive pas à s’initialiser ; vidéo YouTube indisponible détectée ; résultats YouTube gardés 24 h ; sous-titres : voyant orange sans piste chinoise, plafond mensuel, journal du service.']],
+            ['7.23.1', ['Les chaînes YouTube masquées et le réglage « bascule automatique » sont maintenant inclus dans la sauvegarde / restauration.']],
+            ['7.23.0', ['Recherche YouTube : durée de l’épisode comparée (badge « durée identique », en tête de liste ; extraits trop courts écartés), durée affichée sur chaque résultat, recherche aussi avec les autres titres de la série (dont le chinois, « 第411集 » compris).', 'Recherche web : boutons Google, DuckDuckGo, Dailymotion et Bilibili (choix de la source et encadre d’erreur).']],
+            ['7.22.3', ['Plus de faux « Épisode indisponible » quand l’hébergeur est lent à démarrer mais que la vidéo joue déjà.']],
+            ['7.22.2', ['L’encadre « Épisode indisponible » (ou « La vidéo cale ») disparaît tout seul quand la vidéo repart, au lieu de rester affiché.']],
+            ['7.22.1', ['La pause ne se retire plus toute seule : un clic sur la vidéo pour la mettre en pause n’est plus annulé par la remise du son.']],
+            ['7.22.0', ['Mesure de qualité vidéo (résolution réelle, images perdues, pauses) envoyée à un outil local de diagnostic, seulement s’il est lancé ; sans effet sinon.']],
+            ['7.21.0', ['Case « Basculer automatiquement sur YouTube si la vidéo cale » dans le choix de source (Changer) : décochée, plus aucune bascule automatique vers YouTube.']],
+            ['7.20.0', ['Bouton « 🚫 Bloquer cette chaîne » dans la barre du lecteur pendant une vidéo YouTube : la chaîne est bannie pour toujours (plus proposée, plus de bascule automatique) et tu reviens au lecteur du site.']],
+            ['7.19.1', ['Masquer la chaîne YouTube en cours de lecture te ramène aussitôt au lecteur du site et supprime la bascule automatique vers elle.']],
+            ['7.19.0', ['Recherche YouTube : une croix ✕ sur chaque résultat masque définitivement cette chaîne (lien « tout réafficher » en bas de la liste).']],
+            ['7.18.4', ['Revue complète du code : la chaîne de préchargement ne s’arrête plus quand un épisode n’est pas en turbo ou que le turbo échoue (cause probable du « il faut réattendre après plusieurs épisodes »), et un préchargement abandonné n’impose plus 200 s d’attente au lecteur.']],
+            ['7.18.3', ['Épisode servi par le préchargement : le lecteur refait sa propre URL du fichier (celle de l’iframe cachée est supprimée 90 s après le début, ce qui pouvait bloquer les sauts), et la console dit si le préchargement était prêt.']],
+            ['7.18.2', ['Diagnostic : la console (filtre « fluidite ») donne la durée de chaque saut, les images perdues et les attentes de données, pour trouver d’où vient une gêne.']],
             ['7.18.1', ['Saut d’intro immédiat quand l’épisode est lu depuis la mémoire (turbo) ; l’attente d’une lecture stable ne sert plus que pour la lecture normale. Le saut attend aussi la fin du téléchargement turbo.']],
             ['7.18.0', ['Turbo : dès que l’épisode en cours est en mémoire, l’épisode suivant est téléchargé en cachette (iframe cachée) ; en passant à l’épisode suivant il est déjà prêt. Les 2 épisodes restent en mémoire (~1 Go).']],
             ['7.17.3', ['Turbo : à la fin du téléchargement, la lecture reprend à la position où tu étais (et non au début de l’épisode).']],
@@ -2932,6 +3181,49 @@
             if (x) x.addEventListener('click', hide);
         }
 
+        // v7.24 : diagnostic a copier (un seul message au lieu de plusieurs captures) + mode econome (memoire)
+        function diagSectionHtml(prefix) {
+            return menuItem('diag', 'Diagnostic',
+                '<button id="' + prefix + '-diag-copy" title="Copie l\'etat du lecteur (version, source, erreurs, service de sous-titres) a coller dans la conversation">Copier le diagnostic</button>' +
+                '<label class="vc-track vc-small" title="Pas de prechargement de l\'episode suivant : moins de memoire utilisee (automatique si le navigateur annonce 4 Go de RAM ou moins)"><input type="checkbox" id="' + prefix + '-eco"' + (GM_getValue('ecoMemoire', false) === true ? ' checked' : '') + '><span class="off">Mode econome</span><span class="on">&#10003; Mode econome</span></label>' +
+                '<span id="' + prefix + '-diag-note" class="vc-note"></span>');
+        }
+        async function collectDiagnostic() {
+            const L = [];
+            L.push('Video Continuum ' + ((typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '?') + ' | ' + navigator.userAgent);
+            L.push('Page : ' + location.href);
+            if (currentEpisode) L.push('Episode : ' + currentEpisode.siteLabel + ' / ' + currentEpisode.seriesName + ' / ep ' + currentEpisode.episodeNumber);
+            let src = '?';
+            try { src = ytActive ? 'YouTube' : (overlayEls ? hostOf(overlayEls.playerFrame.src) + ' (lecteur ' + (playerCandidateIndex + 1) + '/' + playerCandidates.length + ')' : 'lecteur ferme'); } catch (e) {}
+            L.push('Source : ' + src + ' | lecture en cours : ' + (playerPlaying ? 'oui' : 'non'));
+            L.push('Statut : ' + (lastStatusText || '(vide)'));
+            L.push('Etat de la video (iframe) : ' + (lastVState || 'aucun message recu'));
+            L.push('Derniere erreur lue dans le lecteur : ' + (lastHostError || 'aucune'));
+            L.push('Reglages : bascule auto YouTube ' + (isYtAutoSwitch() ? 'oui' : 'non') + ' | chaines masquees ' + Object.keys(ytBlocked()).length + ' | mode econome ' + (isEcoMemory() ? 'oui' : 'non') + ' (RAM annoncee : ' + (navigator.deviceMemory || '?') + ' Go)');
+            try {
+                const r = await gmRequest({ method: 'GET', url: SUBS_URL + 'status', timeout: 2500 });
+                const st = JSON.parse(r.responseText);
+                L.push('Service de sous-titres : en marche | cle ' + (st.key ? 'oui' : 'NON') + ' | echecs : ' + (st.jobs.filter((j) => j.failed).map((j) => j.err.slice(-100)).join(' / ') || 'aucun') + ' | cout du mois ' + (st.usage ? st.usage.usd.toFixed(2) : '?') + ' $' + (st.cap ? ' / plafond ' + st.cap + ' $' : ''));
+            } catch (e) { L.push('Service de sous-titres : eteint ou injoignable'); }
+            return L.join(String.fromCharCode(10));
+        }
+        function bindDiagSection(container, prefix) {
+            const btn = container.querySelector('#' + prefix + '-diag-copy'), note = container.querySelector('#' + prefix + '-diag-note'), eco = container.querySelector('#' + prefix + '-eco');
+            if (eco) eco.addEventListener('change', () => { GM_setValue('ecoMemoire', eco.checked); if (note) note.textContent = eco.checked ? 'Mode econome actif (prochain episode).' : 'Mode econome coupe.'; });
+            if (!btn) return;
+            btn.addEventListener('click', async () => {
+                const text = await collectDiagnostic();
+                let ok = false;
+                try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+                    const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+                    document.body.appendChild(ta); ta.select();
+                    try { ok = document.execCommand('copy'); } catch (e2) {}
+                    ta.remove();
+                }
+                if (note) note.textContent = ok ? 'Diagnostic copie : colle-le dans la conversation.' : 'Copie impossible : ouvre la console (F12).';
+                if (!ok) console.log('[AnimeTracker v6] diagnostic :' + String.fromCharCode(10) + text);
+            });
+        }
         function bindIncidentSection(container, prefix) {
             const body = container.querySelector('#' + prefix + '-fb-body');
             const sendBtn = container.querySelector('#' + prefix + '-fb-send');
@@ -3099,14 +3391,15 @@
                     menuItem('youtube', 'Sources',
                         '<div id="ed-source" class="vc-src" style="display:none;"><span id="ed-source-label" class="vc-src-label"></span>' +
                         '<button id="ed-source-btn" class="vc-chip" title="Lecteurs du site, autres sites, YouTube">&#8644; Changer</button></div>' +
-                        '<button id="ed-source-main" style="display:none;" title="Revenir à la source principale du site">&#8617; Source principale</button>'),
+                        '<button id="ed-source-main" style="display:none;" title="Revenir à la source principale du site">&#8617; Source principale</button>' +
+                        '<button id="ed-yt-block" style="display:none;" title="Ne plus jamais proposer ni utiliser la chaîne YouTube en cours">&#128683; Bloquer cette chaîne</button>'),
                     plusMenuItem([menuItem('sauvegarde', 'Sauvegarde',
                         '<div class="vc-row"><button id="ed-export-btn">Exporter</button><button id="ed-import-btn">Importer</button></div>' +
                         '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
                         '<button id="ed-choose-backup-btn">Fichier de sauvegarde</button>' +
                         '<button id="ed-reauth-backup-btn">Redonner l\'accès</button>' +
                         '<span id="ed-backup-status" class="vc-note"></span>'),
-                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), legendSectionHtml(false)])
+                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), diagSectionHtml('ed'), legendSectionHtml(false)])
                 ]) +
                 '<footer class="vc-foot"><select id="ed-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" class="vc-summary"></div>' +
@@ -3187,6 +3480,7 @@
             topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
             topbar.querySelector('#ed-aniskip-cb').addEventListener('change', (ev) => { GM_setValue('aniskipShown', ev.target.checked); renderAniSkipStatus(); });
             bindIncidentSection(topbar, 'ed');
+            bindDiagSection(topbar, 'ed');
             bindNewsSection(topbar);
 
             const gotoInput = topbar.querySelector('#ed-goto-input');
@@ -3261,6 +3555,13 @@
                 postToPlayerFrame({ type: MSG_PREFIX + 'pause' });
                 if (document.fullscreenElement === overlay) document.exitFullscreen().catch(() => {});
             });
+            topbar.querySelector('#ed-yt-block').addEventListener('click', () => {
+                if (!ytActive || !currentEpisode) return;
+                const assoc = getYoutubeChannelAssociation(currentEpisode) || {};
+                blockYoutubeChannel(currentEpisode, assoc.channelId || assoc.channelHandle || 'inconnue', assoc.channelName); // quitte YouTube
+                if (ytActive) leaveYoutubeMode(); // association sans identifiant : on quitte quand meme
+                setStatus('Chaine ' + (assoc.channelName || '') + ' bloquee pour toujours.');
+            });
             topbar.querySelector('#ed-source-main').addEventListener('click', () => { if (ytActive) leaveYoutubeMode(); else selectPlayer(0); });
             const cfgTab = topbar.querySelector('.vc-tab[data-menu="reglages"]');
             if (cfgTab) cfgTab.insertAdjacentHTML('beforeend', '<span class="vc-cfgdots" title="Repères : début intro · fin intro · début outro · fin outro (allumé = réglé)"><i data-k="introStart" style="--c:#03d0fc"></i><i data-k="introEnd" style="--c:#43a047"></i><i data-k="outroStart" style="--c:#fb8c00"></i><i data-k="outroEnd" style="--c:#ec407a"></i></span>');
@@ -3316,6 +3617,7 @@
             return info.episodeIndex > 0;
         }
 
+        var lastVState = '', lastHostError = ''; // v7.24 : derniere erreur lue dans le lecteur (diagnostic)
         var lastStatusText = ''; // var : setStatus peut etre appele avant cette ligne (TDZ)
         function setStatus(text, warning) {
             lastStatusText = text;
@@ -3381,7 +3683,7 @@
         function startNextPreload() {
             try {
                 const ce = currentEpisode, key = ce.site + '|' + ce.episodeNumber;
-                if (preloadedEmbed === key || ce.navigate) return;
+                if (preloadedEmbed === key || ce.navigate || isEcoMemory()) return;
                 preloadedEmbed = key;
                 const nextInfo = ce.navStyle === 'index' ? buildNextEpisodeInfo() : (ce.nextPageUrl ? buildNextEpisodeInfo() : null);
                 Promise.resolve(nextInfo).then((info) => {
@@ -3404,6 +3706,7 @@
         }
         function tryNextPlayer() {
             clearTimeout(playerReadyTimer);
+            if (playerPlaying) return; // v7.22.3 : la video joue deja (hebergeur lent a signaler « pret ») : pas de faux « episode indisponible »
             if (!overlayEls || playerCandidateIndex + 1 >= playerCandidates.length) {
                 if (playerCandidates.length) showSiteError(playerCandidates.length);
                 return;
@@ -3442,6 +3745,8 @@
             const away = ytActive || playerCandidateIndex > 0; // hors de la source principale du site
             const mainBtn = overlayEls.overlay.querySelector('#ed-source-main');
             if (mainBtn) mainBtn.style.display = away ? '' : 'none';
+            const blk = overlayEls.overlay.querySelector('#ed-yt-block');
+            if (blk) blk.style.display = ytActive ? '' : 'none';
             const ico = overlayEls.overlay.querySelector('#ed-src-ico');
             if (ico) {
                 const col = ytActive ? '#ff4e45' : away ? '#fb8c00' : '#03d0fc';
@@ -3473,18 +3778,14 @@
                 '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
                 (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
                 '<button type="button" data-act="youtube" style="' + BTN + '">Lire sur YouTube</button>' +
-                '<button type="button" data-act="google" style="' + BTN + '">Rechercher sur Google</button>' +
+                webSearchButtons(BTN) +
                 (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Épisode suivant</button>' : '') +
                 '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             const info = currentEpisode;
             box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
-                if (act === 'google') {
-                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr streaming';
-                    window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
-                    return;
-                }
+                if (openWebSearch(act, info)) return; // v7.23 : Google, DuckDuckGo, Dailymotion, Bilibili
                 if (act === 'youtube') { box.style.display = 'none'; switchToYoutube(info, 'bouton de l\'encadre'); return; }
                 box.style.display = 'none';
                 if (act === 'next') advanceToNextEpisode();
@@ -3550,6 +3851,7 @@
                 const pf = preloadFrame; preloadFrame = null; setTimeout(() => pf.el.remove(), 90000);
             }
             if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'ready' && overlayEls && overlayEls.siteErrorBox && /^(dead|stall)$/.test(overlayEls.siteErrorBox.getAttribute('data-kind') || '')) overlayEls.siteErrorBox.style.display = 'none'; // v7.24.2 : lecteur finalement lance (clic auto tardif) : plus de faux « indisponible »
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
                 if (ytSegment) {
@@ -3584,7 +3886,27 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
-            if (type === 'playstate') { playerPlaying = !!event.data.playing; panelWake(); }
+            if (type === 'vstate') lastVState = String(event.data.s || '').slice(0, 160) + ' @' + new Date().toTimeString().slice(0, 8);
+            if (type === 'host-error') {
+                const k = event.data.kind;
+                lastHostError = k + (event.data.why ? ' (' + event.data.why + ')' : '') + ' ' + new Date().toTimeString().slice(0, 8);
+                if (k === 'turbo') setStatus('Mode turbo abandonne (' + event.data.why + ') : lecture normale.');
+                if (k === 'init') setStatus('Odysee n\'arrive pas a s\'initialiser (« resolve response » / « preparer votre compte »). Essaie : effacer les donnees du site odysee.com, et mettre uBlock en mode « optimal » pour ce site.');
+                else if (k === 'file') setStatus('Odysee n\'arrive pas a charger le fichier video : reessaie, ou change de source (Sources > Changer).');
+                else if (k === 'yt' && ytActive && currentEpisode) {
+                    const all = loadYoutubeOverrides(); delete all[youtubeOverrideKey(currentEpisode)]; saveYoutubeOverrides(all); // ne pas y revenir tout seul
+                    setStatus('Cette video YouTube est indisponible : choisis-en une autre.');
+                    showSourceChooser(currentEpisode);
+                }
+            }
+            if (type === 'playstate') {
+                playerPlaying = !!event.data.playing; panelWake();
+                if (playerPlaying) clearTimeout(playerReadyTimer);
+                // v7.22.2 : la video joue : un encadre « indisponible » / « cale » reste obsolete (ex. changement de qualite chez Odysee : coupure,
+                // encadre, puis reprise) -> on le masque (sauf le choix de source ouvert a la main : data-kind 'sources').
+                const eb = overlayEls && overlayEls.siteErrorBox;
+                if (playerPlaying && eb && eb.style.display !== 'none' && /^(dead|stall)$/.test(eb.getAttribute('data-kind') || '')) eb.style.display = 'none';
+            }
             if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
@@ -3599,7 +3921,7 @@
                     // relancent la lecture, la requete Range du CDN etant suspendue ou ralentie) : on le recharge donc aussi,
                     // 4 fois au plus (v7.16.1, 2 avant : un F5 manuel debloque a coup sur le gel a zero requete, constat 2026-11-05), quand YouTube n'a pas de repli ; sinon bascule YouTube comme avant (v6.39).
                     if (stallRetriedSrc !== overlayEls.playerFrame.src) { stallRetriedSrc = overlayEls.playerFrame.src; stallRetriedN = 0; }
-                    const ytReplacement = !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
+                    const ytReplacement = isYtAutoSwitch() && !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
                     if ((!event.data.direct || !ytReplacement) && stallRetriedN < (event.data.direct ? 4 : 1)) {
                         stallRetriedN++;
                         setStatus('La video cale, nouvel essai ' + stallRetriedN + '...');
@@ -3983,7 +4305,7 @@
         function applyLoadedEpisode(info, pushHistory, skipYoutubeLookup) {
             if (!info) throw new Error('episode introuvable ou aucun lecteur compatible pour cet episode');
             // Serie passee sur YouTube : chercher d'abord cet episode la-bas.
-            if (!skipYoutubeLookup && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
+            if (!skipYoutubeLookup && isYtAutoSwitch() && isYoutubeMode(info) && !getYoutubeOverrideUrl(info) && getYoutubeChannelAssociation(info)) {
                 setStatus('Recherche de l\'episode ' + info.episodeNumber + ' sur YouTube...');
                 findYoutubeEpisode(getYoutubeChannelAssociation(info), Number(info.episodeNumber), seriesSeason(info))
                     .then((hit) => { if (hit) storeYoutubeHit(info, hit); else console.log('[AnimeTracker v6] YouTube : episode ' + info.episodeNumber + ' introuvable sur la chaine, source du site'); })
@@ -4381,7 +4703,9 @@
             const m = subsMon();
             if (!st) return { color: '#777', text: Date.now() < m.starting ? 'Démarrage…' : 'Service éteint', extra: '' };
             const bad = st.jobs.find((j) => j.failed), run = st.jobs.find((j) => !j.failed);
+            if (bad && /Aucune piste source/.test(bad.err)) return { color: '#fb8c00', text: 'Pas de piste chinoise', extra: 'Cette vidéo YouTube n’a pas de sous-titres source à traduire : ceux de YouTube sont gardés.' };
             if (bad) return { color: '#e53935', text: 'Erreur de traduction', extra: bad.err.slice(-120) };
+            if (st.cap > 0 && st.usage && st.usage.usd >= st.cap) return { color: '#fb8c00', text: 'Plafond mensuel atteint', extra: st.usage.usd.toFixed(2) + ' $ sur ' + st.cap + ' $ : plus de nouvelle traduction ce mois-ci (variable VC_PLAFOND_USD).' };
             if (!st.key) return { color: '#e53935', text: 'Clé DeepSeek absente', extra: 'Variable DEEPSEEK_API_KEY non définie' };
             if (run) {
                 const eta = run.done > 0 && run.total ? ' · reste ~' + subsMmss(run.sec / run.done * (run.total - run.done)) : '';
@@ -4410,7 +4734,7 @@
             if (st && m.pendingId) {
                 const id = m.pendingId; m.pendingId = '';
                 gmRequest({ method: 'GET', url: SUBS_URL + 'sub?v=' + id + '&t=0', timeout: 8000 }).then((r) => {
-                    subsMsg(r.status === 200 ? '✓ Déjà traduit' : r.status === 202 || r.status === 206 ? '✓ Traduction lancée' : r.status === 429 ? 'Service occupé (2 traductions max), réessaie plus tard' : r.status === 403 ? 'Refusé : script pas à jour (7.13.1 ou plus requis)' : 'Échec côté service (' + r.status + ')');
+                    subsMsg(r.status === 200 ? '✓ Déjà traduit' : r.status === 202 || r.status === 206 ? '✓ Traduction lancée' : r.status === 429 ? 'Service occupé (2 traductions max), réessaie plus tard' : r.status === 402 ? 'Plafond mensuel atteint : pas de nouvelle traduction' : r.status === 403 ? 'Refusé : script pas à jour (7.13.1 ou plus requis)' : 'Échec côté service (' + r.status + ')');
                 }).catch(() => subsMsg('Service injoignable'));
             } else if (!st && m.pendingId && Date.now() > m.pendingUntil) { m.pendingId = ''; subsMsg('Service injoignable : le lanceur n’a pas démarré (voir installer-lanceur.ps1)'); }
             const v = subsView(st), cost = subsCost(st);
@@ -5132,7 +5456,7 @@
                     '<button id="ep-reauth-backup">Redonner l\'accès</button>' +
                     '<span id="ep-backup-status" class="vc-note"></span>' +
                     '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">'),
-                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), legendSectionHtml(false)])
+                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), diagSectionHtml('ep'), legendSectionHtml(false)])
             ]);
             html += '<footer class="vc-foot"><select id="ep-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div class="vc-summary">' + renderTrackingSummary() + '</div>' + siteLinksHtml() + openModeSelectHtml() + '</footer>';
@@ -5161,6 +5485,7 @@
 
             bindTrackingSummary(panel);
             bindIncidentSection(panel, 'ep');
+            bindDiagSection(panel, 'ep');
             bindNewsSection(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {

@@ -66,14 +66,15 @@
                     menuItem('youtube', 'Sources',
                         '<div id="ed-source" class="vc-src" style="display:none;"><span id="ed-source-label" class="vc-src-label"></span>' +
                         '<button id="ed-source-btn" class="vc-chip" title="Lecteurs du site, autres sites, YouTube">&#8644; Changer</button></div>' +
-                        '<button id="ed-source-main" style="display:none;" title="Revenir à la source principale du site">&#8617; Source principale</button>'),
+                        '<button id="ed-source-main" style="display:none;" title="Revenir à la source principale du site">&#8617; Source principale</button>' +
+                        '<button id="ed-yt-block" style="display:none;" title="Ne plus jamais proposer ni utiliser la chaîne YouTube en cours">&#128683; Bloquer cette chaîne</button>'),
                     plusMenuItem([menuItem('sauvegarde', 'Sauvegarde',
                         '<div class="vc-row"><button id="ed-export-btn">Exporter</button><button id="ed-import-btn">Importer</button></div>' +
                         '<input type="file" id="ed-import-file" accept=".html,.htm" style="display:none;">' +
                         '<button id="ed-choose-backup-btn">Fichier de sauvegarde</button>' +
                         '<button id="ed-reauth-backup-btn">Redonner l\'accès</button>' +
                         '<span id="ed-backup-status" class="vc-note"></span>'),
-                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), legendSectionHtml(false)])
+                    newsSectionHtml(false, 'ed'), incidentSectionHtml('ed', false), diagSectionHtml('ed'), legendSectionHtml(false)])
                 ]) +
                 '<footer class="vc-foot"><select id="ed-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div id="ed-tracking-summary" class="vc-summary"></div>' +
@@ -154,6 +155,7 @@
             topbar.querySelector('#ed-history-btn').addEventListener('click', openHistoryPopup);
             topbar.querySelector('#ed-aniskip-cb').addEventListener('change', (ev) => { GM_setValue('aniskipShown', ev.target.checked); renderAniSkipStatus(); });
             bindIncidentSection(topbar, 'ed');
+            bindDiagSection(topbar, 'ed');
             bindNewsSection(topbar);
 
             const gotoInput = topbar.querySelector('#ed-goto-input');
@@ -228,6 +230,13 @@
                 postToPlayerFrame({ type: MSG_PREFIX + 'pause' });
                 if (document.fullscreenElement === overlay) document.exitFullscreen().catch(() => {});
             });
+            topbar.querySelector('#ed-yt-block').addEventListener('click', () => {
+                if (!ytActive || !currentEpisode) return;
+                const assoc = getYoutubeChannelAssociation(currentEpisode) || {};
+                blockYoutubeChannel(currentEpisode, assoc.channelId || assoc.channelHandle || 'inconnue', assoc.channelName); // quitte YouTube
+                if (ytActive) leaveYoutubeMode(); // association sans identifiant : on quitte quand meme
+                setStatus('Chaine ' + (assoc.channelName || '') + ' bloquee pour toujours.');
+            });
             topbar.querySelector('#ed-source-main').addEventListener('click', () => { if (ytActive) leaveYoutubeMode(); else selectPlayer(0); });
             const cfgTab = topbar.querySelector('.vc-tab[data-menu="reglages"]');
             if (cfgTab) cfgTab.insertAdjacentHTML('beforeend', '<span class="vc-cfgdots" title="Repères : début intro · fin intro · début outro · fin outro (allumé = réglé)"><i data-k="introStart" style="--c:#03d0fc"></i><i data-k="introEnd" style="--c:#43a047"></i><i data-k="outroStart" style="--c:#fb8c00"></i><i data-k="outroEnd" style="--c:#ec407a"></i></span>');
@@ -283,6 +292,7 @@
             return info.episodeIndex > 0;
         }
 
+        var lastVState = '', lastHostError = ''; // v7.24 : derniere erreur lue dans le lecteur (diagnostic)
         var lastStatusText = ''; // var : setStatus peut etre appele avant cette ligne (TDZ)
         function setStatus(text, warning) {
             lastStatusText = text;
@@ -348,7 +358,7 @@
         function startNextPreload() {
             try {
                 const ce = currentEpisode, key = ce.site + '|' + ce.episodeNumber;
-                if (preloadedEmbed === key || ce.navigate) return;
+                if (preloadedEmbed === key || ce.navigate || isEcoMemory()) return;
                 preloadedEmbed = key;
                 const nextInfo = ce.navStyle === 'index' ? buildNextEpisodeInfo() : (ce.nextPageUrl ? buildNextEpisodeInfo() : null);
                 Promise.resolve(nextInfo).then((info) => {
@@ -371,6 +381,7 @@
         }
         function tryNextPlayer() {
             clearTimeout(playerReadyTimer);
+            if (playerPlaying) return; // v7.22.3 : la video joue deja (hebergeur lent a signaler « pret ») : pas de faux « episode indisponible »
             if (!overlayEls || playerCandidateIndex + 1 >= playerCandidates.length) {
                 if (playerCandidates.length) showSiteError(playerCandidates.length);
                 return;
@@ -409,6 +420,8 @@
             const away = ytActive || playerCandidateIndex > 0; // hors de la source principale du site
             const mainBtn = overlayEls.overlay.querySelector('#ed-source-main');
             if (mainBtn) mainBtn.style.display = away ? '' : 'none';
+            const blk = overlayEls.overlay.querySelector('#ed-yt-block');
+            if (blk) blk.style.display = ytActive ? '' : 'none';
             const ico = overlayEls.overlay.querySelector('#ed-src-ico');
             if (ico) {
                 const col = ytActive ? '#ff4e45' : away ? '#fb8c00' : '#03d0fc';
@@ -440,18 +453,14 @@
                 '<div style="margin-top:12px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">' +
                 (stall ? '<button type="button" data-act="retry" style="' + BTN + '">Reessayer</button>' : '') +
                 '<button type="button" data-act="youtube" style="' + BTN + '">Lire sur YouTube</button>' +
-                '<button type="button" data-act="google" style="' + BTN + '">Rechercher sur Google</button>' +
+                webSearchButtons(BTN) +
                 (currentEpisode && hasNextEpisode(currentEpisode) ? '<button type="button" data-act="next" style="background:#ffb020;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">Épisode suivant</button>' : '') +
                 '<button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             const info = currentEpisode;
             box.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
-                if (act === 'google') {
-                    const q = displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr streaming';
-                    window.open('https://www.google.com/search?q=' + encodeURIComponent(q), '_blank', 'noopener');
-                    return;
-                }
+                if (openWebSearch(act, info)) return; // v7.23 : Google, DuckDuckGo, Dailymotion, Bilibili
                 if (act === 'youtube') { box.style.display = 'none'; switchToYoutube(info, 'bouton de l\'encadre'); return; }
                 box.style.display = 'none';
                 if (act === 'next') advanceToNextEpisode();
@@ -517,6 +526,7 @@
                 const pf = preloadFrame; preloadFrame = null; setTimeout(() => pf.el.remove(), 90000);
             }
             if (type === 'ready') { playerPlaying = false; clearTimeout(playerReadyTimer); positionArmed = true; sendConfigToPlayerFrame(); }
+            if (type === 'ready' && overlayEls && overlayEls.siteErrorBox && /^(dead|stall)$/.test(overlayEls.siteErrorBox.getAttribute('data-kind') || '')) overlayEls.siteErrorBox.style.display = 'none'; // v7.24.2 : lecteur finalement lance (clic auto tardif) : plus de faux « indisponible »
             if (type === 'position' && currentEpisode && positionArmed && ytActive) {
                 // Compilation YouTube : le suivi suit l'episode en cours de lecture.
                 if (ytSegment) {
@@ -551,7 +561,27 @@
                 triggerNextEpisode('fin reelle de la video');
             }
             if (type === 'activity') { showNavButtons(); panelWake(); }
-            if (type === 'playstate') { playerPlaying = !!event.data.playing; panelWake(); }
+            if (type === 'vstate') lastVState = String(event.data.s || '').slice(0, 160) + ' @' + new Date().toTimeString().slice(0, 8);
+            if (type === 'host-error') {
+                const k = event.data.kind;
+                lastHostError = k + (event.data.why ? ' (' + event.data.why + ')' : '') + ' ' + new Date().toTimeString().slice(0, 8);
+                if (k === 'turbo') setStatus('Mode turbo abandonne (' + event.data.why + ') : lecture normale.');
+                if (k === 'init') setStatus('Odysee n\'arrive pas a s\'initialiser (« resolve response » / « preparer votre compte »). Essaie : effacer les donnees du site odysee.com, et mettre uBlock en mode « optimal » pour ce site.');
+                else if (k === 'file') setStatus('Odysee n\'arrive pas a charger le fichier video : reessaie, ou change de source (Sources > Changer).');
+                else if (k === 'yt' && ytActive && currentEpisode) {
+                    const all = loadYoutubeOverrides(); delete all[youtubeOverrideKey(currentEpisode)]; saveYoutubeOverrides(all); // ne pas y revenir tout seul
+                    setStatus('Cette video YouTube est indisponible : choisis-en une autre.');
+                    showSourceChooser(currentEpisode);
+                }
+            }
+            if (type === 'playstate') {
+                playerPlaying = !!event.data.playing; panelWake();
+                if (playerPlaying) clearTimeout(playerReadyTimer);
+                // v7.22.2 : la video joue : un encadre « indisponible » / « cale » reste obsolete (ex. changement de qualite chez Odysee : coupure,
+                // encadre, puis reprise) -> on le masque (sauf le choix de source ouvert a la main : data-kind 'sources').
+                const eb = overlayEls && overlayEls.siteErrorBox;
+                if (playerPlaying && eb && eb.style.display !== 'none' && /^(dead|stall)$/.test(eb.getAttribute('data-kind') || '')) eb.style.display = 'none';
+            }
             if (type === 'key') playerShortcut(String(event.data.key));
             if (type === 'mute-state' && overlayEls.muteIndicatorEl) overlayEls.muteIndicatorEl.style.display = event.data.muted ? 'block' : 'none';
             if (type === 'load-status') {
@@ -566,7 +596,7 @@
                     // relancent la lecture, la requete Range du CDN etant suspendue ou ralentie) : on le recharge donc aussi,
                     // 4 fois au plus (v7.16.1, 2 avant : un F5 manuel debloque a coup sur le gel a zero requete, constat 2026-11-05), quand YouTube n'a pas de repli ; sinon bascule YouTube comme avant (v6.39).
                     if (stallRetriedSrc !== overlayEls.playerFrame.src) { stallRetriedSrc = overlayEls.playerFrame.src; stallRetriedN = 0; }
-                    const ytReplacement = !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
+                    const ytReplacement = isYtAutoSwitch() && !ytActive && currentEpisode && getYoutubeChannelAssociation(currentEpisode);
                     if ((!event.data.direct || !ytReplacement) && stallRetriedN < (event.data.direct ? 4 : 1)) {
                         stallRetriedN++;
                         setStatus('La video cale, nouvel essai ' + stallRetriedN + '...');

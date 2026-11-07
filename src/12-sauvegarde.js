@@ -173,9 +173,9 @@
         // Sauvegarde complete (v6.50) : etats de suivi, intro/outro, YouTube,
         // sites ajoutes, reprises, liens AniList + preferences. Pas les caches.
         const BACKUP_SETTINGS = ['excludedSeries', 'dislikedSeries', 'seenSeries', 'togetherSeries', 'seasonDone', 'newSeasons', 'seasonDismissed', 'introOutro', 'customSites',
-            'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks'];
+            'youtubeChannelAssociations', 'youtubeMode', 'youtubeOverrides', 'resumePositions', 'aniLinks', 'youtubeBlockedChannels'];
         const BACKUP_PREFS = ['autoNextEnabled', 'popupAutoOpen', 'openMode', 'panelSiteFilter2', 'aniskipShown', 'theme', 'panelLayout', 'panelAutoHide', 'panelHidden',
-            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto', 'subsSize', 'subsBottom', 'subsStroke'];
+            'accentColor', 'accentTarget', 'fontFamily', 'titleCinzel', 'dimTracked', 'subsAuto', 'subsSize', 'subsBottom', 'subsStroke', 'ytAutoSwitch', 'ecoMemoire'];
         function collectBackupSettings() {
             const out = {};
             BACKUP_SETTINGS.concat(BACKUP_PREFS).forEach((k) => { const v = GM_getValue(k, undefined); if (v !== undefined) out[k] = v; });
@@ -207,6 +207,7 @@
                 let v = cleanBackupValue(data[k], 0);
                 if (!v || typeof v !== 'object' || Array.isArray(v)) return;
                 if (k === 'customSites') v = Object.fromEntries(Object.entries(v).filter(([h]) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(h)));
+                if (k === 'youtubeBlockedChannels') v = Object.fromEntries(Object.entries(v).filter(([id, n]) => /^UC[\w-]{10,40}$/.test(id) && typeof n === 'string'));
                 if (k === 'youtubeOverrides') v = Object.fromEntries(Object.entries(v).filter(([, u]) => /^https:\/\/(www\.)?youtube(-nocookie)?\.com\//i.test(u)));
                 // Fusion : les reglages deja presents ici gagnent.
                 GM_setValue(k, Object.assign({}, v, GM_getValue(k, {})));
@@ -222,7 +223,7 @@
         }
         // Type attendu par preference (recette 6.58 : "oui" texte activait le panneau discret).
         function validImportedPref(k, v) {
-            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'panelHidden', 'titleCinzel', 'dimTracked'].includes(k)) return typeof v === 'boolean';
+            if (['autoNextEnabled', 'popupAutoOpen', 'aniskipShown', 'panelAutoHide', 'panelHidden', 'titleCinzel', 'dimTracked', 'ytAutoSwitch', 'ecoMemoire'].includes(k)) return typeof v === 'boolean';
             if (k === 'theme') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(themes(), v);
             if (k === 'panelLayout') return typeof v === 'string' && Object.prototype.hasOwnProperty.call(layouts(), v);
             if (k === 'accentColor') return typeof v === 'string' && /^(#[0-9a-f]{6})?$/i.test(v);

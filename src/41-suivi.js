@@ -436,7 +436,7 @@
                     '<button id="ep-reauth-backup">Redonner l\'accès</button>' +
                     '<span id="ep-backup-status" class="vc-note"></span>' +
                     '<input type="file" id="ep-import-file" accept=".html,.htm" style="display:none;">'),
-                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), legendSectionHtml(false)])
+                newsSectionHtml(false, 'ep'), incidentSectionHtml('ep', false), diagSectionHtml('ep'), legendSectionHtml(false)])
             ]);
             html += '<footer class="vc-foot"><select id="ep-site-filter" title="Filtrer la liste des animes suivis par site">' + buildSiteFilterOptionsHtml() + '</select>' +
                 '<div class="vc-summary">' + renderTrackingSummary() + '</div>' + siteLinksHtml() + openModeSelectHtml() + '</footer>';
@@ -465,6 +465,7 @@
 
             bindTrackingSummary(panel);
             bindIncidentSection(panel, 'ep');
+            bindDiagSection(panel, 'ep');
             bindNewsSection(panel);
             const checkNewBtn = panel.querySelector('#ep-check-new');
             if (checkNewBtn) checkNewBtn.addEventListener('click', () => {

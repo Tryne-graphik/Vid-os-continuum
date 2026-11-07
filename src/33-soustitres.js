@@ -26,7 +26,9 @@
             const m = subsMon();
             if (!st) return { color: '#777', text: Date.now() < m.starting ? 'Démarrage…' : 'Service éteint', extra: '' };
             const bad = st.jobs.find((j) => j.failed), run = st.jobs.find((j) => !j.failed);
+            if (bad && /Aucune piste source/.test(bad.err)) return { color: '#fb8c00', text: 'Pas de piste chinoise', extra: 'Cette vidéo YouTube n’a pas de sous-titres source à traduire : ceux de YouTube sont gardés.' };
             if (bad) return { color: '#e53935', text: 'Erreur de traduction', extra: bad.err.slice(-120) };
+            if (st.cap > 0 && st.usage && st.usage.usd >= st.cap) return { color: '#fb8c00', text: 'Plafond mensuel atteint', extra: st.usage.usd.toFixed(2) + ' $ sur ' + st.cap + ' $ : plus de nouvelle traduction ce mois-ci (variable VC_PLAFOND_USD).' };
             if (!st.key) return { color: '#e53935', text: 'Clé DeepSeek absente', extra: 'Variable DEEPSEEK_API_KEY non définie' };
             if (run) {
                 const eta = run.done > 0 && run.total ? ' · reste ~' + subsMmss(run.sec / run.done * (run.total - run.done)) : '';
@@ -55,7 +57,7 @@
             if (st && m.pendingId) {
                 const id = m.pendingId; m.pendingId = '';
                 gmRequest({ method: 'GET', url: SUBS_URL + 'sub?v=' + id + '&t=0', timeout: 8000 }).then((r) => {
-                    subsMsg(r.status === 200 ? '✓ Déjà traduit' : r.status === 202 || r.status === 206 ? '✓ Traduction lancée' : r.status === 429 ? 'Service occupé (2 traductions max), réessaie plus tard' : r.status === 403 ? 'Refusé : script pas à jour (7.13.1 ou plus requis)' : 'Échec côté service (' + r.status + ')');
+                    subsMsg(r.status === 200 ? '✓ Déjà traduit' : r.status === 202 || r.status === 206 ? '✓ Traduction lancée' : r.status === 429 ? 'Service occupé (2 traductions max), réessaie plus tard' : r.status === 402 ? 'Plafond mensuel atteint : pas de nouvelle traduction' : r.status === 403 ? 'Refusé : script pas à jour (7.13.1 ou plus requis)' : 'Échec côté service (' + r.status + ')');
                 }).catch(() => subsMsg('Service injoignable'));
             } else if (!st && m.pendingId && Date.now() > m.pendingUntil) { m.pendingId = ''; subsMsg('Service injoignable : le lanceur n’a pas démarré (voir installer-lanceur.ps1)'); }
             const v = subsView(st), cost = subsCost(st);

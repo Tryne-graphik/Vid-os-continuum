@@ -22,6 +22,18 @@
             all[storageKey(info)] = assoc;
             GM_setValue('youtubeChannelAssociations', all);
         }
+        // v7.21 : bascule automatique vers YouTube (video qui cale, serie passee sur YouTube) ; activee par defaut.
+        function isYtAutoSwitch() { return GM_getValue('ytAutoSwitch', true); }
+        // v7.19 : chaines YouTube masquees (globales) : plus jamais proposees dans les resultats.
+        function ytBlocked() { return GM_getValue('youtubeBlockedChannels', {}); }
+        function blockYoutubeChannel(info, id, name) {
+            const all = ytBlocked(); all[id] = name || id; GM_setValue('youtubeBlockedChannels', all);
+            const assoc = getYoutubeChannelAssociation(info);
+            if (assoc && assoc.channelId === id) {
+                setYoutubeChannelAssociation(info, null); // plus de bascule automatique vers cette chaine
+                if (ytActive) leaveYoutubeMode(); // et on quitte la video YouTube en cours (oublie aussi les liens memorises de la serie)
+            }
+        }
         function isYoutubeMode(info) { return !!GM_getValue('youtubeMode', {})[storageKey(info)]; }
         function setYoutubeMode(info, on) {
             const all = GM_getValue('youtubeMode', {});
@@ -46,6 +58,9 @@
                 const a = Number(m[1]), b = Number(m[2] || m[1]);
                 if (n >= a && n <= b && b - a < 200) return { first: a, last: b };
             }
+            // v7.23 : titres chinois « 第411集 » / « 第411-420集 »
+            const zh = /第\s*(\d+)(?:\s*[-~至]\s*(\d+))?\s*[集话話]/.exec(title);
+            if (zh) { const a = Number(zh[1]), b = Number(zh[2] || zh[1]); if (n >= a && n <= b && b - a < 200) return { first: a, last: b }; }
             return null;
         }
         // v7.1 : nom de la serie en mots entiers ("The Demon Hunter's Romance",
@@ -53,7 +68,9 @@
         // annoncee ("S2", "Season 3", "Saison 2", "S02E480", "Nom 2 EP17").
         // ponytail: saison du titre comparee a celle de l'adresse du site ; une chaine qui numerote autrement est ecartee
         function ytWords(t) { return ' ' + String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/['’]s\b/g, 's').replace(/[^a-z0-9]+/g, ' ').trim() + ' '; }
+        const CJK = /[㐀-鿿]/;
         function ytTitleOk(title, name, season) {
+            if (CJK.test(name)) return String(title || '').indexOf(name) !== -1; // v7.23 : nom chinois (ex. 逆天至尊) : simple inclusion, pas de saison
             const t = ytWords(title), k = ytWords(name);
             const at = t.indexOf(k);
             if (k.length < 4 || at === -1) return false;
@@ -70,6 +87,39 @@
         // la serie (avant / entre parentheses) ET le numero d'episode.
         // v6.37 : chaque nom x ("episode N vostfr", "EP N") - les compilations
         // sont souvent titrees avec le nom anglais ("Ten Thousand Worlds EP 181 - EP 200").
+        // v7.23 : duree reelle de l'episode. Lecteur du site si connue, sinon l'API Odysee (resolve, sans cle) a partir du lien du lecteur.
+        const odyDurCache = {}, odyDurFail = {}; // v7.24 : echec de l'API retenu 5 min
+        function referenceDuration(info) {
+            const d0 = aniSkip && aniSkip.key === storageKey(info) && aniSkip.ep === info.episodeNumber && aniSkip.duration;
+            if (d0) return Promise.resolve(d0);
+            let m;
+            try { m = decodeURIComponent(info.embedSrc || '').match(/odysee\.com\/\$\/embed\/(@[^/?#]+)\/([^/?#]+)/); } catch (e) { m = null; }
+            if (!m) return Promise.resolve(0);
+            const lbry = 'lbry://' + m[1] + '/' + m[2];
+            if (odyDurCache[lbry] !== undefined) return Promise.resolve(odyDurCache[lbry]);
+            if (odyDurFail[lbry] > Date.now()) return Promise.resolve(0);
+            return gmRequest({ method: 'POST', url: 'https://api.na-backend.odysee.com/api/v1/proxy', headers: { 'Content-Type': 'application/json' }, timeout: 8000,
+                data: JSON.stringify({ method: 'resolve', params: { urls: [lbry] } }) })
+                .then((r) => { const v = ((JSON.parse(r.responseText).result || {})[lbry] || {}).value; return (odyDurCache[lbry] = Number(v && v.video && v.video.duration) || 0); })
+                .catch(() => { odyDurFail[lbry] = Date.now() + 300000; return 0; });
+        }
+        // v7.23 : autres titres de la serie (« Against The Sky Supreme, N.T.Z.Z, 逆天至尊 ») lus dans la page ouverte, seulement si c'est bien la meme serie.
+        function altSeriesNames(info) {
+            try {
+                const h = document.querySelector('.infox h2'), a = document.querySelector('.infox .alter');
+                if (!h || !a || ytNorm(h.textContent) !== ytNorm(info.seriesName)) return [];
+                return a.textContent.split(',').map((s) => s.trim()).filter((s) => s.length >= 2 && (CJK.test(s) || (/\s/.test(s) && ytNorm(s).length >= 8)));
+            } catch (e) { return []; }
+        }
+        // true = piste chinoise (zh*) presente dans la page de la video, false = absente, null = page illisible (inconnu : on garde la video)
+        function ytHasZhTrack(id) {
+            return fetchPageHtml('https://www.youtube.com/watch?v=' + encodeURIComponent(id) + '&ucbcb=1').then((html) => {
+                const i = html.indexOf('"captionTracks"');
+                if (i < 0) return html.indexOf('"playerCaptionsTracklistRenderer"') >= 0 || html.indexOf('ytInitialPlayerResponse') >= 0 ? false : null;
+                const rest = html.slice(i, i + 30000), e = Math.min(...['"audioTracks"', '"translationLanguages"'].map((s) => { const n = rest.indexOf(s); return n < 0 ? rest.length : n; }));
+                return /"languageCode":"zh(-[A-Za-z]+)?"/.test(rest.slice(0, e));
+            }).catch(() => null);
+        }
         function searchYoutubeForEpisode(info) {
             const n = Number(info.episodeNumber);
             const full = info.seriesName || '';
@@ -78,12 +128,22 @@
             if (!n || !names.length) return Promise.resolve([]);
             const queries = [];
             names.slice(0, 2).forEach((v) => queries.push(v + ' episode ' + n + ' vostfr', v + ' EP ' + n));
+            // v7.23 : titres alternatifs : le chinois (chaines officielles) et un nom anglais different, une requete chacun
+            const alts = altSeriesNames(info).filter((v) => !names.some((x) => ytNorm(x) === ytNorm(v)));
+            alts.slice(0, 2).forEach((v) => { queries.push(v + ' EP ' + n); names.push(v); });
             const seen = {}, out = [];
             const season = seriesSeason(info);
-            // Duree de l'episode si le lecteur du site l'a donnee : ecarte un episode unique 2x trop long/court.
-            const dur = aniSkip && aniSkip.key === storageKey(info) && aniSkip.ep === info.episodeNumber && aniSkip.duration;
-            return Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => ''))).then((pages) => {
-                pages.forEach((html) => (function walk(o) {
+            // v7.24 : resultats gardes 24 h par episode (pas de nouvelle rafale de requetes a chaque ouverture) ; chaines masquees filtrees a la lecture
+            const ckey = storageKey(info) + '::' + n, cache = GM_getValue('ytSearchCache', {});
+            if (cache[ckey] && Date.now() - cache[ckey].t < 86400000 && cache[ckey].out && cache[ckey].out.length) {
+                const bl = ytBlocked();
+                return Promise.resolve(cache[ckey].out.filter((r) => !bl[r.channelId]));
+            }
+            // Duree de l'episode (v7.23 : aussi via Odysee) : ecarte un episode unique trop long/court (v7.23 : 0,75 a 1,3 au lieu de 0,5 a 1,6) et classe en tete celui de meme duree.
+            return Promise.all([referenceDuration(info), Promise.all(queries.map((q) => fetchPageHtml('https://www.youtube.com/results?hl=fr&ucbcb=1&search_query=' + encodeURIComponent(q)).catch(() => '')))]).then((res) => {
+                const dur = res[0], pages = res[1];
+                let parsed = 0;
+                pages.forEach((html) => { let data = null; try { data = html && ytInitialJson(html, 'var ytInitialData'); } catch (e) {} if (data) parsed++; (function walk(o) {
                     if (Array.isArray(o)) { o.forEach(walk); return; }
                     if (!o || typeof o !== 'object') return;
                     if (o.videoId && o.title && o.lengthText && o.ownerText && !seen[o.videoId]) {
@@ -100,15 +160,29 @@
                         // badge ni FR : sous-titres anglais incrustes, ecartee (v6.35).
                         const cc = /"label":"(?:Sous-titres|CC|Subtitles)"/.test(JSON.stringify(o.badges || []));
                         const len = ytTimeToSec(o.lengthText.simpleText);
-                        const badLen = dur && range && range.first === range.last && (len > dur * 1.6 || len < dur * 0.5);
-                        if (name && range && be && be.browseId && !teaser && !badLen && (vf || cc)) {
+                        const badLen = dur && range && range.first === range.last && (len > dur * 1.3 || len < dur * 0.75);
+                        const durMatch = !!(dur && range && range.first === range.last && Math.abs(len - dur) <= Math.max(10, dur * 0.03));
+                        if (name && range && be && be.browseId && !ytBlocked()[be.browseId] && !teaser && !badLen && (vf || cc)) {
                             out.push({ id: o.videoId, title: title, len: len, channelId: be.browseId, channelName: owner.text || '',
-                                keyword: name, first: range.first, last: range.last, vf: vf, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) });
+                                keyword: name, first: range.first, last: range.last, vf: vf, durMatch: durMatch, refDur: dur || 0, score: (vf ? 2 : 0) + (range.first === range.last ? 1 : 0) + (durMatch ? 4 : 0) });
                         }
                     }
                     Object.keys(o).forEach((k) => walk(o[k]));
-                })(html && ytInitialJson(html, 'var ytInitialData')));
-                return out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
+                })(data); });
+                if (!parsed) throw new Error(pages.some(Boolean) ? 'la page YouTube est illisible (format change ?)' : 'YouTube ne repond pas');
+                const top = out.sort((a, b) => (b.score - a.score) || ((a.last - a.first) - (b.last - b.first))).slice(0, 5);
+                // v7.24.3 : le traducteur (traduction/serve.js, --src zh) a besoin d'une piste de sous-titres CHINOISE (manuelle ou automatique) :
+                // on la cherche dans la page de chaque video ; les videos sans piste chinoise sont ecartees s'il en reste d'autres.
+                return Promise.all(top.map((r) => ytHasZhTrack(r.id).then((z) => { r.zh = z; }))).then(() => {
+                    const ok = top.filter((r) => r.zh === true), res = ok.length ? top.filter((r) => r.zh !== false) : top;
+                    res.sort((a, b) => (b.zh === true) - (a.zh === true));
+                    if (res.length) { // cache : 30 recherches au plus
+                        cache[ckey] = { t: Date.now(), out: res };
+                        Object.keys(cache).sort((x, y) => cache[y].t - cache[x].t).slice(30).forEach((k) => delete cache[k]);
+                        GM_setValue('ytSearchCache', cache);
+                    }
+                    return res;
+                });
             });
         }
         // Compilation : debut de chaque episode lu dans les chapitres de la
@@ -158,6 +232,17 @@
         }
         // Vignettes des resultats de la recherche YouTube dans `zone` ; clic =
         // useYoutubeSearchResult (+ onPick, ex. fermer l'encadre).
+        // v7.23 : recherche web hors YouTube (pages de resultats ouvertes dans un onglet ; pas de scraping automatique, trop fragile)
+        const WEB_SEARCHES = [['google', 'Google', (q) => 'https://www.google.com/search?q=' + q], ['ddg', 'DuckDuckGo', (q) => 'https://duckduckgo.com/?q=' + q],
+            ['dm', 'Dailymotion', (q) => 'https://www.dailymotion.com/search/' + q + '/videos'], ['bili', 'Bilibili', (q) => 'https://www.bilibili.tv/en/search-result?q=' + q]];
+        function webSearchButtons(style) { return WEB_SEARCHES.map((w) => '<button type="button" data-act="web-' + w[0] + '" style="' + style + '">' + w[1] + '</button>').join(''); }
+        function openWebSearch(act, info) {
+            const w = WEB_SEARCHES.find((x) => 'web-' + x[0] === act);
+            if (!w) return false;
+            window.open(w[2](encodeURIComponent(displayName(info.seriesName) + ' episode ' + info.episodeNumber + ' vostfr')), '_blank', 'noopener');
+            return true;
+        }
+        function fmtLen(s) { s = Math.round(s || 0); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0'); }
         function renderYoutubeChoices(zone, info, onPick) {
             return searchYoutubeForEpisode(info).then((results) => {
                 if (!zone.isConnected || currentEpisode !== info) return;
@@ -165,17 +250,33 @@
                 zone.innerHTML = '<div style="margin-bottom:4px;">Sur YouTube (clique pour regarder) :</div>' + results.map((r, i) =>
                     '<div data-yt="' + i + '" role="button" tabindex="0" style="display:flex;gap:8px;align-items:center;cursor:pointer;background:#1f1508;border:1px solid #5a4010;border-radius:6px;padding:4px;margin-bottom:4px;">' +
                     '<img src="https://i.ytimg.com/vi/' + escapeHtml(r.id) + '/mqdefault.jpg" style="width:96px;height:54px;object-fit:cover;border-radius:4px;flex-shrink:0;">' +
-                    '<div style="min-width:0;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
-                    '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + '</span> ' +
+                    '<div style="min-width:0;flex:1;"><div style="color:#fff;font-size:12px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + escapeHtml(r.title) + '</div>' +
+                    '<div style="font-size:11px;"><span style="opacity:.8;">' + escapeHtml(r.channelName) + (r.first !== r.last ? ' - compilation ep. ' + r.first + '-' + r.last : '') + ' - ' + fmtLen(r.len) + '</span> ' +
+                    (r.durMatch ? '<span style="background:#1565c0;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Meme duree que l\'episode du site (' + fmtLen(r.refDur) + ')">duree identique</span> ' : '') +
                     // VOSTFR = annonce dans le titre ; sinon piste de sous-titres
                     // traduite automatiquement en francais par YouTube.
+                    (r.zh === true ? '<span style="background:#00695c;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Piste de sous-titres chinoise presente : le traducteur peut l\'utiliser">traduisible</span> ' : r.zh === false ? '<span style="background:#8a1c1c;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Aucune piste chinoise : le traducteur ne pourra pas traduire cette video">pas de piste chinoise</span> ' : '') +
                     (r.vf ? '<span style="background:#2e7d32;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;">VOSTFR</span>'
                         : '<span style="background:#b26a00;color:#fff;border-radius:3px;padding:0 4px;font-weight:bold;" title="Sous-titres traduits automatiquement en francais par YouTube">ST auto FR</span>') +
-                    '</div></div></div>').join('');
+                    '</div></div><button type="button" data-block="' + i + '" title="Ne plus proposer la chaine ' + escapeHtml(r.channelName) + '" style="flex-shrink:0;background:#3a1010;color:#fff;border:1px solid #a33;border-radius:4px;cursor:pointer;padding:2px 6px;">&#10005;</button></div>').join('');
+                zone.querySelectorAll('[data-block]').forEach((el) => el.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    const r = results[Number(el.getAttribute('data-block'))];
+                    blockYoutubeChannel(info, r.channelId, r.channelName);
+                    renderYoutubeChoices(zone, info, onPick);
+                }));
                 zone.querySelectorAll('[data-yt]').forEach((el) => el.addEventListener('click', () => {
                     if (onPick) onPick();
                     useYoutubeSearchResult(info, results[Number(el.getAttribute('data-yt'))]);
                 }));
+            }).then(() => {
+                const n = Object.keys(ytBlocked()).length;
+                if (!n || !zone.isConnected) return;
+                const l = document.createElement('div');
+                l.style.cssText = 'font-size:11px;opacity:.7;cursor:pointer;text-decoration:underline;margin-top:4px;';
+                l.textContent = n + ' chaine(s) masquee(s) - tout reafficher';
+                l.onclick = () => { GM_setValue('youtubeBlockedChannels', {}); renderYoutubeChoices(zone, info, onPick); };
+                zone.append(l);
             }).catch((e) => { zone.textContent = 'Recherche YouTube impossible : ' + e.message; });
         }
         // Choix de la source (v7.1, remplace le volet "Sources") : lecteurs du
@@ -194,16 +295,19 @@
             box.innerHTML = '<div style="font-size:16px;font-weight:bold;">Sources de l\'épisode ' + escapeHtml(String(info.episodeNumber)) + '</div>' +
                 '<div style="font-size:12px;text-align:left;">' + site +
                 head('Autres sites', '#ffb300') + '<div id="ed-site-alt" style="color:#d9b77a;">Recherche sur les autres sites...</div>' +
-                head('YouTube', '#ff4e45') + '<div id="ed-yt-results" style="color:#d9b77a;">Recherche sur YouTube...</div></div>' +
+                head('Sur le web', '#9ccc65') + '<div>' + webSearchButtons(BTN.replace('display:block;width:100%;', 'display:inline-block;width:auto;margin-right:4px;')) + '</div>' +
+                head('YouTube', '#ff4e45') + '<label style="display:block;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="ed-yt-auto"' + (isYtAutoSwitch() ? ' checked' : '') + '> Basculer automatiquement sur YouTube si la vidéo cale</label><div id="ed-yt-results" style="color:#d9b77a;">Recherche sur YouTube...</div></div>' +
                 '<div style="margin-top:12px;"><button type="button" data-act="close" style="background:#333;color:#fff;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;">Fermer</button></div>';
             box.style.display = 'block';
             box.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', () => {
                 const act = b.getAttribute('data-act');
+                if (openWebSearch(act, info)) return; // recherche web : on garde le choix ouvert
                 box.style.display = 'none';
                 if (act === 'site') leaveYoutubeMode();
                 if (act === 'odysee') openCurrentEpisodeOnOdysee();
                 if (act === 'player') selectPlayer(Number(b.getAttribute('data-i')));
             }));
+            box.querySelector('#ed-yt-auto').addEventListener('change', (ev) => GM_setValue('ytAutoSwitch', ev.target.checked));
             renderElsewhere(box.querySelector('#ed-site-alt'), info, ytActive ? [] : playerCandidates.slice());
             renderYoutubeChoices(box.querySelector('#ed-yt-results'), info, () => { box.style.display = 'none'; });
         }
